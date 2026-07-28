@@ -1,0 +1,22 @@
+{
+  "name": "game-price-il",
+  "private": true,
+  "version": "0.1.0",
+  "description": "VGPT.IL (Video Games Price Tracker) — Israeli video game price comparison and wishlist tracker",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,web \"npm run dev -w server\" \"npm run dev -w web\"",
+    "build": "npm run build -w web",
+    "start": "npm run start -w server",
+    "test": "npm run test -w server"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

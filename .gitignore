@@ -1,0 +1,24 @@
+# Secrets — API keys must never be committed (treat like passwords)
+.gg_deals_key
+.itad_key
+*.key
+.env
+.env.*
+
+# Local user data — price history is personal and machine-local
+data/
+*.db
+*.db-journal
+*.sqlite
+
+# Dependencies & build output
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

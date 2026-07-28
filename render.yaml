@@ -1,0 +1,19 @@
+# One-click deploy blueprint for Render (free tier) — see DEPLOY.md.
+# The server needs a persistent Node process (SQLite file, background price
+# capture, per-store rate-limit state), which is why a classic web service fits
+# and serverless platforms don't.
+services:
+  - type: web
+    name: vgpt-il-demo
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 24.4.1
+      # Optional — add your own API keys here (never commit them):
+      # - key: GG_DEALS_API_KEY
+      #   sync: false
+      # - key: ITAD_API_KEY
+      #   sync: false
