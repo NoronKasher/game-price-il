@@ -261,6 +261,9 @@ body {
 .graph-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .graph-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
 .graph-legend .toolbtn { margin-inline-start: auto; }
+.graph-legend-row { display: flex; align-items: flex-start; gap: 10px; margin-top: 10px; }
+.graph-legend-row .graph-legend { margin-top: 0; flex: 1; }
+.graph-legend-row .toolbtn { flex: 0 0 auto; }
 
 /* Multi-series graph: axes, hover tooltip, legend toggles */
 .graph-wrap { position: relative; }
@@ -326,6 +329,24 @@ body {
 
 .empty { text-align: center; color: var(--muted); padding: 60px 20px; line-height: 1.8; }
 .error { color: var(--up); padding: 14px 4px; }
+
+/* Display-currency switch (header) — reachable from every page */
+.currency-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.currency-switch button {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font: inherit; font-size: 14px; font-weight: 700; padding: 6px 11px; line-height: 1.4;
+}
+.currency-switch button + button { border-inline-start: 1px solid var(--line); }
+.currency-switch button:hover { color: var(--text); background: var(--panel-2); }
+.currency-switch button.active { background: var(--amber); color: #141a22; }
+
+/* "The server isn't answering" — distinct from any empty state */
+.server-down {
+  background: var(--panel); border: 1px solid color-mix(in srgb, var(--up) 45%, var(--line));
+  border-radius: 12px; padding: 20px 22px; max-width: 560px; margin: 20px auto; text-align: center;
+}
+.server-down-title { margin: 0 0 8px; font-weight: 700; color: var(--up); }
+.server-down-body { margin: 0 0 14px; color: var(--muted); line-height: 1.7; }
 
 /* Notification bell (header) + dropdown */
 .bell-wrap { position: relative; display: inline-flex; }
@@ -490,14 +511,21 @@ body {
 .offers-loading { color: var(--muted); padding: 24px; text-align: center; }
 
 /* Tracking list: three stacked prices per game (in-platform / disc / keyshop). */
-.prices-cell { line-height: 1.5; }
-.price-line { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
-.price-line + .price-line { margin-top: 3px; }
-.price-line .price-kind { width: 1.2em; text-align: center; opacity: 0.9; }
-.price-line .price-type { color: var(--muted); font-size: 12px; min-width: 78px; }
-.price-line .price { font-weight: 700; }
-.price-line .meta { color: var(--muted); font-size: 12px; }
-.price-line .region-flag { margin: 0; }
+.prices-cell { line-height: 1.5; min-width: 220px; }
+/* kind · amount · source, in reading order. Wrapping (rather than truncating)
+   keeps a long source like "PS Store · דרום אפריקה" readable in a narrow column
+   without widening the table past the viewport. */
+.price-line { display: flex; align-items: center; gap: 4px 7px; flex-wrap: wrap; }
+.price-line + .price-line { margin-top: 5px; }
+.price-line .price-kind { width: 1.2em; text-align: center; opacity: 0.9; flex: 0 0 auto; }
+.price-line .price-type { color: var(--muted); font-size: 12px; white-space: nowrap; flex: 0 0 auto; }
+.price-line .price { font-weight: 700; white-space: nowrap; flex: 0 0 auto; margin-inline-start: auto; }
+/* The origin of the price, as its own quiet chip — never mistakable for the amount. */
+.price-line .price-source {
+  color: var(--muted); font-size: 11.5px; background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
+  white-space: nowrap; flex: 0 0 auto;
+}
 /* The official-store line is the only one the preferred-region picker controls —
    give it a subtle accent so that link is obvious at a glance. */
 .price-line.official {

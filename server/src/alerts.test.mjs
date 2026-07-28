@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { alertFires, discountPct, effectiveAlertRule, primaryReason } from './alerts.ts';
+import {
+  alertFires,
+  discountPct,
+  effectiveAlertRule,
+  isMeaningfulChange,
+  primaryReason,
+} from './alerts.ts';
 
 /** The shipped global rule: any real drop is reported, 20% off is a "worth a look". */
 const GLOBAL = { pct: 20, price: null, ccy: 'ILS', anyDrop: true, scope: 'auto' };
@@ -81,14 +87,38 @@ test('a global rule with nothing enabled watches nothing', () => {
   assert.equal(effectiveAlertRule(plainGame, off), null);
 });
 
-test('"any drop" fires on a plain decrease, but never on the first-ever price', () => {
+test('"any drop" fires on a real decrease, but never on the first-ever price', () => {
   const base = { alertPct: null, thresholdILS: null, notifyAnyDrop: true, baseline: 200 };
-  assert.equal(alertFires({ ...base, current: 199, prev: 200 }).drop, true); // ₪1 counts
+  assert.equal(alertFires({ ...base, current: 190, prev: 200 }).drop, true); // a real ₪10 cut
   assert.equal(alertFires({ ...base, current: 200, prev: 200 }).drop, false); // unchanged
   assert.equal(alertFires({ ...base, current: 210, prev: 200 }).drop, false); // went up
   assert.equal(alertFires({ ...base, current: 120, prev: null }).drop, false); // first check
+  // ₪1 off ₪200 is 0.5% — inside the exchange-rate noise band, so it stays quiet.
+  assert.equal(alertFires({ ...base, current: 199, prev: 200 }).drop, false);
   // Off by default in custom rules — no drop reported when not asked for.
-  assert.equal(alertFires({ ...base, notifyAnyDrop: false, current: 199, prev: 200 }).drop, false);
+  assert.equal(alertFires({ ...base, notifyAnyDrop: false, current: 190, prev: 200 }).drop, false);
+});
+
+test('exchange-rate drift is not a price drop', () => {
+  // Real numbers from the tracked PS Store US price: the dollar price never
+  // moved, only the ILS rate did. That must not ring the bell.
+  const drift = { alertPct: null, thresholdILS: null, notifyAnyDrop: true, baseline: 249 };
+  assert.equal(alertFires({ ...drift, current: 89.6, prev: 89.67 }).drop, false);
+  assert.equal(alertFires({ ...drift, current: 79.21, prev: 79.22 }).drop, false);
+  // A genuine sale still reports, and so does a small drop on a cheap game
+  // (₪1 off ₪20 is 5% — meaningful, unlike ₪1 off ₪250).
+  assert.equal(alertFires({ ...drift, current: 199, prev: 249 }).drop, true);
+  assert.equal(alertFires({ ...drift, current: 19, prev: 20 }).drop, true);
+  assert.equal(alertFires({ ...drift, current: 248, prev: 249 }).drop, false);
+});
+
+test('isMeaningfulChange needs both a real percentage and a real amount', () => {
+  assert.equal(isMeaningfulChange(89.6, 89.67), false); // 0.08% — FX noise
+  assert.equal(isMeaningfulChange(248, 249), false); // ₪1, but only 0.4%
+  assert.equal(isMeaningfulChange(240, 249), true); // ₪9 and 3.6%
+  assert.equal(isMeaningfulChange(19, 20), true); // ₪1 and 5%
+  assert.equal(isMeaningfulChange(249, 240), true); // rises count too
+  assert.equal(isMeaningfulChange(5, 0), true); // no previous value to scale against
 });
 
 test('one check reports one reason, strongest first', () => {

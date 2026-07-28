@@ -93,6 +93,25 @@ export function effectiveAlertRule(
   return rule;
 }
 
+/**
+ * Below this, a change isn't a price change — it's exchange-rate drift.
+ *
+ * Foreign prices (PSN US in dollars, Steam TR in lira…) are converted to ILS at
+ * capture time, so the stored series moves a few agorot whenever the rate does,
+ * even though the store's own price never changed. Without a floor, "notify me
+ * on any drop" fires on ₪89.67 → ₪89.60 and the bell fills with non-events.
+ * A real sale clears both bars comfortably; daily FX drift clears neither.
+ */
+export const MIN_CHANGE_PCT = 1;
+export const MIN_CHANGE_ILS = 1;
+
+/** True when a move from `prev` to `current` is a real price change, not FX noise. */
+export function isMeaningfulChange(current: number, prev: number): boolean {
+  const diff = Math.abs(current - prev);
+  if (diff < MIN_CHANGE_ILS) return false;
+  return prev > 0 ? (diff / prev) * 100 >= MIN_CHANGE_PCT : true;
+}
+
 export interface AlertInputs {
   /** Notify at ≥ this % off the normal (baseline) price; null = no percent rule. */
   alertPct: number | null;
@@ -130,8 +149,13 @@ export function alertFires(o: AlertInputs): AlertResult {
   }
 
   // "Cheaper than last time" needs a previous check to compare against — the very
-  // first price we ever record for a game is news, not a drop.
-  const drop = !!o.notifyAnyDrop && o.prev != null && o.current < o.prev;
+  // first price we ever record for a game is news, not a drop — and the move has
+  // to be big enough to be a price change rather than exchange-rate drift.
+  const drop =
+    !!o.notifyAnyDrop &&
+    o.prev != null &&
+    o.current < o.prev &&
+    isMeaningfulChange(o.current, o.prev);
 
   return { pct, price, drop };
 }

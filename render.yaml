@@ -12,6 +12,11 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 24.4.1
+      # Required: only in production does the server take Render's PORT and bind
+      # a public interface. Without it, it stays on loopback:5174 and the service
+      # never becomes reachable.
+      - key: NODE_ENV
+        value: production
       # Optional — add your own API keys here (never commit them):
       # - key: GG_DEALS_API_KEY
       #   sync: false

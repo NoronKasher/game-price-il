@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { nis, t } from './he';
 import { regionByMarket } from './regions';
+import { cleanStoreName } from './source';
 import type { HistoryPoint } from './types';
 
 /**
@@ -242,7 +243,9 @@ export function TrackGraph({
           const points = cheapestPerCheck(rows.filter((r) => r.store === store));
           storeSeries.push({
             key: `store:${icon}:${store}`,
-            label: `${icon} ${store}`,
+            // Adapters bake a flag emoji into some store names, which Windows
+            // can't draw — sourceLabel strips it and names the region in words.
+            label: `${icon} ${cleanStoreName(store)}`,
             color: STORE_COLORS[storeIdx++ % STORE_COLORS.length]!,
             emphasis: false,
             thin: true,
@@ -264,11 +267,53 @@ export function TrackGraph({
   const allPts = visible.flatMap((s) => s.points);
   const checkTimes = [...new Set(allPts.map((d) => d.t))].sort((a, b) => a - b);
 
+  const toggle = (key: string) =>
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  /** The legend must render in EVERY state — hiding the last line used to hide
+   *  the legend with it, leaving no way to switch anything back on. */
+  const legend = (
+    <div className="graph-legend">
+      {series.map((s) => (
+        <button
+          key={s.key}
+          className={`legend-chip ${s.thin ? 'thin' : ''} ${hidden.has(s.key) ? 'off' : ''}`}
+          onClick={() => toggle(s.key)}
+          title={t.graphLegendHint}
+        >
+          <i style={{ background: s.color }} />
+          {s.label}
+          {s.emphasis && preferredName ? ` · ${t.seriesPreferred}` : ''}
+        </button>
+      ))}
+      {/* Master switch for the per-store layer — additive, never replaces the buckets. */}
+      <button
+        className={`legend-chip stores-master ${showStores ? 'on' : ''}`}
+        onClick={toggleStores}
+        title={t.graphShowStoresHint}
+      >
+        🏪 {t.graphShowStores}
+      </button>
+    </div>
+  );
+
   if (checkTimes.length < 2) {
     const only = allPts[0];
+    const message =
+      series.length > 0 && visible.length === 0
+        ? t.graphAllHidden // every line switched off — say so, don't claim "no data"
+        : history.length === 0
+          ? t.graphNoData
+          : t.graphOnePoint(nis(only?.p ?? 0));
     return (
-      <div className="graph-empty">
-        {history.length === 0 ? t.graphNoData : t.graphOnePoint(nis(only?.p ?? 0))}
+      <div className="graph-wrap">
+        <div className="graph-empty">{message}</div>
+        {series.length > 0 && legend}
       </div>
     );
   }
@@ -305,14 +350,6 @@ export function TrackGraph({
   const lowLabelX = Math.min(Math.max(X(low.t), padL + 34), W - padR - 34);
   /** Tick labels drop a redundant ".00" so the axis stays quiet. */
   const tickLabel = (v: number) => nis(Math.round(v)).replace('.00', '');
-
-  const toggle = (key: string) =>
-    setHidden((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
 
   const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
     // Map the cursor to viewBox x, then invert X() back to a time, and snap to
@@ -431,27 +468,8 @@ export function TrackGraph({
         </div>
       )}
 
-      <div className="graph-legend">
-        {series.map((s) => (
-          <button
-            key={s.key}
-            className={`legend-chip ${s.thin ? 'thin' : ''} ${hidden.has(s.key) ? 'off' : ''}`}
-            onClick={() => toggle(s.key)}
-            title={t.graphLegendHint}
-          >
-            <i style={{ background: s.color }} />
-            {s.label}
-            {s.emphasis && preferredName ? ` · ${t.seriesPreferred}` : ''}
-          </button>
-        ))}
-        {/* Master switch for the per-store layer — additive, never replaces the buckets. */}
-        <button
-          className={`legend-chip stores-master ${showStores ? 'on' : ''}`}
-          onClick={toggleStores}
-          title={t.graphShowStoresHint}
-        >
-          🏪 {t.graphShowStores}
-        </button>
+      <div className="graph-legend-row">
+        {legend}
         <button className="toolbtn" onClick={downloadPng}>🖼️ {t.exportGraphImage}</button>
       </div>
       <p className="graph-hint">{t.graphHint}</p>

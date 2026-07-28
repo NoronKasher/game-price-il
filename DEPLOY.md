@@ -30,7 +30,12 @@ like your machine does. **Render is the path of least resistance** and has a
 
 Manual alternative (no blueprint): New → Web Service → repo →
 Build command `npm install && npm run build`, Start command `npm start`,
-add env var `NODE_VERSION=24.4.1`.
+add env vars `NODE_VERSION=24.4.1` and **`NODE_ENV=production`**.
+
+> `NODE_ENV=production` is what tells the server to take the platform's `PORT`
+> and bind a public interface. Locally it deliberately ignores `PORT` and stays
+> on loopback `5174`, so a stray `PORT` in a dev environment can never move the
+> API away from the port the web app proxies to.
 
 ### Optional: GG.deals / ITAD keys
 
@@ -54,8 +59,8 @@ simply runs without those two PC-deal sources; everything else works.
 ## Local production run (sanity check)
 
 ```bash
-npm run build
-PORT=8790 npm start
+npm run build && NODE_ENV=production PORT=8790 npm start
 ```
 
 Then open http://localhost:8790 — same single-process setup the host runs.
+(`VGPT_PORT=8790` works too, in either mode.)

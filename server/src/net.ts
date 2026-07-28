@@ -76,6 +76,34 @@ export function isLocalOrigin(origin: string | undefined | null): boolean {
 }
 
 /**
+ * Where the API server listens.
+ *
+ * `PORT` alone is NOT a safe signal. Dev harnesses and IDE run-configs export
+ * PORT for the *web* dev server, and this API inheriting it moved it off 5174 —
+ * the port the Vite proxy talks to — so every request in the app failed with
+ * ECONNREFUSED and the UI looked like it had lost all its data. Only a real
+ * deployment (NODE_ENV=production, which is what hosts set) may take its port
+ * from the environment, and only a deployment binds a public interface.
+ * `VGPT_PORT` stays as an explicit local override for both.
+ */
+export function resolveListenConfig(env: NodeJS.ProcessEnv = process.env): {
+  port: number;
+  host: string;
+  production: boolean;
+} {
+  const production = env.NODE_ENV === 'production';
+  const explicit = Number(env.VGPT_PORT);
+  const fromPlatform = production ? Number(env.PORT) : NaN;
+  const port =
+    (Number.isFinite(explicit) && explicit > 0 && explicit) ||
+    (Number.isFinite(fromPlatform) && fromPlatform > 0 && fromPlatform) ||
+    5174;
+  // Local-first by default: loopback only, never reachable from the LAN.
+  const host = env.HOST ?? (production ? '0.0.0.0' : '127.0.0.1');
+  return { port, host, production };
+}
+
+/**
  * The full CSRF decision, deployment-aware: a state-changing request is allowed
  * when its Origin is local (dev: the Vite app on another localhost port) OR
  * exactly the host the request itself was addressed to (production: the server

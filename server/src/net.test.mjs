@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { absoluteUrl, isAllowedRequestOrigin, isAllowedScrapeUrl, isLocalOrigin } from './net.ts';
+import {
+  absoluteUrl,
+  isAllowedRequestOrigin,
+  isAllowedScrapeUrl,
+  isLocalOrigin,
+  resolveListenConfig,
+} from './net.ts';
 
 test('scrape guard allows the stores we actually scrape', () => {
   assert.equal(isAllowedScrapeUrl('https://arcadia.co.il/product/elden-ring'), true);
@@ -56,6 +62,38 @@ test('CSRF guard (deployed): the origin serving the app passes, everything else 
   assert.equal(isAllowedRequestOrigin(undefined, HOST), true);
   // A missing Host header can never authorize a cross-site origin.
   assert.equal(isAllowedRequestOrigin('https://evil.com', undefined), false);
+});
+
+test('a stray PORT in the dev environment never moves the API off 5174', () => {
+  // The real incident: the dev harness exported PORT=5173 for the WEB server;
+  // the API inherited it, left 5174, and every request through the Vite proxy
+  // died with ECONNREFUSED — the app looked like it had lost all its data.
+  assert.deepEqual(resolveListenConfig({ PORT: '5173' }), {
+    port: 5174,
+    host: '127.0.0.1',
+    production: false,
+  });
+  // Dev also never exposes the no-auth API beyond loopback.
+  assert.equal(resolveListenConfig({}).host, '127.0.0.1');
+});
+
+test('a real deployment takes the platform port and binds publicly', () => {
+  assert.deepEqual(resolveListenConfig({ NODE_ENV: 'production', PORT: '10000' }), {
+    port: 10000,
+    host: '0.0.0.0',
+    production: true,
+  });
+  // Production without a platform port still serves on the default.
+  assert.equal(resolveListenConfig({ NODE_ENV: 'production' }).port, 5174);
+});
+
+test('VGPT_PORT is the explicit override, in either mode', () => {
+  assert.equal(resolveListenConfig({ VGPT_PORT: '8790' }).port, 8790);
+  assert.equal(resolveListenConfig({ VGPT_PORT: '8790', PORT: '5173' }).port, 8790);
+  assert.equal(resolveListenConfig({ NODE_ENV: 'production', VGPT_PORT: '9000', PORT: '10000' }).port, 9000);
+  // Garbage falls back rather than binding port NaN/0 (a random free port).
+  assert.equal(resolveListenConfig({ VGPT_PORT: 'abc' }).port, 5174);
+  assert.equal(resolveListenConfig({ NODE_ENV: 'production', PORT: '0' }).port, 5174);
 });
 
 test('absoluteUrl joins bare-relative hrefs without welding them onto the host', () => {

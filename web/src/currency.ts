@@ -33,3 +33,18 @@ export function money(amountILS: number): string {
   const v = amountILS * (ratesFromILS[code] ?? 1);
   return SYMBOL[code] + v.toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+/**
+ * Is a price move real, or just exchange-rate drift? Foreign prices are stored
+ * in ILS, converted at capture time, so the series wobbles a few agorot whenever
+ * the rate moves while the store's own price sits still. Showing "▲ $0.02" for
+ * that is noise dressed as news.
+ *
+ * Mirrors MIN_CHANGE_* in server/src/alerts.ts, which gates the same decision for
+ * notifications — keep the two in sync so the list and the bell never disagree.
+ */
+export function isMeaningfulChange(currentILS: number, prevILS: number): boolean {
+  const diff = Math.abs(currentILS - prevILS);
+  if (diff < 1) return false;
+  return prevILS > 0 ? (diff / prevILS) * 100 >= 1 : true;
+}

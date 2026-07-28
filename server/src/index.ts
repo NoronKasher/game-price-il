@@ -56,7 +56,7 @@ import { hasApiKey, setApiKey, apiKeySource, type ApiKeyName } from './keys.ts';
 import { isAlertMode, isAlertScope } from './alerts.ts';
 import { evaluateAlerts } from './notify.ts';
 import { captureFromView } from './capture.ts';
-import { isAllowedRequestOrigin } from './net.ts';
+import { isAllowedRequestOrigin, resolveListenConfig } from './net.ts';
 
 const ALL_PLATFORMS: Platform[] = ['pc', 'ps5', 'ps4', 'xbox-series', 'xbox-one', 'switch'];
 
@@ -271,7 +271,12 @@ app.post('/api/track', async (req, res) => {
     return res.status(400).json({ error: 'missing fields' });
   }
   const row = addToWishlist({ title, platform, image, refs });
-  await recordAllFor(row);
+  // Re-tracking a game already on the list (a second platform tab, a double
+  // click, adding it again from search) used to append another full check
+  // seconds after the first — junk duplicate points that flatten the graph's
+  // time axis. Record only what the history doesn't already have.
+  const offers = await currentOffersFor(row);
+  await captureFromView(row, offers);
   res.json({ id: row.id, history: bestPerCheck(row.id) });
 });
 
@@ -473,8 +478,12 @@ app.get('/api/ticker', async (_req, res) => {
       if (!Number.isFinite(normalUsd) || normalUsd <= 0) continue;
       deals.push({
         title: d.title,
-        salePrice: Math.round(await toILS(saleUsd, 'USD')),
-        normalPrice: Math.round(await toILS(normalUsd, 'USD')),
+        // Keep agorot. Rounding to whole shekels here distorted the price the
+        // user actually sees: $0.99 → ₪3 → back to $0.98 once the client
+        // formats it in dollars. The client rounds for display; the API keeps
+        // the real converted amount.
+        salePrice: await toILS(saleUsd, 'USD'),
+        normalPrice: await toILS(normalUsd, 'USD'),
         savings: Math.round(Number(d.savings)),
         rating: d.steamRatingPercent ? Number(d.steamRatingPercent) : undefined,
       });
@@ -542,9 +551,7 @@ if (fs.existsSync(path.join(webDist, 'index.html'))) {
   console.log('serving built web app from', webDist);
 }
 
-// Local-first by default: bind loopback only, never reachable from the LAN (the
-// Vite dev proxy talks to it locally). A hosting platform hands us PORT and
-// needs an external bind — only then do we open up, on the platform's port.
-const PORT = Number(process.env.PORT) || 5174;
-const HOST = process.env.HOST ?? (process.env.PORT ? '0.0.0.0' : '127.0.0.1');
-app.listen(PORT, HOST, () => console.log(`VGPT.IL server on http://${HOST}:${PORT}`));
+const { port, host, production } = resolveListenConfig();
+app.listen(port, host, () =>
+  console.log(`VGPT.IL server on http://${host}:${port}${production ? ' (production)' : ''}`)
+);

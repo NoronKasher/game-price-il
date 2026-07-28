@@ -21,7 +21,15 @@ import {
 import { PriceGraph, TrackGraph } from './PriceGraph';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
-import { setCurrencyConfig, currencySymbol, currencyCode, CURRENCIES, type CurrencyCode } from './currency';
+import {
+  setCurrencyConfig,
+  currencySymbol,
+  currencyCode,
+  isMeaningfulChange,
+  CURRENCIES,
+  type CurrencyCode,
+} from './currency';
+import { sourceLabel } from './source';
 import type {
   AlertMode,
   AlertRule,
@@ -135,6 +143,7 @@ export function App() {
           >
             {t.settingsTab}
           </button>
+          <CurrencySwitch value={currency} onChange={changeCurrency} />
           <NotificationBell
             state={notifications}
             rule={alerts}
@@ -195,9 +204,7 @@ export function App() {
             onFocusConsumed={() => setFocusTrack(null)}
           />
         )}
-        {view.name === 'settings' && (
-          <SettingsView currency={currency} onChangeCurrency={changeCurrency} />
-        )}
+        {view.name === 'settings' && <SettingsView />}
       </main>
 
       <AlertToasts
@@ -206,6 +213,77 @@ export function App() {
         onOpen={openTrackedGame}
       />
     </>
+  );
+}
+
+/**
+ * One price in the tracking list: what kind of price it is, how much, and where
+ * it comes from — in that reading order, each part visually distinct.
+ *
+ * The old markup put the kind, a bare flag emoji and the raw store name in one
+ * undifferentiated row, which on Windows (no flag glyphs) read "Steam us $59.99
+ * US" — the region twice and the store name apparently mangled. Now the store
+ * and region are one labelled chip built by sourceLabel().
+ */
+function PriceLine({
+  icon,
+  kind,
+  priceILS,
+  store,
+  region,
+  official,
+  title,
+}: {
+  icon: string;
+  kind: string;
+  priceILS: number;
+  store: string;
+  region?: string | null;
+  official?: boolean;
+  title?: string;
+}) {
+  return (
+    <div className={`price-line ${official ? 'official' : ''}`} title={title}>
+      <span className="price-kind" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="price-type">{kind}</span>
+      <span className="price num">{nis(priceILS)}</span>
+      <span className="price-source" title={sourceLabel(store, region)}>
+        {sourceLabel(store, region)}
+      </span>
+    </div>
+  );
+}
+
+/* ───────────────────────── currency switch (header) ───────────────────────── */
+
+/**
+ * Display currency, reachable from every page. It used to live only inside the
+ * settings tab, which meant leaving whatever you were comparing to change it —
+ * the one setting you most want to flip while looking at prices.
+ */
+function CurrencySwitch({
+  value,
+  onChange,
+}: {
+  value: CurrencyCode;
+  onChange: (c: CurrencyCode) => void;
+}) {
+  return (
+    <div className="currency-switch" role="group" aria-label={t.currencyTitle}>
+      {CURRENCIES.map((c) => (
+        <button
+          key={c}
+          className={c === value ? 'active' : ''}
+          onClick={() => onChange(c)}
+          title={t.currencyNames[c]}
+          aria-pressed={c === value}
+        >
+          {currencySymbol(c)}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -490,7 +568,11 @@ function NotificationRule({
     const n = Number(pctVal);
     onChange({ pct: pctVal.trim() === '' || !(n >= 1) ? null : Math.round(n) });
   };
-  const commitPrice = (ccy: string = value.ccy) => {
+  // With no threshold set yet, offer the currency the user is actually looking at.
+  // Defaulting to ILS while the app displayed dollars invited "notify under 50"
+  // to mean ₪50 when the user meant $50.
+  const effectiveCcy = value.price == null ? currencyCode() : value.ccy;
+  const commitPrice = (ccy: string = effectiveCcy) => {
     const n = Number(priceVal);
     onChange({ price: priceVal.trim() === '' || !(n > 0) ? null : n, ccy });
   };
@@ -538,7 +620,7 @@ function NotificationRule({
         />
         <select
           className="pref-select small"
-          value={value.ccy}
+          value={effectiveCcy}
           onChange={(e) => commitPrice(e.target.value)}
         >
           {CURRENCIES.map((c) => (
@@ -1275,39 +1357,48 @@ function CaptureSelect({
 
 /* ───────────────────────── settings (BYOK keys) ───────────────────────── */
 
-function SettingsView({
-  currency,
-  onChangeCurrency,
-}: {
-  currency: CurrencyCode;
-  onChangeCurrency: (c: CurrencyCode) => void;
-}) {
+/**
+ * Shown whenever the app can't reach its own server. Silently rendering an
+ * empty state instead made a live tracking list look erased — this says what
+ * actually happened and offers the one useful action.
+ */
+function ServerDown({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="server-down" role="alert">
+      <p className="server-down-title">⚠️ {t.serverDownTitle}</p>
+      <p className="server-down-body">{t.serverDownBody}</p>
+      <button className="toolbtn" onClick={onRetry}>
+        {t.serverDownRetry}
+      </button>
+    </div>
+  );
+}
+
+function SettingsView() {
   const [keys, setKeys] = useState<KeysResponse | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const loadKeys = () =>
+    api
+      .getKeys()
+      .then((k) => {
+        setKeys(k);
+        setLoadFailed(false);
+      })
+      .catch(() => setLoadFailed(true));
   useEffect(() => {
-    api.getKeys().then(setKeys).catch(() => {});
+    loadKeys();
   }, []);
   const save = async (patch: { ggdeals?: string; itad?: string }) => setKeys(await api.setKeys(patch));
+
+  // A dead server used to leave this page blank below the heading, which read as
+  // "you can't enter API keys here" rather than "the server isn't answering".
+  if (loadFailed) return <ServerDown onRetry={loadKeys} />;
+
   return (
     <section className="settings-view">
-      <h2>{t.currencyTitle}</h2>
-      <p className="settings-intro">{t.currencyHint}</p>
-      <div className="currency-row">
-        <select
-          className="pref-select"
-          value={currency}
-          onChange={(e) => onChangeCurrency(e.target.value as CurrencyCode)}
-        >
-          {CURRENCIES.map((c) => (
-            <option key={c} value={c}>
-              {t.currencyNames[c]}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <h2 className="settings-section">{t.keysTitle}</h2>
+      <h2>{t.keysTitle}</h2>
       <p className="settings-intro">{t.keysIntro}</p>
-      {keys && (
+      {keys ? (
         <>
           <KeyRow
             label="GG.deals"
@@ -1324,7 +1415,12 @@ function SettingsView({
             onSave={(v) => save({ itad: v })}
           />
         </>
+      ) : (
+        <p className="settings-intro">{t.loadingDetails}</p>
       )}
+
+      <h2 className="settings-section">{t.currencyTitle}</h2>
+      <p className="settings-intro">{t.currencySettingsNote}</p>
     </section>
   );
 }
@@ -1409,10 +1505,19 @@ function WishlistView({
   const [captureGlobal, setCaptureGlobal] = useState(7);
   const [showRule, setShowRule] = useState(false);
 
-  // On failure fall through to an empty list rather than leaving `items` null —
-  // the render below bails out on null, so an unhandled error left the whole
-  // wishlist tab permanently blank with nothing explaining why.
-  const load = () => api.wishlist().then((r) => setItems(r.items)).catch(() => setItems([]));
+  // "Couldn't reach the server" and "you track nothing yet" are completely
+  // different messages. Collapsing a failed fetch into an empty list once made
+  // a full tracking list look permanently DELETED — never imply data loss we
+  // haven't verified.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const load = () =>
+    api
+      .wishlist()
+      .then((r) => {
+        setItems(r.items);
+        setLoadFailed(false);
+      })
+      .catch(() => setLoadFailed(true));
   useEffect(() => {
     load();
     api.getSettings().then((s) => setCaptureGlobal(s.captureDaysGlobal)).catch(() => {});
@@ -1513,6 +1618,7 @@ function WishlistView({
     }
   };
 
+  if (loadFailed) return <ServerDown onRetry={load} />;
   if (!items) return null;
 
   return (
@@ -1632,51 +1738,56 @@ function WishlistView({
                     </td>
                     <td className="prices-cell">
                       {it.current ? (
-                        <div className="price-line official" title={t.kindDigital}>
-                          <span className="price-kind">☁️</span>
-                          <span className="price-type">{t.kindDigitalShort}</span>
-                          {it.current.region && regionByMarket.get(it.current.region) && (
-                            <span
-                              className="region-flag"
-                              title={
-                                it.preferred_region && it.current.region !== it.preferred_region
-                                  ? t.bestPriceFallback(regionByMarket.get(it.current.region)!.nameHe)
-                                  : t.forRegionNote(regionByMarket.get(it.current.region)!.nameHe)
-                              }
-                            >
-                              {regionByMarket.get(it.current.region)!.flag}
-                            </span>
-                          )}
-                          <span className="price num">{nis(it.current.price_ils)}</span>
-                          <span className="meta">{it.current.store}</span>
-                        </div>
+                        <PriceLine
+                          icon="☁️"
+                          kind={t.kindDigitalShort}
+                          official
+                          priceILS={it.current.price_ils}
+                          store={it.current.store}
+                          region={it.current.region}
+                          title={
+                            it.current.region && regionByMarket.get(it.current.region)
+                              ? it.preferred_region && it.current.region !== it.preferred_region
+                                ? t.bestPriceFallback(regionByMarket.get(it.current.region)!.nameHe)
+                                : t.forRegionNote(regionByMarket.get(it.current.region)!.nameHe)
+                              : t.kindDigital
+                          }
+                        />
                       ) : (
                         <span className="meta">{t.neverChecked}</span>
                       )}
                       {it.physical && (
-                        <div className="price-line" title={`${t.kindDisc} · ${it.physical.store}`}>
-                          <span className="price-kind">💿</span>
-                          <span className="price-type">{t.kindDiscShort}</span>
-                          <span className="price num">{nis(it.physical.price_ils)}</span>
-                        </div>
+                        <PriceLine
+                          icon="💿"
+                          kind={t.kindDiscShort}
+                          priceILS={it.physical.price_ils}
+                          store={it.physical.store}
+                          title={t.kindDisc}
+                        />
                       )}
                       {it.cdkeys && (
-                        <div className="price-line" title={`${t.kindKeyshop} · ${it.cdkeys.store}`}>
-                          <span className="price-kind">🔑</span>
-                          <span className="price-type">{t.kindKeyshopShort}</span>
-                          <span className="price num">{nis(it.cdkeys.price_ils)}</span>
-                        </div>
+                        <PriceLine
+                          icon="🔑"
+                          kind={t.kindKeyshopShort}
+                          priceILS={it.cdkeys.price_ils}
+                          store={it.cdkeys.store}
+                          title={t.kindKeyshop}
+                        />
                       )}
                     </td>
                     <td>
-                      {delta == null ? (
+                      {/* Movements too small to be a real price change are exchange-rate
+                          drift, not news — see isMeaningfulChange. */}
+                      {delta == null || !it.previous ? (
                         <span className="delta flat">—</span>
+                      ) : !isMeaningfulChange(it.current!.price_ils, it.previous.price_ils) ? (
+                        <span className="delta flat" title={t.deltaNoiseHint}>
+                          ≈
+                        </span>
                       ) : delta < 0 ? (
                         <span className="delta down num">▼ {nis(Math.abs(delta))}</span>
-                      ) : delta > 0 ? (
-                        <span className="delta up num">▲ {nis(delta)}</span>
                       ) : (
-                        <span className="delta flat">0</span>
+                        <span className="delta up num">▲ {nis(delta)}</span>
                       )}
                     </td>
                     <td className="meta">
