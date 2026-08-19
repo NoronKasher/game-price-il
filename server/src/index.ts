@@ -56,6 +56,7 @@ import { hasApiKey, setApiKey, apiKeySource, type ApiKeyName } from './keys.ts';
 import { isAlertMode, isAlertScope } from './alerts.ts';
 import { evaluateAlerts } from './notify.ts';
 import { captureFromView } from './capture.ts';
+import { priceVerdict } from './verdict.ts';
 import { isAllowedRequestOrigin, resolveListenConfig } from './net.ts';
 
 const ALL_PLATFORMS: Platform[] = ['pc', 'ps5', 'ps4', 'xbox-series', 'xbox-one', 'switch'];
@@ -191,7 +192,17 @@ app.get('/api/wishlist', (_req, res) => {
     // keyshop/CD-key from the latest check (null when the game has neither).
     const physical = latestCheapestOf(row.id, 'physical');
     const cdkeys = latestCheapestOf(row.id, 'external');
-    return { ...row, refs: JSON.parse(row.refs) as SourceRef[], current, previous, physical, cdkeys };
+    // "Is this a good price?" judged against this game's own record, on the very
+    // same series the headline price comes from — so the verdict can never
+    // disagree with the number printed beside it. `scope` says WHICH price it
+    // judged: with a pinned region that's the official store, otherwise it's the
+    // cheapest of everything. Without it, "cheapest ever ₪183" reads as a lie
+    // when a ₪111 keyshop price sits on the next line.
+    const base = priceVerdict(history);
+    const verdict = base
+      ? { ...base, scope: regional.length > 0 ? ('official' as const) : ('any' as const) }
+      : null;
+    return { ...row, refs: JSON.parse(row.refs) as SourceRef[], current, previous, physical, cdkeys, verdict };
   });
   res.json({ items: rows });
 });

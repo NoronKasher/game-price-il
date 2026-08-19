@@ -58,7 +58,15 @@ body {
   background: none; border: 1px solid var(--line); color: var(--text);
   font: inherit; font-weight: 500; padding: 8px 18px; border-radius: 8px; cursor: pointer;
 }
-.tabs button.active { background: var(--amber); border-color: var(--amber); color: #14100a; font-weight: 700; }
+/* ── Hebrew emphasis ─────────────────────────────────────────────────────────
+   Hebrew has no capitals and no italics, so bold is the only weapon a Latin
+   design reaches for — and heavy weights close up Hebrew letterforms, which
+   makes them HARDER to read. The convention is to emphasise with size (~+10%)
+   or colour instead. So: 500 is our "bold" for Hebrew text; 700 is reserved for
+   numerals, where the digits are Latin and the extra weight genuinely helps a
+   price stand out in a column. Where an element already has a background or an
+   accent colour doing the emphasis, weight drops back to 500 entirely. */
+.tabs button.active { background: var(--amber); border-color: var(--amber); color: #14100a; font-weight: 500; }
 
 /* ── ticker ── */
 .ticker {
@@ -68,7 +76,7 @@ body {
 }
 .ticker .label {
   flex: none; padding: 2px 14px; margin-inline-start: 10px;
-  background: var(--amber); color: #14100a; font-weight: 700; border-radius: 4px;
+  background: var(--amber); color: #14100a; font-weight: 500; border-radius: 4px;
   z-index: 1;
 }
 .ticker .reel { display: inline-block; padding-inline-start: 100%; animation: reel 60s linear infinite; }
@@ -95,7 +103,7 @@ body {
 }
 .searchbar input:focus { border-color: var(--amber); }
 .searchbar button {
-  font: inherit; font-weight: 700; font-size: 17px; padding: 0 30px;
+  font: inherit; font-weight: 500; font-size: 18px; padding: 0 30px;
   background: var(--amber); color: #14100a; border: none; border-radius: 10px; cursor: pointer;
 }
 .hint { color: var(--muted); font-size: 13px; margin: 10px 4px 0; }
@@ -161,14 +169,14 @@ body {
   border-radius: 10px; overflow: hidden; background: var(--panel);
 }
 .mode-switch button {
-  font: inherit; font-size: 15px; font-weight: 700; padding: 10px 22px; cursor: pointer;
+  font: inherit; font-size: 15px; font-weight: 500; padding: 10px 22px; cursor: pointer;
   background: none; color: var(--muted); border: none;
 }
 .mode-switch button.on { background: var(--amber); color: #14100a; }
 
 .digital-toggle {
   display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
-  font: inherit; font-size: 17px; font-weight: 700; color: var(--accent);
+  font: inherit; font-size: 17px; font-weight: 500; color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border: 1px solid var(--accent); border-radius: 10px; padding: 10px 20px; margin-bottom: 14px;
 }
@@ -176,19 +184,19 @@ body {
 .digital-toggle .dt-icon { font-size: 20px; }
 
 .editions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
-.editions-label { color: var(--muted); font-size: 13px; font-weight: 700; }
+.editions-label { color: var(--muted); font-size: 13px; font-weight: 500; }
 .editions button {
   font: inherit; font-size: 14px; font-weight: 500; padding: 6px 16px; border-radius: 999px; cursor: pointer;
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
 }
-.editions button.on { background: var(--amber); border-color: var(--amber); color: #14100a; font-weight: 700; }
+.editions button.on { background: var(--amber); border-color: var(--amber); color: #14100a; font-weight: 500; }
 
 .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .filters button {
   font: inherit; font-size: 14px; padding: 6px 14px; border-radius: 8px; cursor: pointer;
   background: var(--panel); color: var(--text); border: 1px solid var(--line);
 }
-.filters button.on { border-color: var(--amber); color: var(--amber); font-weight: 700; }
+.filters button.on { border-color: var(--amber); color: var(--amber); font-weight: 500; }
 
 .board { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 12px; overflow: hidden; }
 .board th {
@@ -222,7 +230,10 @@ body {
 
 /* wishlist board */
 .wishrow-title { display: flex; align-items: center; gap: 12px; }
-.wishrow-title img { width: 92px; border-radius: 6px; }
+/* A fixed frame, not just a width: store artwork ranges from wide banners to
+   tall box art, and letting each set its own height made row heights jump
+   between 100px and 170px down the list. */
+.wishrow-title img { width: 84px; height: 48px; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
 .delta.up { color: var(--up); font-weight: 700; }
 .delta.down { color: var(--down); font-weight: 700; }
 .delta.flat { color: var(--muted); }
@@ -245,7 +256,7 @@ body {
 .track-prompt b { font-size: 16px; }
 .track-prompt p { color: var(--muted); font-size: 14px; line-height: 1.7; margin: 8px 0 16px; }
 .history-actions { display: flex; align-items: center; gap: 14px; margin-top: 12px; }
-.tracking-badge { color: var(--down); font-weight: 700; font-size: 14px; }
+.tracking-badge { color: var(--down); font-weight: 500; font-size: 14px; }
 
 .graph-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
 .graph { width: 100%; height: auto; display: block; }
@@ -280,9 +291,17 @@ body {
 .legend-chip.off { opacity: 0.45; text-decoration: line-through; }
 .legend-chip.thin { font-size: 11.5px; padding: 3px 8px; }
 .legend-chip.thin i { height: 2px; }
-/* The per-store master switch reads as a mode, not a series. */
-.legend-chip.stores-master { border-style: dashed; color: var(--muted); }
-.legend-chip.stores-master.on { border-color: var(--amber); border-style: solid; color: var(--amber); }
+
+/* Graph OPTIONS — what the chart draws. Deliberately unlike the legend chips
+   below them, which toggle individual data series; a mode switch sitting in a
+   row of series read as just another line to turn off. */
+.graph-controls { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.graph-ctl {
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+  border-radius: var(--radius, 8px); padding: 5px 12px; cursor: pointer; font: inherit; font-size: 12.5px;
+}
+.graph-ctl:hover { border-color: var(--amber); color: var(--text); }
+.graph-ctl.on { background: color-mix(in srgb, var(--amber) 16%, var(--panel-2)); border-color: var(--amber); color: var(--amber); }
 .graph-tooltip {
   /* Floats above the plot; clamped so it can never widen the layout. */
   position: absolute; top: 10px; transform: translateX(-50%); z-index: 5; pointer-events: none;
@@ -322,7 +341,7 @@ body {
 
 .toolbtn {
   display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-  font: inherit; font-weight: 700; font-size: 14px; padding: 8px 16px; border-radius: 8px;
+  font: inherit; font-weight: 500; font-size: 14px; padding: 8px 16px; border-radius: 8px;
   background: var(--panel); color: var(--text); border: 1px solid var(--line); text-decoration: none;
 }
 .toolbtn:hover { border-color: var(--amber); }
@@ -345,7 +364,7 @@ body {
   background: var(--panel); border: 1px solid color-mix(in srgb, var(--up) 45%, var(--line));
   border-radius: 12px; padding: 20px 22px; max-width: 560px; margin: 20px auto; text-align: center;
 }
-.server-down-title { margin: 0 0 8px; font-weight: 700; color: var(--up); }
+.server-down-title { margin: 0 0 8px; font-weight: 500; font-size: 17px; color: var(--up); }
 .server-down-body { margin: 0 0 14px; color: var(--muted); line-height: 1.7; }
 
 /* Notification bell (header) + dropdown */
@@ -455,7 +474,7 @@ body {
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 10px;
   padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px;
 }
-.alert-title { color: var(--amber); font-weight: 700; font-size: 13px; }
+.alert-title { color: var(--amber); font-weight: 500; font-size: 14px; }
 .alert-line { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
 .alert-input {
   width: 68px; font: inherit; font-size: 13px; color: var(--text);
@@ -511,27 +530,62 @@ body {
 .offers-loading { color: var(--muted); padding: 24px; text-align: center; }
 
 /* Tracking list: three stacked prices per game (in-platform / disc / keyshop). */
-.prices-cell { line-height: 1.5; min-width: 220px; }
+.prices-cell { line-height: 1.5; min-width: 250px; }
+.price-line .delta { font-size: 11px; margin-inline-start: 2px; }
 /* kind · amount · source, in reading order. Wrapping (rather than truncating)
    keeps a long source like "PS Store · דרום אפריקה" readable in a narrow column
    without widening the table past the viewport. */
-.price-line { display: flex; align-items: center; gap: 4px 7px; flex-wrap: wrap; }
+/* Never wrap: one price is one line, always. The source chip shrinks with an
+   ellipsis (full text stays in its tooltip) rather than dropping to a new row,
+   which made row heights jump around unpredictably between games. */
+.price-line { display: flex; align-items: center; gap: 7px; flex-wrap: nowrap; }
 .price-line + .price-line { margin-top: 5px; }
-.price-line .price-kind { width: 1.2em; text-align: center; opacity: 0.9; flex: 0 0 auto; }
-.price-line .price-type { color: var(--muted); font-size: 12px; white-space: nowrap; flex: 0 0 auto; }
-.price-line .price { font-weight: 700; white-space: nowrap; flex: 0 0 auto; margin-inline-start: auto; }
+/* Bucket dots, sharing the graph's series colours so list and chart agree.
+   Drawn, not emoji — emoji vary wildly per platform (Windows can't draw flags). */
+.price-line .price-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.price-line .price-dot.official { background: var(--accent); }
+.price-line .price-dot.disc { background: #7ee0a3; }
+.price-line .price-dot.keys { background: #c792ea; }
+/* Fixed label and amount widths align the three prices into a column without an
+   auto margin — which used to shove the amount (and everything after it) to the
+   far edge and strand the source chip on its own line. */
+.price-line .price-type { color: var(--muted); font-size: 12px; white-space: nowrap; flex: 0 0 68px; }
+.price-line .price-amount { display: inline-flex; align-items: baseline; gap: 5px; flex: 0 0 auto; min-width: 86px; }
+.price-line .price { font-weight: 700; white-space: nowrap; }
 /* The origin of the price, as its own quiet chip — never mistakable for the amount. */
 .price-line .price-source {
-  color: var(--muted); font-size: 11.5px; background: var(--panel-2);
-  border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
-  white-space: nowrap; flex: 0 0 auto;
+  color: var(--muted); font-size: 11px; background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 6px;
+  white-space: nowrap; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
 }
+/* The region picker doesn't need to be the widest column on the page. */
+.wishlist .pref-select.small { max-width: 132px; }
 /* The official-store line is the only one the preferred-region picker controls —
    give it a subtle accent so that link is obvious at a glance. */
 .price-line.official {
   border-inline-start: 2px solid var(--accent); padding-inline-start: 6px; margin-inline-start: -8px;
 }
 .price-line.official .price-type { color: var(--accent); }
+
+/* The buy-now verdict, above the prices it judges. Colour is earned: only a
+   genuine low gets the green rail; "still above its low" stays grey and quiet. */
+/* Sits under the game's title, so it reads as a statement about that game. */
+.verdict { display: flex; flex-direction: column; gap: 0; margin: 5px 0 0; padding-inline-start: 26px; }
+.verdict.record .verdict-main::before,
+.verdict.cheapest-since .verdict-main::before {
+  content: '▼'; font-size: 9px; margin-inline-end: 4px; vertical-align: 1px;
+}
+.verdict-main { font-size: 12px; line-height: 1.45; }
+.verdict.record .verdict-main, .verdict.cheapest-since .verdict-main { color: var(--down); font-weight: 500; }
+.verdict.above-low .verdict-main { color: var(--muted); font-size: 12px; }
+.verdict-sub { color: var(--muted); font-size: 11.5px; }
+.verdict-evidence { color: var(--muted); font-size: 10.5px; opacity: 0.8; }
+/* "Dropped 3 days ago" — recency, not an expiry we can't know. */
+.verdict-fresh {
+  align-self: flex-start; color: var(--down); font-size: 10.5px;
+  background: color-mix(in srgb, var(--down) 12%, transparent);
+  border-radius: 3px; padding: 1px 6px; margin-top: 2px;
+}
 
 /* One-line reminder above the tracking table that region scopes to the official store. */
 .region-scope-hint {
@@ -545,7 +599,7 @@ body {
   border: 1px solid color-mix(in srgb, var(--amber) 35%, var(--line));
   font-size: 13px; color: var(--text);
 }
-.source-notice-head { margin: 0 0 6px; font-weight: 700; color: var(--amber); }
+.source-notice-head { margin: 0 0 6px; font-weight: 500; font-size: 15px; color: var(--amber); }
 .source-notice ul { margin: 0; padding-inline-start: 20px; }
 .source-notice li { margin: 2px 0; color: var(--text); }
 .source-notice-hint { margin: 8px 0 0; color: var(--muted); }

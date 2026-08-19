@@ -127,6 +127,56 @@ test('the global alert rule round-trips, and "off" is not mistaken for "unset"',
   });
 });
 
+test('sharing a tracking file merges without losing or duplicating anything', async () => {
+  const db = await loadDb(tempDataDir());
+  const mine = db.addToWishlist({ title: 'Elden Ring', platform: 'pc', refs: [{ sourceId: 'steam-regional', sourceGameId: '1245620' }] });
+  db.setPreferredRegion(mine.id, 'IL');
+  db.recordOffers(mine.id, [{ store: 'Steam', region: 'IL', kind: 'digital', price: 183, currency: 'ILS', priceILS: 183 }], '2026-07-01 10:00:00');
+
+  // Round-tripping my own file must change nothing at all.
+  const exported = db.exportAll();
+  assert.deepEqual(db.importAll({ items: exported }), { games: 0, points: 0 });
+  assert.equal(db.listWishlist().length, 1);
+  assert.equal(db.bestPerCheck(mine.id).length, 1);
+
+  // A friend's file: one check I already have, one I don't, plus a game I don't track.
+  const friend = [
+    {
+      title: 'Elden Ring',
+      platform: 'pc',
+      image: null,
+      refs: [{ sourceId: 'cheapshark', sourceGameId: '612' }],
+      preferred_region: 'US',
+      added_at: '2026-01-01 00:00:00',
+      history: [
+        { store: 'Steam', region: 'IL', kind: 'digital', price: 183, currency: 'ILS', price_ils: 183, checked_at: '2026-07-01 10:00:00' },
+        { store: 'Steam', region: 'IL', kind: 'digital', price: 149, currency: 'ILS', price_ils: 149, checked_at: '2026-07-15 10:00:00' },
+      ],
+    },
+    {
+      title: 'Hades II',
+      platform: 'switch',
+      image: null,
+      refs: [{ sourceId: 'nintendo-eshop', sourceGameId: 'hades-ii' }],
+      preferred_region: null,
+      added_at: '2026-05-05 00:00:00',
+      history: [
+        { store: 'eShop', region: 'US', kind: 'digital', price: 29.99, currency: 'USD', price_ils: 99, checked_at: '2026-07-20 10:00:00' },
+      ],
+    },
+  ];
+  assert.deepEqual(db.importAll({ items: friend }), { games: 1, points: 2 }, 'only the genuinely new rows');
+
+  const rows = db.listWishlist();
+  assert.equal(rows.length, 2);
+  const eldenAfter = rows.find((r) => r.title === 'Elden Ring');
+  // My own region choice survives someone else's file.
+  assert.equal(eldenAfter.preferred_region, 'IL');
+  // Their source ref is adopted alongside mine, so future checks cover both.
+  assert.equal(JSON.parse(eldenAfter.refs).length, 2);
+  assert.equal(db.bestPerCheck(eldenAfter.id).length, 2, 'their extra check joined my history');
+});
+
 test('alert scopes read the right price series for the game', async () => {
   const db = await loadDb(tempDataDir());
   const row = db.addToWishlist({ title: 'EA Sports FC 25', platform: 'ps5', refs: [] });

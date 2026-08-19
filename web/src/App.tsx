@@ -41,6 +41,7 @@ import type {
   Offer,
   AppNotification,
   Platform,
+  PriceVerdict,
   SearchResponse,
   SourceRef,
   SourceStatus,
@@ -226,32 +227,106 @@ export function App() {
  * and region are one labelled chip built by sourceLabel().
  */
 function PriceLine({
-  icon,
+  tone,
   kind,
   priceILS,
   store,
   region,
   official,
   title,
+  delta,
 }: {
-  icon: string;
+  /** Which bucket this price is — also picks the dot colour, matching the graph. */
+  tone: 'official' | 'disc' | 'keys';
   kind: string;
   priceILS: number;
   store: string;
   region?: string | null;
   official?: boolean;
   title?: string;
+  /** Movement since the previous check, in ILS — shown beside the price it describes. */
+  delta?: { amountILS: number; prevILS: number } | null;
 }) {
   return (
     <div className={`price-line ${official ? 'official' : ''}`} title={title}>
-      <span className="price-kind" aria-hidden="true">
-        {icon}
-      </span>
+      {/* A drawn dot rather than an emoji: emoji render inconsistently across
+          platforms (Windows shows flag emoji as bare letters), and these dots
+          reuse the graph's series colours so the two views agree. */}
+      <span className={`price-dot ${tone}`} aria-hidden="true" />
       <span className="price-type">{kind}</span>
-      <span className="price num">{nis(priceILS)}</span>
+      {/* Amount and its movement travel together — with the delta as a separate
+          flex child it drifted to the far edge, away from the price it describes. */}
+      <span className="price-amount">
+        <span className="price num">{nis(priceILS)}</span>
+        {delta && <DeltaMark amountILS={delta.amountILS} prevILS={delta.prevILS} />}
+      </span>
       <span className="price-source" title={sourceLabel(store, region)}>
         {sourceLabel(store, region)}
       </span>
+    </div>
+  );
+}
+
+/** Which way a price moved, next to the price itself rather than in its own column. */
+function DeltaMark({ amountILS, prevILS }: { amountILS: number; prevILS: number }) {
+  if (!isMeaningfulChange(prevILS + amountILS, prevILS)) {
+    return (
+      <span className="delta flat" title={t.deltaNoiseHint}>
+        ≈
+      </span>
+    );
+  }
+  const down = amountILS < 0;
+  return (
+    <span className={`delta ${down ? 'down' : 'up'} num`}>
+      {down ? '▼' : '▲'} {nis(Math.abs(amountILS))}
+    </span>
+  );
+}
+
+/**
+ * The answer to "should I buy this now?", above the prices it judges.
+ *
+ * Worked out from the game's own recorded history rather than the discount a
+ * shop advertises — a store can call anything 50% off, but it can't argue with
+ * what this tool watched the price actually do. Stays quiet (grey, one line)
+ * when the answer is "no"; only a genuine low earns colour.
+ */
+function VerdictLine({ v }: { v: PriceVerdict }) {
+  const low = nis(v.lowILS);
+  const notable = v.kind === 'record' || v.kind === 'cheapest-since';
+  const main =
+    v.kind === 'record'
+      ? t.verdictRecord
+      : v.kind === 'cheapest-since'
+        ? t.verdictCheapestSince(t.verdictSince(v.daysSinceCheaper ?? 0))
+        : t.verdictAboveLow(v.pctAboveLow, low);
+
+  const scope = t.verdictScope[v.scope] ?? '';
+  return (
+    <div className={`verdict ${v.kind}`} title={t.verdictHint}>
+      <span className="verdict-main">{main}</span>
+      {/* Naming the scope is what stops "cheapest ever ₪183" from reading as a
+          lie when a cheaper keyshop price sits on the next line. */}
+      {/* At a record the low IS today's price, so repeating it just invited a
+          confusing near-miss ("record €24.07 · all-time low €24.06" — the 1%
+          FX tolerance). Only a non-record needs the low spelled out. */}
+      <span className="verdict-sub">
+        {scope}
+        {v.kind !== 'record' ? ` · ${t.verdictAboveLow(v.pctAboveLow, low)}` : ''}
+      </span>
+      {/* Recency of the cut — the honest half of "when does this sale end?",
+          which no source publishes. Only shown while it's still news. */}
+      {v.changeDirection === 'down' && (v.changedDaysAgo ?? 99) <= 14 && (
+        <span className="verdict-fresh" title={t.verdictDroppedHint}>
+          {t.verdictDropped(v.changedDaysAgo ?? 0)}
+        </span>
+      )}
+      {/* Say what the claim rests on. "Cheapest ever" off two checks is true and
+          nearly worthless; showing the evidence stops it from overselling. */}
+      {notable && v.checks < 5 && (
+        <span className="verdict-evidence">{t.verdictEvidence(v.checks, v.spanDays)}</span>
+      )}
     </div>
   );
 }
@@ -993,10 +1068,10 @@ function GamePage({
       {offers && physical.length > 0 && digitalRegions.length + digitalStores.length > 0 && (
         <div className="mode-switch">
           <button className={mode === 'physical' ? 'on' : ''} onClick={() => setMode('physical')}>
-            💿 {t.modePhysical}
+            <span className="price-dot disc" aria-hidden="true" /> {t.modePhysical}
           </button>
           <button className={mode === 'digital' ? 'on' : ''} onClick={() => setMode('digital')}>
-            ☁️ {t.modeDigital}
+            <span className="price-dot official" aria-hidden="true" /> {t.modeDigital}
           </button>
         </div>
       )}
@@ -1682,7 +1757,8 @@ function WishlistView({
               <th>פלטפורמה</th>
               <th>{t.preferredCol}</th>
               <th>{t.pricesCol}</th>
-              <th>שינוי</th>
+              {/* The old "שינוי" column held one character per row; the movement
+                  now sits beside the price it actually describes. */}
               <th>{t.lastChecked}</th>
               <th></th>
             </tr>
@@ -1715,6 +1791,9 @@ function WishlistView({
                           </span>
                         ) : null}
                       </button>
+                      {/* The verdict belongs with the game's name, not floating
+                          above a stack of prices it only partly describes. */}
+                      {it.verdict && <VerdictLine v={it.verdict} />}
                     </td>
                     <td>
                       <span className={`chip ${it.platform}`} style={{ cursor: 'default' }}>
@@ -1739,9 +1818,14 @@ function WishlistView({
                     <td className="prices-cell">
                       {it.current ? (
                         <PriceLine
-                          icon="☁️"
+                          tone="official"
                           kind={t.kindDigitalShort}
                           official
+                          delta={
+                            delta != null && it.previous
+                              ? { amountILS: delta, prevILS: it.previous.price_ils }
+                              : null
+                          }
                           priceILS={it.current.price_ils}
                           store={it.current.store}
                           region={it.current.region}
@@ -1758,7 +1842,7 @@ function WishlistView({
                       )}
                       {it.physical && (
                         <PriceLine
-                          icon="💿"
+                          tone="disc"
                           kind={t.kindDiscShort}
                           priceILS={it.physical.price_ils}
                           store={it.physical.store}
@@ -1767,7 +1851,7 @@ function WishlistView({
                       )}
                       {it.cdkeys && (
                         <PriceLine
-                          icon="🔑"
+                          tone="keys"
                           kind={t.kindKeyshopShort}
                           priceILS={it.cdkeys.price_ils}
                           store={it.cdkeys.store}
@@ -1775,25 +1859,14 @@ function WishlistView({
                         />
                       )}
                     </td>
-                    <td>
-                      {/* Movements too small to be a real price change are exchange-rate
-                          drift, not news — see isMeaningfulChange. */}
-                      {delta == null || !it.previous ? (
-                        <span className="delta flat">—</span>
-                      ) : !isMeaningfulChange(it.current!.price_ils, it.previous.price_ils) ? (
-                        <span className="delta flat" title={t.deltaNoiseHint}>
-                          ≈
-                        </span>
-                      ) : delta < 0 ? (
-                        <span className="delta down num">▼ {nis(Math.abs(delta))}</span>
-                      ) : (
-                        <span className="delta up num">▲ {nis(delta)}</span>
-                      )}
-                    </td>
                     <td className="meta">
-                      {it.current
-                        ? new Date(it.current.checked_at + 'Z').toLocaleString('he-IL')
-                        : '—'}
+                      {it.current ? (
+                        <span title={new Date(it.current.checked_at + 'Z').toLocaleString('he-IL')}>
+                          {t.timeAgo(it.current.checked_at)}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td>
                       <button className="removebtn" onClick={() => remove(it.id)}>
@@ -1803,7 +1876,7 @@ function WishlistView({
                   </tr>
                   {open && (
                     <tr className="wishrow-detail">
-                      <td colSpan={7}>
+                      <td colSpan={6}>
                         <ExpandedTrack
                           id={it.id}
                           preferredRegion={it.preferred_region}

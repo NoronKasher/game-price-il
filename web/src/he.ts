@@ -33,9 +33,9 @@ export const t = {
   // Which price an alert watches
   scopeNames: {
     auto: 'המחיר הראשי במעקב',
-    official: '☁️ החנות הרשמית (לפי האזור המועדף)',
-    physical: '💿 דיסק',
-    cdkey: '🔑 מוכרי מפתחות',
+    official: 'החנות הרשמית (לפי האזור המועדף)',
+    physical: 'דיסק',
+    cdkey: 'מוכרי מפתחות',
     any: 'הזול מכולם',
   } as Record<string, string>,
   scopeHint:
@@ -70,6 +70,39 @@ export const t = {
   currencySettingsNote:
     'מטבע התצוגה עבר לכפתור ₪ / $ / € שבראש העמוד — אפשר להחליף אותו מכל מסך, והמחירים מתעדכנים מיד. המחירים תמיד נאספים ונשמרים בשקלים ומומרים לתצוגה לפי שער יציג.',
   deltaNoiseHint: 'ללא שינוי מהותי — הפרש זעיר שנובע משער החליפין, לא משינוי מחיר בחנות',
+  // "Is this a good price?" — judged against the game's own recorded history
+  verdictRecord: 'הזול ביותר שנרשם',
+  verdictEvidence: (checks: number, days: number) =>
+    days >= 1 ? `לפי ${checks} בדיקות על פני ${days} ימים` : `לפי ${checks} בדיקות`,
+  /** Which price the verdict judged — without this it can look like it contradicts a cheaper line. */
+  verdictScope: { official: 'חנות רשמית', any: 'הזול מכל המקורות' } as Record<string, string>,
+  /**
+   * Time since a check, in natural Hebrew. Hebrew has a dual form: two days is
+   * "יומיים", not "2 ימים" — getting that wrong is the tell of a translated UI.
+   */
+  timeAgo: (iso: string): string => {
+    const then = new Date(iso.replace(' ', 'T') + 'Z').getTime();
+    if (!Number.isFinite(then)) return '—';
+    const days = Math.floor((Date.now() - then) / 86_400_000);
+    if (days <= 0) return 'היום';
+    if (days === 1) return 'אתמול';
+    if (days === 2) return 'שלשום';
+    if (days < 7) return `לפני ${days} ימים`;
+    const weeks = Math.round(days / 7);
+    if (days < 30) return weeks === 2 ? 'לפני שבועיים' : weeks === 1 ? 'לפני שבוע' : `לפני ${weeks} שבועות`;
+    const months = Math.round(days / 30);
+    return months === 2 ? 'לפני חודשיים' : months === 1 ? 'לפני חודש' : `לפני ${months} חודשים`;
+  },
+  verdictCheapestSince: (since: string) => `הזול ביותר מזה ${since}`,
+  verdictAboveLow: (pct: number, low: string) => `${pct}% מעל השיא (${low})`,
+  verdictLowEver: (low: string) => `שיא כל הזמנים: ${low}`,
+  verdictSince: (days: number) =>
+    days >= 60 ? `${Math.round(days / 30)} חודשים` : days >= 14 ? `${Math.round(days / 7)} שבועות` : `${days} ימים`,
+  verdictHint: 'מחושב מהמחירים שנרשמו למשחק הזה לאורך זמן, לא מהאחוזים שהחנות מפרסמת',
+  /** When the drop happened. No source מפרסם מתי מבצע נגמר, so we say what we do know. */
+  verdictDropped: (days: number) =>
+    days === 0 ? 'ירד היום' : days === 1 ? 'ירד אתמול' : days === 2 ? 'ירד שלשום' : `ירד לפני ${days} ימים`,
+  verdictDroppedHint: 'מתי המחיר ירד, לפי ההיסטוריה שנאספה. אף מקור לא מפרסם מתי המבצע מסתיים.',
   // Server-unreachable state (never imply the data itself is gone)
   serverDownTitle: 'אין חיבור לשרת של הכלי',
   serverDownBody:
@@ -183,7 +216,7 @@ export const t = {
   kindDiscShort: 'דיסק',
   kindKeyshopShort: 'מוכרי מפתחות',
   regionScopeHint:
-    'האזור המועדף משפיע רק על מחיר החנות הרשמית (☁️ חנות רשמית). מחירי דיסק (💿) ומוכרי מפתחות (🔑) אינם תלויים באזור.',
+    'האזור המועדף משפיע רק על מחיר החנות הרשמית. מחירי דיסק ומוכרי מפתחות אינם תלויים באזור.',
   // Auto-capture interval (how often a price point is recorded on the graph)
   captureGlobalLabel: 'עדכון מחירים אוטומטי לרשימת המעקב:',
   captureDaysUnit: 'ימים',
@@ -199,15 +232,19 @@ export const t = {
   doneEditing: 'סיום',
   hideAllDescriptions: 'הסתר תיאורים בכל המשחקים',
   preferredRegionGameLabel:
-    'בחירת אזור משפיעה רק על מחיר החנות הרשמית של הפלטפורמה (☁️) — לא על מחירי דיסק או מוכרי מפתחות.',
+    'בחירת אזור משפיעה רק על מחיר החנות הרשמית של הפלטפורמה — לא על מחירי דיסק או מוכרי מפתחות.',
   exportGraphImage: 'הורד גרף כתמונה',
   seriesCheapest: 'הזול ביותר',
   seriesPreferred: 'האזור המועדף',
   seriesLegendNote: 'הגרף מציג את המחיר לאורך זמן. אפשר לבחור אזור מועדף כדי לראות גם קו נפרד עבורו.',
   graphLegendHint: 'לחיצה מציגה/מסתירה את הקו',
   graphAllHidden: 'כל הקווים מוסתרים — לחצו על שם במקרא כדי להציג אותו שוב.',
-  graphShowStores: 'כל חנות בנפרד',
-  graphShowStoresHint: 'מוסיף קו דק לכל חנות (דיסקים ומוכרי מפתחות) — בנוסף לקווי הסיכום, לא במקומם',
+  graphShowAll: 'הצג הכל',
+  graphHideAll: 'הסתר הכל',
+  // The button says what pressing it will DO, and changes with its state.
+  graphShowStores: 'הצג מוכרים בודדים',
+  graphHideStores: 'הסתר מוכרים בודדים',
+  graphShowStoresHint: 'מוסיף קו נפרד לכל מוכר (חנויות דיסקים ומוכרי מפתחות) — בנוסף לקווי הסיכום, לא במקומם',
   graphHint: 'כל קו הוא מקור מחיר: חנות רשמית לפי אזור, דיסק ומוכרי מפתחות. לחצו על שם במקרא כדי להסתיר/להציג, הפעילו "כל חנות בנפרד" כדי לראות גם קו לכל חנות, ורחפו על הגרף כדי לראות את כל המחירים בתאריך מסוים.',
   graphCapturedNow: 'נרשמה נקודת מחיר עדכנית ✓',
   importDone: (games: number, points: number) => `יובאו ${games} משחקים ו-${points} נקודות מחיר.`,

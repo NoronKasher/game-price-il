@@ -65,6 +65,23 @@ export interface AlertRule {
   scope: AlertScope;
 }
 
+/** Whether a tracked game is at a good price right now, judged on its own history. */
+export interface PriceVerdict {
+  kind: 'record' | 'cheapest-since' | 'above-low';
+  currentILS: number;
+  lowILS: number;
+  lowAt: string;
+  pctAboveLow: number;
+  daysSinceCheaper?: number;
+  checks: number;
+  spanDays: number;
+  /** Which price the verdict judged: the pinned region's store, or the cheapest of all. */
+  scope: 'official' | 'any';
+  /** How long the current price has been in place, and which way it moved to get here. */
+  changedDaysAgo?: number;
+  changeDirection?: 'down' | 'up';
+}
+
 export interface WishlistItem {
   id: number;
   platform: Platform;
@@ -85,6 +102,8 @@ export interface WishlistItem {
   // Alongside the in-platform (region) price: cheapest disc + cheapest keyshop.
   physical: { store: string; price_ils: number } | null;
   cdkeys: { store: string; price_ils: number } | null;
+  /** Null until there are at least two recorded checks to compare. */
+  verdict: PriceVerdict | null;
 }
 
 export interface AppNotification {

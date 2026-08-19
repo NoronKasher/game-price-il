@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { nis, t } from './he';
 import { regionByMarket } from './regions';
 import { cleanStoreName } from './source';
@@ -193,7 +193,9 @@ export function TrackGraph({
       const emphasis = r === preferredRegion;
       out.push({
         key: `region:${r}`,
-        label: `${meta?.flag ?? '☁️'} ${meta?.nameHe ?? r}`,
+        // No flag emoji: Windows renders those as bare country letters. The
+        // legend swatch already carries the colour, so the name alone is enough.
+        label: meta?.nameHe ?? r,
         color: emphasis ? AMBER : REGION_COLORS[colorIdx++ % REGION_COLORS.length]!,
         emphasis,
         points,
@@ -204,7 +206,7 @@ export function TrackGraph({
     if (disc.length > 0) {
       out.push({
         key: 'disc',
-        label: `💿 ${t.kindDiscShort}`,
+        label: t.kindDiscShort,
         color: DISC_COLOR,
         emphasis: false,
         dash: '7 4',
@@ -216,7 +218,7 @@ export function TrackGraph({
     if (keys.length > 0) {
       out.push({
         key: 'keys',
-        label: `🔑 ${t.kindKeyshopShort}`,
+        label: t.kindKeyshopShort,
         color: KEYS_COLOR,
         emphasis: false,
         dash: '2 4',
@@ -235,8 +237,8 @@ export function TrackGraph({
       const storeSeries: Series[] = [];
       let storeIdx = 0;
       for (const [bucket, icon] of [
-        [(h: HistoryPoint) => h.kind === 'physical', '💿'],
-        [(h: HistoryPoint) => h.kind === 'digital' && !h.region, '🔑'],
+        [(h: HistoryPoint) => h.kind === 'physical', t.kindDiscShort],
+        [(h: HistoryPoint) => h.kind === 'digital' && !h.region, t.kindKeyshopShort],
       ] as const) {
         const rows = history.filter(bucket);
         for (const store of [...new Set(rows.map((r) => r.store))]) {
@@ -245,7 +247,7 @@ export function TrackGraph({
             key: `store:${icon}:${store}`,
             // Adapters bake a flag emoji into some store names, which Windows
             // can't draw — sourceLabel strips it and names the region in words.
-            label: `${icon} ${cleanStoreName(store)}`,
+            label: `${icon} · ${cleanStoreName(store)}`,
             color: STORE_COLORS[storeIdx++ % STORE_COLORS.length]!,
             emphasis: false,
             thin: true,
@@ -275,6 +277,49 @@ export function TrackGraph({
       return next;
     });
 
+  /**
+   * Open on ONE line, not all of them. A game with a dozen regions plus every
+   * seller opened as a thicket nobody could read; the useful starting point is
+   * the price you'd actually pay — the disc if this game comes on one, else the
+   * store price in the region you pinned. Everything else is one click away.
+   * Runs once per game (the component remounts when a different row expands).
+   */
+  const primed = useRef(false);
+  useEffect(() => {
+    if (primed.current || series.length === 0) return;
+    primed.current = true;
+    const lead =
+      series.find((s) => s.key === 'disc') ?? series.find((s) => s.emphasis) ?? series[0];
+    if (lead) setHidden(new Set(series.filter((s) => s.key !== lead.key).map((s) => s.key)));
+  }, [series]);
+
+  const allHidden = series.length > 0 && visible.length === 0;
+  /** Clear the board, then click the one line you care about — the fastest way
+   *  to isolate a single price, which is what the legend alone made tedious. */
+  const toggleAll = () =>
+    setHidden(allHidden ? new Set() : new Set(series.map((s) => s.key)));
+
+  /**
+   * Options that change WHAT the graph draws, kept apart from the legend chips
+   * that toggle individual lines. Mixing the two put a mode switch in a row of
+   * data series, where it read as just another line to turn off.
+   */
+  const controls = (
+    <div className="graph-controls">
+      <button className="graph-ctl" onClick={toggleAll}>
+        {allHidden ? t.graphShowAll : t.graphHideAll}
+      </button>
+      <button
+        className={`graph-ctl ${showStores ? 'on' : ''}`}
+        onClick={toggleStores}
+        aria-pressed={showStores}
+        title={t.graphShowStoresHint}
+      >
+        {showStores ? t.graphHideStores : t.graphShowStores}
+      </button>
+    </div>
+  );
+
   /** The legend must render in EVERY state — hiding the last line used to hide
    *  the legend with it, leaving no way to switch anything back on. */
   const legend = (
@@ -291,14 +336,6 @@ export function TrackGraph({
           {s.emphasis && preferredName ? ` · ${t.seriesPreferred}` : ''}
         </button>
       ))}
-      {/* Master switch for the per-store layer — additive, never replaces the buckets. */}
-      <button
-        className={`legend-chip stores-master ${showStores ? 'on' : ''}`}
-        onClick={toggleStores}
-        title={t.graphShowStoresHint}
-      >
-        🏪 {t.graphShowStores}
-      </button>
     </div>
   );
 
@@ -313,7 +350,12 @@ export function TrackGraph({
     return (
       <div className="graph-wrap">
         <div className="graph-empty">{message}</div>
-        {series.length > 0 && legend}
+        {series.length > 0 && (
+          <>
+            {controls}
+            {legend}
+          </>
+        )}
       </div>
     );
   }
@@ -469,9 +511,10 @@ export function TrackGraph({
       )}
 
       <div className="graph-legend-row">
-        {legend}
+        {controls}
         <button className="toolbtn" onClick={downloadPng}>🖼️ {t.exportGraphImage}</button>
       </div>
+      {legend}
       <p className="graph-hint">{t.graphHint}</p>
     </div>
   );
