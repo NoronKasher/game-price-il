@@ -108,6 +108,12 @@ export const t = {
   serverDownBody:
     'הנתונים שלכם שמורים ובטוחים — רק השרת המקומי לא עונה כרגע. ודאו שהוא פועל (npm run dev) ונסו שוב.',
   serverDownRetry: 'נסו שוב',
+  // Render-crash fallback (a component threw mid-render; the tracked data in the
+  // server DB is never touched by a display error).
+  errorBoundaryTitle: 'משהו השתבש בתצוגה',
+  errorBoundaryBody:
+    'חלק מהמסך נתקל בתקלה, אבל הנתונים שלכם — רשימת המעקב והיסטוריית המחירים — שמורים במקום. אפשר לרענן ולהמשיך.',
+  errorBoundaryReload: 'רענון הדף',
   currencyNames: { ILS: '₪ שקל (ILS)', USD: '$ דולר (USD)', EUR: '€ אירו (EUR)' } as Record<string, string>,
   // BYOK API-key setup
   keysTitle: 'מפתחות API — מקורות מחיר נוספים',

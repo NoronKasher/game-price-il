@@ -1117,7 +1117,7 @@ function GamePage({
                     >
                       {REGIONS.map((r) => (
                         <option key={r.market} value={r.market}>
-                          {r.flag} {r.nameHe}
+                          {r.nameHe}
                         </option>
                       ))}
                     </select>
@@ -1141,7 +1141,7 @@ function GamePage({
               <>
                 <p className="board-note">
                   {t.digitalStoresNote}
-                  {preferredMeta && ` ${t.forRegionNote(`${preferredMeta.flag} ${preferredMeta.nameHe}`)}`}
+                  {preferredMeta && ` ${t.forRegionNote(preferredMeta.nameHe)}`}
                 </p>
                 <StoreBoard offers={digitalStores} showLaunchers />
               </>
@@ -1360,7 +1360,9 @@ function RegionBoard({
             <tr key={i} className={isPreferred ? 'preferred' : i === 0 ? 'best' : ''}>
               <td>
                 <span className="regioncell">
-                  <span className="flag">{o.flag}</span>
+                  {/* No flag emoji: regional-indicator flags degrade to bare
+                      country letters on Windows ("US ארה״ב"), so the Hebrew
+                      region name carries it alone. */}
                   {o.regionName}
                   {isPreferred && <span className="pin">📍</span>}
                 </span>
@@ -1810,7 +1812,7 @@ function WishlistView({
                         <option value="">—</option>
                         {REGIONS.map((r) => (
                           <option key={r.market} value={r.market}>
-                            {r.flag} {r.nameHe}
+                            {r.nameHe}
                           </option>
                         ))}
                       </select>
@@ -2038,7 +2040,7 @@ function AlertControls({
             onChange={(e) => onSet({ alertScope: (e.target.value || null) as AlertScope | null })}
           >
             <option value="">
-              {t.alertScopeUseGlobal(t.scopeNames[globalRule?.scope ?? 'auto']!)}
+              {t.alertScopeUseGlobal(t.scopeNames[globalRule?.scope ?? 'any']!)}
             </option>
             {(Object.keys(t.scopeNames) as AlertScope[]).map((s) => (
               <option key={s} value={s}>
@@ -2152,7 +2154,7 @@ function ExpandedTrack({
           <TrackGraph
             history={detail.history}
             preferredRegion={pref}
-            preferredName={prefMeta ? `${prefMeta.flag} ${prefMeta.nameHe}` : ''}
+            preferredName={prefMeta ? prefMeta.nameHe : ''}
           />
         ) : (
           <div className="graph-loading">{t.loadingDetails}</div>

@@ -8,8 +8,9 @@ import {
   primaryReason,
 } from './alerts.ts';
 
-/** The shipped global rule: any real drop is reported, 20% off is a "worth a look". */
-const GLOBAL = { pct: 20, price: null, ccy: 'ILS', anyDrop: true, scope: 'auto' };
+/** The shipped global rule: any real drop is reported, 20% off is a "worth a look",
+ *  and the cheapest offer of any kind is watched unless a game narrows it. */
+const GLOBAL = { pct: 20, price: null, ccy: 'ILS', anyDrop: true, scope: 'any' };
 /** A tracked game with no alert settings of its own. */
 const plainGame = {
   alert_mode: null,
@@ -67,7 +68,7 @@ test('a game can override the global rule, or silence itself', () => {
     { ...plainGame, alert_mode: 'custom', alert_price: 120, alert_price_ccy: 'USD' },
     GLOBAL
   );
-  assert.deepEqual(custom, { pct: null, price: 120, ccy: 'USD', anyDrop: false, scope: 'auto' });
+  assert.deepEqual(custom, { pct: null, price: 120, ccy: 'USD', anyDrop: false, scope: 'any' });
 
   // 'custom' with nothing filled in is the same as silence — nothing to check.
   assert.equal(effectiveAlertRule({ ...plainGame, alert_mode: 'custom' }, GLOBAL), null);
@@ -79,7 +80,7 @@ test('the watched price follows the game, even under the global rule', () => {
   const rule = effectiveAlertRule({ ...plainGame, alert_scope: 'physical' }, GLOBAL);
   assert.deepEqual(rule, { ...GLOBAL, scope: 'physical' });
   // An unknown/corrupt scope falls back to the global one rather than dropping alerts.
-  assert.equal(effectiveAlertRule({ ...plainGame, alert_scope: 'bogus' }, GLOBAL).scope, 'auto');
+  assert.equal(effectiveAlertRule({ ...plainGame, alert_scope: 'bogus' }, GLOBAL).scope, 'any');
 });
 
 test('a global rule with nothing enabled watches nothing', () => {

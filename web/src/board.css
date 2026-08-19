@@ -146,7 +146,6 @@ body {
 .backlink { background: none; border: none; color: var(--accent); font: inherit; cursor: pointer; padding: 0; margin-bottom: 14px; }
 
 .regioncell { display: flex; align-items: center; gap: 10px; font-weight: 500; }
-.regioncell .flag { font-size: 22px; line-height: 1; }
 .regioncell .pin { font-size: 14px; }
 
 .pref-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -366,6 +365,15 @@ body {
 }
 .server-down-title { margin: 0 0 8px; font-weight: 500; font-size: 17px; color: var(--up); }
 .server-down-body { margin: 0 0 14px; color: var(--muted); line-height: 1.7; }
+
+/* Whole-app render-crash fallback (ErrorBoundary). The data is safe, so this is
+   amber "heads up", not the red "server down" alarm. */
+.error-boundary {
+  background: var(--panel); border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--line));
+  border-radius: 12px; padding: 24px 26px; max-width: 560px; margin: 80px auto; text-align: center;
+}
+.error-boundary-title { margin: 0 0 8px; font-weight: 500; font-size: 18px; color: var(--amber); }
+.error-boundary-body { margin: 0 0 16px; color: var(--muted); line-height: 1.7; }
 
 /* Notification bell (header) + dropdown */
 .bell-wrap { position: relative; display: inline-flex; }

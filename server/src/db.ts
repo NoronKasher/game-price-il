@@ -450,7 +450,11 @@ export const DEFAULT_ALERT: AlertRule = {
   price: null,
   ccy: 'ILS',
   anyDrop: true,
-  scope: 'auto',
+  // Watch the cheapest offer of ANY kind by default, not just the headline price:
+  // 'auto' followed only the pinned region's store, so a big drop in a game's
+  // keyshop or disc price (a real deal the user would want) fired nothing. A game
+  // the user tracks for one specific price can still narrow this per-game.
+  scope: 'any',
 };
 
 /** Read a stored number setting; '' means "rule off", absent means "use the default". */
