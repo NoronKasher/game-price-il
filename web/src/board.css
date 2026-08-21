@@ -939,3 +939,6 @@ body {
   border: 1px solid color-mix(in srgb, var(--up) 26%, var(--line));
   color: var(--text); font-size: 12px; line-height: 1.6;
 }
+
+/* A row with no published Eilat price says so rather than showing a guess. */
+.dep-eilat.none { color: var(--muted); background: none; border: 1px dashed #2f3a4d; }

@@ -4,7 +4,7 @@ import { nis, platformNames, t } from './he';
 import { cleanStoreName, isDirectPurchase, regionLabel, storeFamily } from './source';
 import { offerRisk, boardHasRisk, loadRegionNoticeHidden, saveRegionNoticeHidden, type RowRisk } from './regionRisk';
 import { loadBoardView, type BoardView } from './regions';
-import { boardHasIsraeliSellers, eilatPrice } from './eilat';
+import { boardHasEilatPrices, eilatPrice, eilatSaving } from './eilat';
 import { safeUrl } from './url';
 import type { GameMeta, Offer, Platform, SourceRef } from './types';
 
@@ -160,7 +160,7 @@ export function DepartureBoard({
   );
   const anyOnSale = useMemo(() => all.some(onSaleOf), [all]);
   const anyRisk = useMemo(() => boardHasRisk(all, preferred), [all, preferred]);
-  const anyIsraeli = useMemo(() => boardHasIsraeliSellers(all), [all]);
+  const anyEilat = useMemo(() => boardHasEilatPrices(all), [all]);
   /**
    * Storefronts on this board, biggest first. A regional storefront contributes
    * ~30 rows to a PC board, so hiding one is the strongest lever the user has on
@@ -371,7 +371,7 @@ export function DepartureBoard({
                 {t.depOnlyBuyable}
               </button>
             )}
-            {anyIsraeli && (
+            {anyEilat && (
               <button
                 className={`dt-ftoggle ${eilat ? 'on' : ''}`}
                 aria-pressed={eilat}
@@ -442,7 +442,6 @@ export function DepartureBoard({
             <div className="dt-eilat-note" role="note">
               <strong>{t.depEilatTitle}</strong>
               <p>{t.depEilatBody}</p>
-              <p>{t.depEilatDigitalNote}</p>
               <p>{t.depEilatBody2}</p>
             </div>
           )}
@@ -474,7 +473,11 @@ export function DepartureBoard({
                         key={`${o.store}-${o.region ?? o.kind}-${i}`}
                         style={{ animationDelay: `${220 + Math.min(i, 12) * 55}ms` }}
                         title={
-                          [o.regionName ? `${cleanStoreName(o.store)} · ${o.regionName}` : cleanStoreName(o.store), risk.detail]
+                          [
+                            o.regionName ? `${cleanStoreName(o.store)} · ${o.regionName}` : cleanStoreName(o.store),
+                            eilat && eilatSaving(o) != null ? t.depEilatSaving(eilatSaving(o)!) : null,
+                            risk.detail,
+                          ]
                             .filter(Boolean)
                             .join('\n\n')
                         }
@@ -495,9 +498,12 @@ export function DepartureBoard({
                         <span className="dep-flap">{codeFor(o)}</span>
                         <span className="dep-flap amber">
                           {eilat && eilatPrice(o) != null ? nis(eilatPrice(o)!) : nis(o.priceILS)}
-                          {eilat && eilatPrice(o) != null && (
-                            <span className="dep-eilat">{t.depEilatBadge}</span>
-                          )}
+                          {eilat &&
+                            (eilatPrice(o) != null ? (
+                              <span className="dep-eilat">{t.depEilatBadge}</span>
+                            ) : (
+                              <span className="dep-eilat none">{t.depEilatNone}</span>
+                            ))}
                         </span>
                         <span className={`dep-flap ${cut > 0 ? 'down' : 'flat'}`}>{cut > 0 ? `-${cut}%` : '—'}</span>
                       </div>

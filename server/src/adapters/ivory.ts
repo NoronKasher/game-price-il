@@ -44,7 +44,7 @@ function englishName(title: string): string {
   return segments.reduce((a, b) => (b.length > a.length ? b : a));
 }
 
-function makeOffer(title: string, price: number, url: string, oldPrice?: number): Offer {
+function makeOffer(title: string, price: number, url: string, oldPrice?: number, eilat?: number): Offer {
   return {
     store: 'Ivory',
     kind: looksDigital(title) ? 'digital' : 'physical',
@@ -54,6 +54,9 @@ function makeOffer(title: string, price: number, url: string, oldPrice?: number)
     priceILS: price,
     retailPrice: oldPrice && oldPrice > price ? oldPrice : undefined,
     savings: oldPrice && oldPrice > price ? Math.round(((oldPrice - price) / oldPrice) * 100) : undefined,
+    // Ivory has an Eilat branch and prints its VAT-free price next to the
+    // national one ("מחיר באילת: 194 ₪"). It is read, never calculated.
+    eilatPriceILS: eilat != null && eilat > 0 && eilat < price ? eilat : undefined,
     url,
   };
 }
@@ -101,17 +104,18 @@ export const ivory: SourceAdapter = {
       if (platforms.length && !platforms.includes(platform)) return;
 
       // The first pricing row holds the regular price and, on sale, a second
-      // (lower) current price — so the last amount is the one to charge. The
-      // Eilat (VAT-free) prices live in later rows and are excluded here.
+      // (lower) current price — so the last amount is the one to charge.
       const priceEls = $el.find('.pricing-row').first().find('.price-area').not('.eilatprice').find('.price');
       const price = parseNis(priceEls.last().text());
       if (price == null) return;
       const oldPrice = priceEls.length > 1 ? (parseNis(priceEls.first().text()) ?? undefined) : undefined;
+      // The Eilat branch's own price, in a later row, on products that have one.
+      const eilat = parseNis($el.find('.price.eilatprice').first().text()) ?? undefined;
 
       let image = $el.find('img.img-fluid[data-src]').first().attr('data-src') ?? undefined;
       if (image && !/^https?:\/\//.test(image)) image = BASE + '/' + image.replace(/^\//, '');
 
-      offerCache.set(url, makeOffer(rawTitle, price, url, oldPrice));
+      offerCache.set(url, makeOffer(rawTitle, price, url, oldPrice, eilat));
       hits.push({
         sourceId: 'ivory',
         sourceGameId: url,

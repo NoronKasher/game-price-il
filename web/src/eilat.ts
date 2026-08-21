@@ -1,58 +1,38 @@
 import type { Offer } from './types';
 
 /**
- * Eilat pricing — a VAT-free ESTIMATE, never a scraped price.
+ * Eilat pricing — read from the shops, never calculated.
  *
- * Eilat sits in a free-trade zone, so a purchase made there carries 0% VAT
- * instead of the national rate, which is why a console or a game is routinely
- * cheaper bought in the city. That gap is real and worth showing.
+ * Eilat sits in a free-trade zone, so a purchase made in the city carries no
+ * VAT, and games really are cheaper bought there. A chain with an Eilat branch
+ * prints that second price beside the national one; Ivory, for instance, shows
+ * "מחיר באילת: 194 ₪" under a ₪229 game.
  *
- * What is NOT available is an actual Eilat price feed: every Israeli retailer we
- * can reach publishes one national, VAT-inclusive price online, and the Eilat
- * rate applies at the branch. (Ivory's site mentions Eilat 71 times — all of it
- * a branch dropdown, not a price.) So this derives the figure by removing VAT,
- * and every derived number is badged as an estimate. Presenting a computed
- * number as if a shop had quoted it is exactly the kind of confident-but-wrong
- * price this project refuses to print.
+ * An earlier version of this file DERIVED the figure by removing VAT from every
+ * Israeli price. That was wrong in both directions and is not coming back:
+ *  - Most of our shops have no Eilat branch at all, so there is no Eilat price
+ *    to show — subtracting VAT invented a discount the buyer could never get.
+ *  - Where a shop does publish one, the real number is the one that matters;
+ *    rounding and per-branch pricing are the shop's business, not arithmetic we
+ *    should be guessing at.
  *
- * Only PHYSICAL goods from Israeli shops are converted, and that restriction is
- * the whole point of the rule:
- *  - A Turkish Steam price has no Israeli VAT in it to remove; "discounting" it
- *    would invent an 18% saving that does not exist.
- *  - A Steam ISRAEL price does contain Israeli VAT, but the Eilat exemption does
- *    not reach it. The free-trade-zone relief applies to a transaction made in
- *    the city; a digital storefront charges VAT on the account's country no
- *    matter where the buyer is standing. Flying to Eilat does not make a Steam
- *    key 18% cheaper, so showing that it would is precisely the confident-but-
- *    wrong number this file exists to avoid.
+ * So a row has an Eilat price only when its seller published one. Everything
+ * else simply has none, and the UI says so rather than filling the gap.
  */
 
-/**
- * Israel's standard VAT, 18% since January 2025 (verified August 2026).
- * A proposal to levy 9% in Eilat has been floated but is not law; if it passes,
- * this is the one place that needs changing.
- */
-export const VAT_RATE = 0.18;
-
-/** A physical item, sold by an Israeli shop — the only case Eilat relief covers. */
-export function isIsraeliSeller(o: Offer): boolean {
-  return o.kind === 'physical' && o.location === 'israel';
-}
-
-/** The same price without VAT, rounded to agorot. */
-export function exVat(priceILS: number): number {
-  return Math.round((priceILS / (1 + VAT_RATE)) * 100) / 100;
-}
-
-/**
- * What an offer would cost bought in Eilat, or null when the question doesn't
- * apply (a foreign seller has no Israeli VAT to remove).
- */
+/** The seller's own published Eilat price, or null when it doesn't publish one. */
 export function eilatPrice(o: Offer): number | null {
-  return isIsraeliSeller(o) ? exVat(o.priceILS) : null;
+  return typeof o.eilatPriceILS === 'number' && o.eilatPriceILS > 0 ? o.eilatPriceILS : null;
 }
 
-/** Does this board have anything the Eilat view would actually change? */
-export function boardHasIsraeliSellers(offers: Offer[]): boolean {
-  return offers.some(isIsraeliSeller);
+/** How much the Eilat branch saves on this row, as a percentage. */
+export function eilatSaving(o: Offer): number | null {
+  const e = eilatPrice(o);
+  if (e == null || !(o.priceILS > 0) || e >= o.priceILS) return null;
+  return Math.round((1 - e / o.priceILS) * 100);
+}
+
+/** Does this board have any real Eilat price to show? */
+export function boardHasEilatPrices(offers: Offer[]): boolean {
+  return offers.some((o) => eilatPrice(o) != null);
 }

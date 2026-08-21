@@ -3,6 +3,7 @@ import type { Platform } from '../search.ts';
 import { toILS, canConvert } from '../rates.ts';
 import { describeProduct, parseLocalizedPrice } from '../normalize.ts';
 import { getSetting } from '../db.ts';
+import { discoverSearchHash, hashDiscoveryDue } from './psnHash.ts';
 import { REGIONS } from '../regions.ts';
 
 /**
@@ -124,6 +125,31 @@ const SKIP_CLASS = /ADD.?ON|LEVEL|CONSUMABLE|CURRENCY|DEMO|THEME|AVATAR|SEASON_P
 const cache = new Map<string, { body: string; at: number }>();
 
 /** Fetch text with a short cache; null on any non-200 / network error. */
+/**
+ * Like fetchText, but hands back the status AND the body on failure.
+ *
+ * The GraphQL endpoint rejects a rotated hash with HTTP 400 and
+ * `{"message":"Query not whitelisted"}` — a shape fetchText discards, so the
+ * rejection used to read as "no results" and the hash error could never fire.
+ * Error responses are deliberately not cached.
+ */
+async function fetchStatusText(
+  url: string,
+  headers: Record<string, string>
+): Promise<{ status: number; body: string } | null> {
+  const key = url + JSON.stringify(headers);
+  const c = cache.get(key);
+  if (c && Date.now() - c.at < CACHE_TTL) return { status: 200, body: c.body };
+  try {
+    const res = await fetch(url, { headers, redirect: 'follow', signal: AbortSignal.timeout(15000) });
+    const body = await res.text();
+    if (res.status === 200) cache.set(key, { body, at: Date.now() });
+    return { status: res.status, body };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchText(url: string, headers: Record<string, string>): Promise<string | null> {
   const key = url + JSON.stringify(headers);
   const c = cache.get(key);
@@ -189,7 +215,7 @@ async function gqlSearch(term: string, country: string, lang: string, pageSize =
     JSON.stringify({ persistedQuery: { version: 1, sha256Hash: currentSearchHash() } })
   );
   const url = `${GQL}?operationName=${SEARCH_OP}&variables=${variables}&extensions=${extensions}`;
-  const body = await fetchText(url, {
+  const res = await fetchStatusText(url, {
     'User-Agent': UA,
     Accept: 'application/json',
     'content-type': 'application/json',
@@ -198,19 +224,24 @@ async function gqlSearch(term: string, country: string, lang: string, pageSize =
     // so the search language must match the region's own store locale.
     'x-psn-store-locale-override': `${lang}-${country}`,
   });
-  if (!body) return [];
+  if (!res) return [];
+  const rejected = (m: string) => /persisted|whitelist|unknown operation/i.test(m);
   let json: {
+    message?: string;
     data?: { universalSearch?: { results?: SearchProduct[] } };
     errors?: { message?: string }[];
   };
   try {
-    json = JSON.parse(body);
+    json = JSON.parse(res.body);
   } catch {
     return [];
   }
+  // The rejection arrives as a bare top-level message on a 400, not in `errors`.
+  if (json.message && rejected(json.message)) throw new PsnHashError(json.message.slice(0, 120));
+  if (res.status !== 200) return [];
   if (json.errors?.length) {
     const msg = json.errors[0]?.message ?? '';
-    if (/persisted|whitelist|unknown operation/i.test(msg)) throw new PsnHashError(msg.slice(0, 120));
+    if (rejected(msg)) throw new PsnHashError(msg.slice(0, 120));
     return [];
   }
   return json.data?.universalSearch?.results ?? [];
@@ -277,6 +308,32 @@ async function priceOf(locale: string, productId: string): Promise<RegionPrice |
   return { currency: cc[1]!, value, base: base ?? value };
 }
 
+/**
+ * gqlSearch, plus one automatic attempt to recover a rotated hash.
+ *
+ * Recovery drives a real browser over the public store page and reads the hash
+ * it sends (see psnHash.ts) — only possible when Playwright is installed, and
+ * rate-limited to one attempt per cooldown because it launches a browser. When
+ * it isn't available the original error propagates, the canary reports PSN as
+ * down, and the fix is to set PSN_SEARCH_HASH.
+ */
+async function gqlSearchRecovering(
+  term: string,
+  country: string,
+  lang: string,
+  pageSize = 20
+): Promise<SearchProduct[]> {
+  try {
+    return await gqlSearch(term, country, lang, pageSize);
+  } catch (err) {
+    if (!(err instanceof PsnHashError) || !hashDiscoveryDue()) throw err;
+    const fresh = await discoverSearchHash();
+    if (!fresh) throw err;
+    console.log('psn: recovered a fresh search hash automatically');
+    return gqlSearch(term, country, lang, pageSize);
+  }
+}
+
 export const psn: SourceAdapter = {
   id: 'psn-store',
   name: 'PlayStation Store (regional)',
@@ -286,7 +343,7 @@ export const psn: SourceAdapter = {
 
   async search(title: string, platforms: Platform[]): Promise<GameHit[]> {
     // Discover the game in the US catalog (broadest); per-region ids come later.
-    const products = await gqlSearch(title, 'US', 'en');
+    const products = await gqlSearchRecovering(title, 'US', 'en');
     const wantPs5 = !platforms.length || platforms.includes('ps5');
     const wantPs4 = !platforms.length || platforms.includes('ps4');
 

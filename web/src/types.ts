@@ -29,6 +29,9 @@ export interface Offer {
   priceILS: number;
   retailPrice?: number;
   savings?: number;
+  /** The seller's OWN published Eilat (VAT-free) price. Never derived — only
+   *  set when the shop actually prints one, i.e. it has a branch there. */
+  eilatPriceILS?: number;
   region?: string;
   regionName?: string;
   flag?: string;

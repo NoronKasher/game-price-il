@@ -38,6 +38,16 @@ export interface Offer {
   retailPrice?: number;
   /** Discount percent 0-100, if known. */
   savings?: number;
+  /**
+   * What this seller charges in Eilat, AS PUBLISHED BY THE SELLER — never
+   * derived. Eilat is a free-trade zone, so a purchase made in the city carries
+   * no VAT, and a chain with a branch there prints the second price beside the
+   * national one. Only set when the store actually publishes it: most don't
+   * (they have no Eilat branch), and computing "price ÷ 1.18" for those would
+   * invent a discount the buyer cannot get. Digital sellers never have one —
+   * the relief follows the transaction's location, not the buyer's.
+   */
+  eilatPriceILS?: number;
   /** Region code for console stores (e.g. "TR", "US"); undefined for region-free PC keys. */
   region?: string;
   /** Hebrew region name for the region board, when this offer is region-specific. */
