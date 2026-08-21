@@ -874,3 +874,34 @@ body {
   background: #10151d; border: 1px solid var(--line);
   color: var(--muted); font-size: 12px; line-height: 1.65;
 }
+
+/* Search autocomplete. The list overlays the page; the box anchors it. */
+.searchbox { position: relative; }
+.suggest {
+  position: absolute; inset-inline: 0; top: calc(100% + 6px); z-index: 40;
+  margin: 0; padding: 6px; list-style: none; direction: rtl;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45); max-height: 340px; overflow-y: auto;
+}
+.suggest-head {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px;
+  letter-spacing: 0.14em; text-transform: uppercase; color: #5d6875; padding: 4px 10px 6px;
+}
+.suggest-item {
+  padding: 8px 10px; border-radius: 7px; cursor: pointer; font-size: 15px; color: var(--text);
+}
+.suggest-item.on { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+
+/* Eilat (VAT-free) view — an estimate, so it never masquerades as a scraped price. */
+.dep-eilat {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 9.5px;
+  letter-spacing: 0.04em; padding: 1px 6px; border-radius: 999px; margin-inline-start: 7px;
+  color: #6fc3d9; background: color-mix(in srgb, #6fc3d9 14%, transparent); white-space: nowrap;
+}
+.dt-eilat-note {
+  direction: rtl; margin: 0 0 12px; padding: 10px 12px; border-radius: 9px;
+  background: color-mix(in srgb, #6fc3d9 7%, transparent);
+  border: 1px solid color-mix(in srgb, #6fc3d9 28%, var(--line));
+  color: var(--text); font-size: 12.5px; line-height: 1.6;
+}
+.dt-eilat-note strong { color: #6fc3d9; }

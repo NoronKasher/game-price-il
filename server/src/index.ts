@@ -61,6 +61,7 @@ import { evaluateAlerts } from './notify.ts';
 import { captureFromView } from './capture.ts';
 import { priceVerdict } from './verdict.ts';
 import { isAllowedRequestOrigin, resolveListenConfig } from './net.ts';
+import { suggestTitles } from './suggest.ts';
 
 const ALL_PLATFORMS: Platform[] = ['pc', 'ps5', 'ps4', 'xbox', 'switch'];
 
@@ -155,6 +156,15 @@ app.get('/api/search', async (req, res) => {
   );
 
   res.json({ query: parsed, games: hits, platformStatus, sources: status });
+});
+
+/**
+ * Fast title suggestions for the search box's autocomplete. Deliberately does
+ * NOT touch the source fan-out — see suggest.ts.
+ */
+app.get('/api/suggest', async (req, res) => {
+  const q = String(req.query.q ?? '');
+  res.json({ suggestions: await suggestTitles(q) });
 });
 
 /**

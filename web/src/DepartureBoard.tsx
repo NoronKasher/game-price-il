@@ -4,6 +4,7 @@ import { nis, platformNames, t } from './he';
 import { cleanStoreName, isDirectPurchase, regionLabel, storeFamily } from './source';
 import { offerRisk, boardHasRisk, loadRegionNoticeHidden, saveRegionNoticeHidden, type RowRisk } from './regionRisk';
 import { loadBoardView, type BoardView } from './regions';
+import { boardHasIsraeliSellers, eilatPrice } from './eilat';
 import { safeUrl } from './url';
 import type { GameMeta, Offer, Platform, SourceRef } from './types';
 
@@ -116,6 +117,8 @@ export function DepartureBoard({
   const [openStores, setOpenStores] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
   const [noticeHidden, setNoticeHidden] = useState(() => loadRegionNoticeHidden());
+  /** Show Israeli-shop prices as they'd be in Eilat (VAT-free). Estimate, off by default. */
+  const [eilat, setEilat] = useState(false);
   const [noticeDismissedNow, setNoticeDismissedNow] = useState(false);
 
   const refsKey = refs.map((r) => `${r.sourceId}:${r.sourceGameId}`).join('|');
@@ -135,6 +138,7 @@ export function DepartureBoard({
     setOpenStores(new Set());
     setShowAll(false);
     setNoticeDismissedNow(false);
+    setEilat(false);
     if (refs.length === 0) {
       setOffers([]);
       setMeta(null);
@@ -156,6 +160,7 @@ export function DepartureBoard({
   );
   const anyOnSale = useMemo(() => all.some(onSaleOf), [all]);
   const anyRisk = useMemo(() => boardHasRisk(all, preferred), [all, preferred]);
+  const anyIsraeli = useMemo(() => boardHasIsraeliSellers(all), [all]);
   /**
    * Storefronts on this board, biggest first. A regional storefront contributes
    * ~30 rows to a PC board, so hiding one is the strongest lever the user has on
@@ -366,6 +371,16 @@ export function DepartureBoard({
                 {t.depOnlyBuyable}
               </button>
             )}
+            {anyIsraeli && (
+              <button
+                className={`dt-ftoggle ${eilat ? 'on' : ''}`}
+                aria-pressed={eilat}
+                onClick={() => setEilat((v) => !v)}
+                title={t.depEilatHint}
+              >
+                {t.depEilat}
+              </button>
+            )}
             <select
               className="dt-fselect dt-sort"
               value={sort}
@@ -423,6 +438,15 @@ export function DepartureBoard({
             </div>
           )}
 
+          {eilat && (
+            <div className="dt-eilat-note" role="note">
+              <strong>{t.depEilatTitle}</strong>
+              <p>{t.depEilatBody}</p>
+              <p>{t.depEilatDigitalNote}</p>
+              <p>{t.depEilatBody2}</p>
+            </div>
+          )}
+
           <div className="dep-board">
             {error ? (
               <div className="dep-msg">{t.depError}</div>
@@ -469,7 +493,12 @@ export function DepartureBoard({
                           )}
                         </span>
                         <span className="dep-flap">{codeFor(o)}</span>
-                        <span className="dep-flap amber">{nis(o.priceILS)}</span>
+                        <span className="dep-flap amber">
+                          {eilat && eilatPrice(o) != null ? nis(eilatPrice(o)!) : nis(o.priceILS)}
+                          {eilat && eilatPrice(o) != null && (
+                            <span className="dep-eilat">{t.depEilatBadge}</span>
+                          )}
+                        </span>
                         <span className={`dep-flap ${cut > 0 ? 'down' : 'flat'}`}>{cut > 0 ? `-${cut}%` : '—'}</span>
                       </div>
                     );

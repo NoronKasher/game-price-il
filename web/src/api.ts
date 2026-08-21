@@ -25,6 +25,12 @@ export const api = {
   search: (q: string) =>
     fetch(`/api/search?q=${encodeURIComponent(q)}`).then((r) => json<SearchResponse>(r)),
 
+  /** Fast title suggestions for the search box (never runs the full fan-out). */
+  suggest: (q: string, signal?: AbortSignal) =>
+    fetch(`/api/suggest?q=${encodeURIComponent(q)}`, { signal }).then((r) =>
+      json<{ suggestions: string[] }>(r)
+    ),
+
   offers: (refs: SourceRef[], platform: string) =>
     fetch('/api/offers', {
       method: 'POST',

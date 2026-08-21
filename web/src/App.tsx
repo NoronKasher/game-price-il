@@ -27,6 +27,7 @@ import {
 } from './regions';
 import { PriceGraph, TrackGraph } from './PriceGraph';
 import { DepartureBoard } from './DepartureBoard';
+import { SearchBox, rememberSearch } from './SearchBox';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
 import {
@@ -904,6 +905,7 @@ function SearchView({
   useEffect(() => {
     if (autoQuery == null) return;
     setQuery(autoQuery);
+    rememberSearch(autoQuery); // a ticker click is a search too
     run(autoQuery);
     onAutoConsumed();
   }, [autoQuery]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -935,18 +937,13 @@ function SearchView({
 
   return (
     <section>
-      <div className="searchbar">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && run()}
-          placeholder={t.searchPlaceholder(example)}
-          autoFocus
-        />
-        <button onClick={() => run()} disabled={busy}>
-          {busy ? t.searching : t.searchButton}
-        </button>
-      </div>
+      <SearchBox
+        query={query}
+        setQuery={setQuery}
+        busy={busy}
+        placeholder={t.searchPlaceholder(example)}
+        onSubmit={(term) => run(term)}
+      />
       <p className="hint">{t.searchHint}</p>
 
       {failed && <div className="empty">{t.searchFailed}</div>}
