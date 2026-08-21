@@ -397,7 +397,11 @@ export const psn: SourceAdapter = {
     const targetGroup = describeProduct(name).groupKey;
     async function offerForRegion(region: PsnRegion): Promise<Offer | null> {
       const lang = region.locale.split('-')[0]!;
-      const products = await gqlSearch(name, region.country, lang);
+      // Recovering here too, not just in search(): pricing a region ALSO has to
+      // find that region's product id, so a rotated hash takes the price board
+      // down with the search. Discovery is rate-limited internally, so the
+      // concurrent workers below trigger at most one attempt between them.
+      const products = await gqlSearchRecovering(name, region.country, lang);
       // First-party SIE titles carry a region marker in the product code
       // (STRAYSIEA vs …SIEE), so an exact-code match only works for region-neutral
       // codes. Fall back to the same base game by name + platform, preferring the
