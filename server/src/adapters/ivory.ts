@@ -62,7 +62,7 @@ export const ivory: SourceAdapter = {
   id: 'ivory',
   name: 'Ivory (Israel)',
   nameHe: 'אייבורי (Ivory)',
-  platforms: ['ps5', 'ps4', 'xbox-series', 'xbox-one', 'switch'],
+  platforms: ['ps5', 'ps4', 'xbox', 'switch'],
   enabled: true,
 
   async search(title: string, platforms: Platform[]): Promise<GameHit[]> {

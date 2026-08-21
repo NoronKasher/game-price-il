@@ -1,4 +1,8 @@
-export type Platform = 'pc' | 'ps5' | 'ps4' | 'xbox-series' | 'xbox-one' | 'switch';
+// Xbox Series and Xbox One are one cross-gen platform here: Microsoft sells a
+// single Smart Delivery SKU and one disc plays on both, so a per-generation
+// split only scattered the same game's offers across two boards. PS4/PS5 stay
+// separate — those really are different discs at different prices.
+export type Platform = 'pc' | 'ps5' | 'ps4' | 'xbox' | 'switch';
 
 export interface GameHit {
   sourceId: string;
@@ -30,6 +34,13 @@ export interface Offer {
   flag?: string;
   pinned?: boolean;
   url?: string;
+}
+
+/** Steam description + genres for a game (null server-side when it has no Steam ref). */
+export interface GameMeta {
+  description: string;
+  genres: string[];
+  image?: string;
 }
 
 /** Per-source outcome, so the UI can say "this store's data is missing / delayed" honestly. */

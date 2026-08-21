@@ -143,8 +143,14 @@ export async function politeFetch(url: string): Promise<string> {
       redirect: 'follow',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (res.status === 429 || res.status === 503) {
+    if (res.status === 429 || res.status === 503 || res.status === 403) {
       // The store is asking us to slow down — honour it: pause this host.
+      //
+      // 403 counts. Stores in front of a WAF (Ivory, and CheapShark's API) answer
+      // a burst with 403 rather than 429, and treating that as an ordinary error
+      // meant we kept requesting at full rate against a host that had just told
+      // us to stop — the opposite of this module's whole point. Whether the 403
+      // is throttling or an outright block, standing down is the right response.
       const retryHeader = Number(res.headers.get('retry-after'));
       const pauseMs = Number.isFinite(retryHeader) && retryHeader > 0 ? retryHeader * 1000 : BACKOFF_MS;
       st.pausedUntil = Date.now() + pauseMs;

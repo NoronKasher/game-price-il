@@ -1,6 +1,7 @@
 import type { GameHit, Offer, SourceAdapter } from './types.ts';
 import { toILS } from '../rates.ts';
 import { getApiKey, hasApiKey } from '../keys.ts';
+import { activeShopKeys, normShop } from './cheapsharkStores.ts';
 
 /**
  * IsThereAnyDeal (ITAD) — the widest legit PC price aggregator.
@@ -43,57 +44,33 @@ const HEADERS = {
 const MAX_OFFERS = 12;
 
 /**
- * Shops CheapShark already surfaces (normalised names). We SKIP these so ITAD
- * doesn't duplicate CheapShark's official-store rows in the same board — ITAD's
- * distinctive value is the *other* shops (keyshops + niche stores CheapShark
- * misses). CheapShark stays the source of truth for the mainstream storefronts;
- * the merged board still cross-checks at the cheapest-overall level. GG.deals'
- * single cheapest-keyshop line and ITAD's per-keyshop breakdown complement (not
- * duplicate) each other. Keep in rough sync with CheapShark's active store list.
+ * Shops our own board already shows, whose ITAD rows would only be duplicates.
+ * ITAD's distinctive value is the *other* shops — the keyshops and niche stores
+ * nothing else here covers — so those are the ones we let through.
+ *
+ * The list is derived at request time from CheapShark's live store registry
+ * rather than typed out, because a typed list rots silently and in exactly one
+ * direction: when CheapShark retires a storefront (Origin went inactive when EA
+ * shut it down), a stale entry keeps suppressing a shop that is now covered by
+ * nobody, and the price simply stops existing anywhere in the app. That had
+ * quietly hidden EA App, Battle.net, Microsoft Store, GameStop and ~18 more.
+ *
+ * Only the shops we price with a dedicated adapter of our own stay hardcoded —
+ * that fact lives here, not at CheapShark.
  */
-const CHEAPSHARK_COVERED = new Set(
-  [
-    'steam',
-    'gog',
-    'epicgamestore',
-    'epicgames',
-    'humblestore',
-    'humble',
-    'humblebundle',
-    'fanatical',
-    'greenmangaming',
-    'gamesplanet',
-    'gamebillet',
-    'voidu',
-    'wingamestore',
-    'indiegala',
-    '2game',
-    'gamersgate',
-    'allyouplay',
-    'dlgamer',
-    'noctre',
-    'dreamgame',
-    'gamestop',
-    'gamesrocket',
-    'gamesload',
-    'razergamestore',
-    'blizzard',
-    'battlenet',
-    'microsoftstore',
-    'xboxstore',
-    'ea',
-    'eaapp',
-    'origin',
-    'ubisoftstore',
-    'ubisoftconnect',
-    'uplay',
-    'amazon',
-  ].map(normShop)
-);
+const OWN_ADAPTERS = ['steam', 'epicgamestore', 'epicgames', 'epicgamesstore', 'ubisoftstore', 'ubisoftconnect', 'uplay'];
 
-/** Lowercase + strip non-alphanumerics so "Green Man Gaming" == "GreenManGaming". */
-function normShop(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+/**
+ * Used only when CheapShark's registry is unreachable: suppress the majors we're
+ * confident it serves, so an outage degrades to "a few duplicate rows" instead
+ * of duplicating every mainstream storefront at once.
+ */
+const FALLBACK_COVERED = ['gog', 'humblestore', 'fanatical', 'greenmangaming', 'gamesplanet', 'gamebillet', 'wingamestore', 'indiegala', 'gamersgate', 'dreamgame', 'gamesload'];
+
+/** Shops to skip for this request: our own adapters + whatever CheapShark serves. */
+async function coveredShops(): Promise<Set<string>> {
+  const live = await activeShopKeys();
+  return new Set([...OWN_ADAPTERS, ...(live ?? FALLBACK_COVERED)].map(normShop));
 }
 
 /** Resolve Steam appId → ITAD game-uuid, cached per process (null = looked up, none found). */
@@ -163,13 +140,14 @@ export const itad: SourceAdapter = {
       : undefined;
     const deals = entry?.deals ?? [];
 
-    // Keep the cheapest deal per shop, dropping shops CheapShark already covers.
+    // Keep the cheapest deal per shop, dropping shops the board already covers.
+    const covered = await coveredShops();
     const cheapestPerShop = new Map<string, ItadDeal>();
     for (const d of deals) {
       const name = d.shop?.name?.trim();
       const amount = d.price?.amount;
       if (!name || typeof amount !== 'number' || !(amount > 0)) continue;
-      if (CHEAPSHARK_COVERED.has(normShop(name))) continue;
+      if (covered.has(normShop(name))) continue;
       const prev = cheapestPerShop.get(name);
       if (!prev || (prev.price?.amount ?? Infinity) > amount) cheapestPerShop.set(name, d);
     }

@@ -22,11 +22,20 @@ const MAX_HISTORY = 20_000; // per game
 const MAX_TOTAL_POINTS = 100_000; // across the whole file — bounds worst-case work
 const MAX_STR = 400;
 
-const PLATFORMS = new Set(['pc', 'ps5', 'ps4', 'xbox-series', 'xbox-one', 'switch']);
+const PLATFORMS = new Set(['pc', 'ps5', 'ps4', 'xbox', 'switch']);
+/**
+ * Legacy platform ids from files exported before the two Xbox generations were
+ * merged into one `xbox` platform. An old shared file still names them, so we
+ * accept and remap them rather than silently dropping every Xbox game it holds.
+ */
+const PLATFORM_ALIASES: Record<string, string> = { 'xbox-series': 'xbox', 'xbox-one': 'xbox' };
 /** Source ids we ship adapters for — keep in sync with the registry in index.ts. */
 const SOURCE_IDS = new Set([
   'cheapshark',
   'steam-regional',
+  'epic-games',
+  'ubisoft-store',
+  'ea-app',
   'ggdeals',
   'itad',
   'vgs',
@@ -138,7 +147,8 @@ export function sanitizeImport(raw: unknown): CleanImportItem[] {
     if (!entry || typeof entry !== 'object') continue;
     const o = entry as Record<string, unknown>;
     const title = str(o.title);
-    const platform = str(o.platform, 20);
+    const rawPlatform = str(o.platform, 20);
+    const platform = rawPlatform ? (PLATFORM_ALIASES[rawPlatform] ?? rawPlatform) : null;
     if (!title || !platform || !PLATFORMS.has(platform)) continue;
 
     const image = str(o.image, 2048);

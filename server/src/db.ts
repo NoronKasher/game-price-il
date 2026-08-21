@@ -113,7 +113,7 @@ db.exec(`
  * Also update the baseline CREATE above so fresh installs get the new shape.
  * Each step runs exactly once, in order.
  */
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 const MIGRATIONS: Record<number, string[]> = {
   4: [
     'ALTER TABLE wishlist ADD COLUMN capture_days INTEGER',
@@ -141,6 +141,17 @@ const MIGRATIONS: Record<number, string[]> = {
     // Games that already had a hand-set rule keep behaving exactly as before.
     `UPDATE wishlist SET alert_mode = 'custom'
        WHERE alert_mode IS NULL AND (alert_pct IS NOT NULL OR alert_price IS NOT NULL)`,
+  ],
+  7: [
+    // Xbox Series and Xbox One became one `xbox` platform (one cross-gen SKU).
+    // Rewrite any tracked games/notifications that still carry the old ids.
+    // OR IGNORE skips a rename that would collide with the UNIQUE(title,platform)
+    // of a same-title row already merged; the leftover duplicate is then dropped
+    // (price_history/notifications cascade on delete), so no stale ids survive.
+    `UPDATE OR IGNORE wishlist SET platform = 'xbox' WHERE platform = 'xbox-series'`,
+    `UPDATE OR IGNORE wishlist SET platform = 'xbox' WHERE platform = 'xbox-one'`,
+    `DELETE FROM wishlist WHERE platform IN ('xbox-series', 'xbox-one')`,
+    `UPDATE notifications SET platform = 'xbox' WHERE platform IN ('xbox-series', 'xbox-one')`,
   ],
 };
 
@@ -754,6 +765,12 @@ export function importAll(raw: unknown): { games: number; points: number } {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );
   for (const item of items) {
+    // An item the sanitiser stripped to nothing — every ref rejected (unknown
+    // adapter, or a URL pointing somewhere we refuse to fetch) and no history
+    // to show either — would become a wishlist row that can never be priced and
+    // never charted, only re-scraped forever by auto-capture. Drop it instead.
+    if (item.refs.length === 0 && item.history.length === 0) continue;
+
     const before = findWishlist(item.title, item.platform);
     const row = addToWishlist({
       title: item.title,

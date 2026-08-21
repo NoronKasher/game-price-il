@@ -1,5 +1,4 @@
 import type { GameHit, Offer, SourceAdapter } from './types.ts';
-import type { Platform } from '../search.ts';
 import { toILS, canConvert } from '../rates.ts';
 import { REGIONS } from '../regions.ts';
 import { describeProduct } from '../normalize.ts';
@@ -76,10 +75,10 @@ export const xbox: SourceAdapter = {
   id: 'xbox-store',
   name: 'Xbox Store (regional)',
   nameHe: 'חנות אקסבוקס — לפי אזור',
-  platforms: ['xbox-series', 'xbox-one'],
+  platforms: ['xbox'],
   enabled: true,
 
-  async search(title: string, platforms: Platform[]): Promise<GameHit[]> {
+  async search(title: string): Promise<GameHit[]> {
     const url = `${CATALOG}/productFamilies/autosuggest?query=${encodeURIComponent(
       title
     )}&market=US&languages=en-US&productFamilyNames=Games`;
@@ -93,10 +92,6 @@ export const xbox: SourceAdapter = {
       if (p.Type !== 'Game') continue;
       const d = describeProduct(p.Title);
       if (d.accessory) continue;
-      // Xbox games list under both Series and One; show under whichever the user asked.
-      const platform: Platform = platforms.includes('xbox-one') && !platforms.includes('xbox-series')
-        ? 'xbox-one'
-        : 'xbox-series';
       hits.push({
         sourceId: 'xbox-store',
         sourceGameId: p.ProductId,
@@ -104,7 +99,7 @@ export const xbox: SourceAdapter = {
         groupKey: d.groupKey,
         edition: d.edition,
         image: icon(p.Icon),
-        platform,
+        platform: 'xbox',
       });
     }
     return hits;

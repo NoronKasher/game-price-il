@@ -34,7 +34,7 @@ export const player1: SourceAdapter = {
   id: 'player1',
   name: 'Player1 (Israel)',
   nameHe: 'פלייר1 (Player1)',
-  platforms: ['ps5', 'ps4', 'xbox-series', 'xbox-one', 'switch'],
+  platforms: ['ps5', 'ps4', 'xbox', 'switch'],
   enabled: true,
 
   async search(title: string, platforms: Platform[]): Promise<GameHit[]> {

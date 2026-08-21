@@ -34,7 +34,7 @@ export const gamestorm: SourceAdapter = {
   id: 'gamestorm',
   name: 'Game Storm (Israel)',
   nameHe: 'גיים סטורם (Game Storm)',
-  platforms: ['ps5', 'ps4', 'xbox-series', 'xbox-one', 'switch'],
+  platforms: ['ps5', 'ps4', 'xbox', 'switch'],
   enabled: true,
 
   async search(title: string, platforms: Platform[]): Promise<GameHit[]> {

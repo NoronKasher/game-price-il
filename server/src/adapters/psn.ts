@@ -1,162 +1,248 @@
-import * as cheerio from 'cheerio';
 import type { GameHit, Offer, SourceAdapter } from './types.ts';
 import type { Platform } from '../search.ts';
 import { toILS, canConvert } from '../rates.ts';
-import { describeProduct } from '../normalize.ts';
+import { describeProduct, parseLocalizedPrice } from '../normalize.ts';
+import { REGIONS } from '../regions.ts';
 
 /**
  * PlayStation Store — regional price board.
  *
- * PSN has no clean public price API, but its store *server-renders* search
- * results as HTML with stable `data-qa` selectors (the same markup a browser
- * with JavaScript disabled receives). We read those pages politely — exactly
- * what the user's own browser does — and parse the tiles. No GraphQL hashes,
- * no headless browser, no bot-protection circumvention.
+ * PSN rebuilt its store as a client-side app in 2026: the search page now ships
+ * only empty loading skeletons and hydrates results in the browser, so the old
+ * "read the server-rendered search HTML" approach returns nothing. There is no
+ * official free price API (PlatPrices forbids price-alert tools; ITAD has no
+ * console prices), so — like every PS price tracker — we now use the store's own
+ * two public data paths, the same ones the user's browser hits:
  *
- * Cross-region: PSN product ids are region-specific by prefix (EP/UP/HP), but
- * the trailing product code (e.g. "GOWRAGNAROK00000") is stable across
- * regions, so we search each region's store and match a game by that code.
+ *   1. SEARCH — the store's GraphQL endpoint (`getSearchResults`), which takes an
+ *      explicit `countryCode` and returns each region's products (with the stable
+ *      cross-region product code) but NOT their price. This is the one call that
+ *      needs a persisted-query hash (see SEARCH_HASH).
+ *   2. PRICE — the product page IS still server-rendered with its price embedded
+ *      in `__NEXT_DATA__` (`batarangs.cta`). We fetch `/{locale}/product/{id}` and
+ *      read the buyable ("APPLICABLE") price. No hash, no scraping of protected
+ *      markup — just the page the store serves without JavaScript.
+ *
+ * Product ids are region-specific by prefix (UP…=Americas, EP…=Europe), but the
+ * trailing product code (e.g. "GOWRAGNAROK00000") is stable across regions, so we
+ * search each region and match a game by that code, then price that region's id.
  *
  * sourceGameId = "<productCode>~<url-encoded search name>".
  */
 
-const UA = 'GamePriceIL/0.1 (personal wishlist price tracker for Israel)';
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36';
+const GQL = 'https://web.np.playstation.com/api/graphql/v1//op';
+const STORE = 'https://store.playstation.com';
 const CACHE_TTL = 10 * 60 * 1000;
-const MAX_CONCURRENT = 3;
+// Each region costs a search + a product-page fetch, so with ~22 regions we let
+// more run at once (PSN's own store fans out far harder than this).
+const MAX_CONCURRENT = 8;
 
-/** Regions with a stable PSN locale AND a stable display currency. */
+/**
+ * Persisted-query hash for the store's `getSearchResults` operation. PSN uses
+ * Apollo persisted-query-ONLY mode (a raw query is rejected as "not whitelisted"),
+ * and the hash is computed on their client from the query text — it is NOT shipped
+ * in the bundle, so it can't be rediscovered server-side. It's stable for long
+ * stretches and only rotates when PSN changes the query. When it does, the search
+ * calls start failing (see gqlSearch), the source reports as unavailable, and this
+ * one line is refreshed:
+ *   open store.playstation.com search in a browser, and in DevTools read the
+ *   `extensions.persistedQuery.sha256Hash` off the request to /api/graphql whose
+ *   operationName is getSearchResults.
+ * Captured 2026-08-20 from @sie-ppr-web-store/app 0.113.0.
+ */
+const SEARCH_OP = 'getSearchResults';
+const SEARCH_HASH = '4df6284f982e57bec70f23c77e2c219dc792eb19af7fb3d3a81767aa3f1958aa';
+
+/**
+ * The markets PSN serves, each mapped to the store locale its product pages
+ * actually price in. PSN's country set differs from the shared roster — it has
+ * no Israel store, and several markets need a non-English locale (es-/pt-/uk-…)
+ * or the product page renders with no price. Every region here was verified to
+ * return a real APPLICABLE price; the rest of the roster is simply skipped.
+ * (currency isn't listed — each product page reports its own, e.g. LATAM in USD.)
+ */
+const PSN_LOCALE: Record<string, string> = {
+  // Americas cluster
+  US: 'en-us', CA: 'en-ca', MX: 'es-mx', BR: 'pt-br', AR: 'es-ar', CL: 'es-cl', CO: 'es-co', PE: 'es-pe',
+  // Europe / EMEA cluster
+  GB: 'en-gb', TR: 'en-tr', IN: 'en-in', ZA: 'en-za', DE: 'de-de', FR: 'fr-fr', UA: 'uk-ua',
+  // Asia cluster
+  HK: 'en-hk', SG: 'en-sg', TW: 'zh-tw', TH: 'en-th', ID: 'en-id', MY: 'en-my', KR: 'ko-kr',
+};
+
 interface PsnRegion {
-  market: string;
+  country: string;
   locale: string;
-  currency: string;
   nameHe: string;
   flag: string;
   pinned: boolean;
 }
-const PSN_REGIONS: PsnRegion[] = [
-  { market: 'US', locale: 'en-us', currency: 'USD', nameHe: 'ארה״ב', flag: '🇺🇸', pinned: true },
-  { market: 'TR', locale: 'en-tr', currency: 'TRY', nameHe: 'טורקיה', flag: '🇹🇷', pinned: true },
-  { market: 'IN', locale: 'en-in', currency: 'INR', nameHe: 'הודו', flag: '🇮🇳', pinned: true },
-  { market: 'ZA', locale: 'en-za', currency: 'ZAR', nameHe: 'דרום אפריקה', flag: '🇿🇦', pinned: false },
-  { market: 'GB', locale: 'en-gb', currency: 'GBP', nameHe: 'בריטניה', flag: '🇬🇧', pinned: false },
-];
+/** PSN-servable regions, drawn from the shared roster so names/flags stay in sync. */
+const PSN_REGIONS: PsnRegion[] = REGIONS.filter((r) => PSN_LOCALE[r.market]).map((r) => ({
+  country: r.market,
+  locale: PSN_LOCALE[r.market]!,
+  nameHe: r.nameHe,
+  flag: r.flag,
+  pinned: r.pinned,
+}));
 
-const cache = new Map<string, { html: string; at: number }>();
+/** PSN platform tag ⇄ our platform id (PSN only sells PS4/PS5). */
+const PLATFORM_TAG: Record<'ps4' | 'ps5', string> = { ps5: 'PS5', ps4: 'PS4' };
 
-async function fetchPsn(url: string): Promise<string | null> {
-  const c = cache.get(url);
-  if (c && Date.now() - c.at < CACHE_TTL) return c.html;
+/** Store-display classifications that are NOT a buyable game (skip in search). */
+const SKIP_CLASS = /ADD.?ON|LEVEL|CONSUMABLE|CURRENCY|DEMO|THEME|AVATAR|SEASON_PASS|MEMBERSHIP/i;
+
+const cache = new Map<string, { body: string; at: number }>();
+
+/** Fetch text with a short cache; null on any non-200 / network error. */
+async function fetchText(url: string, headers: Record<string, string>): Promise<string | null> {
+  const key = url + JSON.stringify(headers);
+  const c = cache.get(key);
+  if (c && Date.now() - c.at < CACHE_TTL) return c.body;
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': UA, 'Accept-Language': 'en' },
-      redirect: 'manual', // a 302 means "no store here" — treat as no data
-      signal: AbortSignal.timeout(15000),
-    });
+    const res = await fetch(url, { headers, redirect: 'follow', signal: AbortSignal.timeout(15000) });
     if (res.status !== 200) return null;
-    const html = await res.text();
-    cache.set(url, { html, at: Date.now() });
-    return html;
+    const body = await res.text();
+    cache.set(key, { body, at: Date.now() });
+    return body;
   } catch {
     return null;
   }
 }
 
-/** Run tasks with a small concurrency cap (PSN is one host; keep it neighbourly). */
-async function pooled<T, R>(items: T[], fn: (t: T) => Promise<R>, limit = MAX_CONCURRENT): Promise<R[]> {
-  const out: R[] = [];
-  let i = 0;
-  async function worker() {
-    while (i < items.length) {
-      const idx = i++;
-      out[idx] = await fn(items[idx]!);
-    }
+/** Thrown when the store's GraphQL rejects our persisted-query hash (rotated). */
+class PsnHashError extends Error {
+  constructor(detail: string) {
+    super(`PSN search hash rejected (rotated?) — refresh SEARCH_HASH in psn.ts. ${detail}`);
+    this.name = 'PsnHashError';
   }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return out;
+}
+
+interface SearchProduct {
+  id: string;
+  name: string;
+  platforms: string[];
+  media?: { role: string; type: string; url: string }[];
+  storeDisplayClassification?: string;
+}
+
+/** The stable, cross-region product code — the segment after "_00-". */
+function codeOf(productId: string): string | null {
+  return productId.match(/_00-([A-Za-z0-9]+)$/)?.[1] ?? null;
+}
+
+/** Best cover image from a product's media list. */
+function imageOf(p: SearchProduct): string | undefined {
+  const pref = ['GAMEHUB_COVER_ART', 'MASTER', 'EDITION_KEY_ART', 'FOUR_BY_THREE_BANNER', 'BACKGROUND'];
+  const images = (p.media ?? []).filter((m) => m.type === 'IMAGE');
+  for (const role of pref) {
+    const hit = images.find((m) => m.role === role);
+    if (hit) return hit.url;
+  }
+  return images[0]?.url;
 }
 
 /**
- * Parse a localized price string to a number.
- *
- * The trailing separator is a decimal point only when it is followed by 1–2
- * digits ("1.399,50"→1399.5, "£59.99"→59.99); a separator followed by 3 digits
- * is a thousands group ("₹2,499"→2499, "R 1,559"→1559). Any non-decimal
- * separators are thousands and are stripped.
+ * Call the store's `getSearchResults` for one region. Throws PsnHashError if the
+ * persisted-query hash is no longer accepted (so callers can surface the outage
+ * instead of silently returning nothing); returns [] on ordinary empty/failed
+ * responses.
  */
-export function parseLocalizedPrice(text: string): number | null {
-  const digits = text.replace(/[^\d.,]/g, '');
-  if (!digits) return null;
-  const lastSep = Math.max(digits.lastIndexOf(','), digits.lastIndexOf('.'));
-  let normalized: string;
-  if (lastSep === -1) {
-    normalized = digits;
-  } else {
-    const decimals = digits.length - lastSep - 1;
-    if (decimals >= 1 && decimals <= 2) {
-      // trailing separator is the decimal point; everything else is thousands
-      const intPart = digits.slice(0, lastSep).replace(/[.,]/g, '');
-      normalized = `${intPart}.${digits.slice(lastSep + 1)}`;
-    } else {
-      // no decimals — all separators are thousands groupings
-      normalized = digits.replace(/[.,]/g, '');
-    }
+async function gqlSearch(term: string, country: string, lang: string, pageSize = 20): Promise<SearchProduct[]> {
+  const variables = encodeURIComponent(
+    JSON.stringify({ countryCode: country, languageCode: lang, nextCursor: '', pageOffset: 0, pageSize, searchTerm: term })
+  );
+  const extensions = encodeURIComponent(
+    JSON.stringify({ persistedQuery: { version: 1, sha256Hash: SEARCH_HASH } })
+  );
+  const url = `${GQL}?operationName=${SEARCH_OP}&variables=${variables}&extensions=${extensions}`;
+  const body = await fetchText(url, {
+    'User-Agent': UA,
+    Accept: 'application/json',
+    'content-type': 'application/json',
+    'x-apollo-operation-name': SEARCH_OP,
+    // Non-English stores (DE/FR/KR/JP…) return zero results for an `en` query,
+    // so the search language must match the region's own store locale.
+    'x-psn-store-locale-override': `${lang}-${country}`,
+  });
+  if (!body) return [];
+  let json: {
+    data?: { universalSearch?: { results?: SearchProduct[] } };
+    errors?: { message?: string }[];
+  };
+  try {
+    json = JSON.parse(body);
+  } catch {
+    return [];
   }
-  const n = Number(normalized);
-  return Number.isFinite(n) ? n : null;
-}
-
-interface Tile {
-  code: string; // stable cross-region product code
-  name: string;
-  platforms: string[];
-  price?: string;
-  strike?: string;
-  image?: string;
-  href: string;
-}
-
-/** Parse the server-rendered search tiles from a store page. */
-function parseTiles(html: string, locale: string): Tile[] {
-  const $ = cheerio.load(html);
-  const tiles: Tile[] = [];
-  for (let i = 0; i < 48; i++) {
-    const nameEl = $(`[data-qa="search#productTile${i}#product-name"]`);
-    if (nameEl.length === 0) continue;
-    const link = nameEl.closest(`a[href*="/product/"]`);
-    const href = link.attr('href') ?? '';
-    const m = href.match(/\/product\/[A-Z0-9]+-[A-Z0-9]+_00-([A-Z0-9]+)/);
-    if (!m) continue;
-    const price = $(`[data-qa="search#productTile${i}#price#display-price"]`).first().text().trim();
-    const strike = $(`[data-qa="search#productTile${i}#price#price-strikethrough"]`).first().text().trim();
-    const tags = [0, 1, 2]
-      .map((t) => $(`[data-qa="search#productTile${i}#game-art#tag${t}"]`).first().text().trim())
-      .filter(Boolean);
-    let image = $(`[data-qa="search#productTile${i}#game-art#image#image-no-js"]`).attr('src');
-    tiles.push({
-      code: m[1]!,
-      name: nameEl.text().trim(),
-      platforms: tags,
-      price: price || undefined,
-      strike: strike || undefined,
-      image: image || undefined,
-      href: href.startsWith('http') ? href : `https://store.playstation.com${href}`,
-    });
+  if (json.errors?.length) {
+    const msg = json.errors[0]?.message ?? '';
+    if (/persisted|whitelist|unknown operation/i.test(msg)) throw new PsnHashError(msg.slice(0, 120));
+    return [];
   }
-  return tiles;
+  return json.data?.universalSearch?.results ?? [];
 }
 
-const PLATFORM_TAG: Record<Platform, string> = {
-  ps5: 'PS5',
-  ps4: 'PS4',
-  pc: '',
-  'xbox-series': '',
-  'xbox-one': '',
-  switch: '',
-};
+interface RegionPrice {
+  currency: string;
+  /** Current buy price in major currency units (e.g. 69.99, 4999). */
+  value: number;
+  /** Full price before discount, major units. */
+  base: number;
+}
 
-function tileMatchesPlatform(tile: Tile, platform: Platform): boolean {
-  const want = PLATFORM_TAG[platform];
-  return want ? tile.platforms.some((t) => t.toUpperCase().includes(want)) : true;
+/**
+ * The buyable ("APPLICABLE") price on a product's server-rendered page, in the
+ * given region locale. Reads `__NEXT_DATA__ → props.pageProps.batarangs.cta`,
+ * skipping the PS-Plus "UPSELL" price (which shows as "Included" / 0). Returns
+ * null when the product isn't sold in that region (the page then carries no
+ * applicable price).
+ */
+async function priceOf(locale: string, productId: string): Promise<RegionPrice | null> {
+  const html = await fetchText(`${STORE}/${locale}/product/${productId}`, {
+    'User-Agent': UA,
+    'Accept-Language': 'en',
+  });
+  if (!html) return null;
+  const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if (!m) return null;
+  let cta: unknown;
+  try {
+    const nd = JSON.parse(m[1]!) as { props?: { pageProps?: { batarangs?: Record<string, unknown> } } };
+    cta = nd.props?.pageProps?.batarangs?.cta;
+  } catch {
+    return null;
+  }
+  // The `cta` batarang is `{ text, statusCode }`, where `text` is the CTA
+  // fragment's own HTML — the price JSON sits inside it as a real (once-escaped)
+  // string, so we scan `text` directly. Stringifying the wrapper object instead
+  // double-escapes the quotes and the match silently fails.
+  const blob =
+    typeof cta === 'string'
+      ? cta
+      : cta && typeof (cta as { text?: unknown }).text === 'string'
+        ? (cta as { text: string }).text
+        : '';
+  // Take the buyable ("APPLICABLE") price, not the PS-Plus "UPSELL" one (which
+  // shows as "Included"/0 for catalog games). basePrice/discountedPrice/currencyCode
+  // all sit inside that Price object, before its applicability field.
+  const at = blob.indexOf('"applicability":"APPLICABLE"');
+  if (at < 0) return null;
+  const start = blob.lastIndexOf('{"__typename":"Price"', at);
+  if (start < 0) return null;
+  const seg = blob.slice(start, at + 40);
+  const cc = seg.match(/"currencyCode":"([A-Z]{3})"/);
+  const bp = seg.match(/"basePrice":"([^"]*)"/);
+  const dp = seg.match(/"discountedPrice":"([^"]*)"/);
+  if (!cc || !bp || !dp) return null;
+  // Parse the display strings ("$69.99", "Rs 4,999", "2.799,00 TL") per locale
+  // rather than the numeric minor-unit field, whose scale varies by currency
+  // (USD/TRY are in cents, INR is whole rupees).
+  const value = parseLocalizedPrice(dp[1]!);
+  const base = parseLocalizedPrice(bp[1]!);
+  if (value == null || !(value > 0)) return null; // free / included / unpriced
+  return { currency: cc[1]!, value, base: base ?? value };
 }
 
 export const psn: SourceAdapter = {
@@ -167,31 +253,34 @@ export const psn: SourceAdapter = {
   enabled: true,
 
   async search(title: string, platforms: Platform[]): Promise<GameHit[]> {
-    // Search the US store (broadest catalog, stable en-us locale) for discovery.
-    const html = await fetchPsn(
-      `https://store.playstation.com/en-us/search/${encodeURIComponent(title)}`
-    );
-    if (!html) return [];
-    const tiles = parseTiles(html, 'en-us');
+    // Discover the game in the US catalog (broadest); per-region ids come later.
+    const products = await gqlSearch(title, 'US', 'en');
+    const wantPs5 = !platforms.length || platforms.includes('ps5');
+    const wantPs4 = !platforms.length || platforms.includes('ps4');
 
     const hits: GameHit[] = [];
     const seen = new Set<string>();
-    for (const tile of tiles) {
-      const d = describeProduct(tile.name);
+    for (const p of products) {
+      if (SKIP_CLASS.test(p.storeDisplayClassification ?? '')) continue;
+      const code = codeOf(p.id);
+      if (!code) continue;
+      const d = describeProduct(p.name);
       if (d.accessory) continue;
-      for (const platform of ['ps5', 'ps4'] as Platform[]) {
-        if (platforms.length && !platforms.includes(platform)) continue;
-        if (!tileMatchesPlatform(tile, platform)) continue;
-        const key = `${tile.code}:${platform}`;
+      const image = imageOf(p);
+      for (const platform of ['ps5', 'ps4'] as const) {
+        if (platform === 'ps5' && !wantPs5) continue;
+        if (platform === 'ps4' && !wantPs4) continue;
+        if (!p.platforms?.includes(PLATFORM_TAG[platform])) continue;
+        const key = `${code}:${platform}`;
         if (seen.has(key)) continue;
         seen.add(key);
         hits.push({
           sourceId: 'psn-store',
-          sourceGameId: `${tile.code}~${encodeURIComponent(d.base || tile.name)}`,
-          title: d.base || tile.name,
+          sourceGameId: `${code}~${encodeURIComponent(d.base || p.name)}`,
+          title: d.base || p.name,
           groupKey: d.groupKey,
           edition: d.edition,
-          image: tile.image,
+          image,
           platform,
         });
       }
@@ -203,40 +292,61 @@ export const psn: SourceAdapter = {
   async getOffers(sourceGameId: string, platform: Platform): Promise<Offer[]> {
     const [code, encodedName] = sourceGameId.split('~');
     const name = decodeURIComponent(encodedName ?? '');
-    if (!code || !name) return [];
+    const tag = PLATFORM_TAG[platform as 'ps4' | 'ps5'];
+    if (!code || !name || !tag) return [];
 
-    const results = await pooled(PSN_REGIONS, async (region) => {
-      const html = await fetchPsn(
-        `https://store.playstation.com/${region.locale}/search/${encodeURIComponent(name)}`
-      );
-      if (!html) return null;
-      const tiles = parseTiles(html, region.locale);
-      const tile = tiles.find(
-        (t) => t.code === code && tileMatchesPlatform(t, platform) && t.price
-      );
-      if (!tile?.price) return null;
-      const native = parseLocalizedPrice(tile.price);
-      if (native == null || native <= 0) return null;
-      if (!(await canConvert(region.currency))) return null;
-      const regular = tile.strike ? parseLocalizedPrice(tile.strike) : null;
-      const onSale = regular != null && regular > native;
-      const offer: Offer = {
+    // Process each region (search → match by code → price) with a small pool so
+    // one game opens in a few seconds without bursting either PSN host.
+    const results: (Offer | null)[] = [];
+    let i = 0;
+    async function worker() {
+      while (i < PSN_REGIONS.length) {
+        const region = PSN_REGIONS[i++]!;
+        results.push(await offerForRegion(region));
+      }
+    }
+    const targetGroup = describeProduct(name).groupKey;
+    async function offerForRegion(region: PsnRegion): Promise<Offer | null> {
+      const lang = region.locale.split('-')[0]!;
+      const products = await gqlSearch(name, region.country, lang);
+      // First-party SIE titles carry a region marker in the product code
+      // (STRAYSIEA vs …SIEE), so an exact-code match only works for region-neutral
+      // codes. Fall back to the same base game by name + platform, preferring the
+      // base edition, so those titles still price across every region.
+      let product = products.find((p) => codeOf(p.id) === code && p.platforms?.includes(tag));
+      if (!product) {
+        const cands = products.filter(
+          (p) =>
+            p.platforms?.includes(tag) &&
+            !SKIP_CLASS.test(p.storeDisplayClassification ?? '') &&
+            describeProduct(p.name).groupKey === targetGroup
+        );
+        product = cands.find((p) => describeProduct(p.name).edition === null) ?? cands[0];
+      }
+      if (!product) return null;
+      const price = await priceOf(region.locale, product.id);
+      if (!price) return null;
+      if (!(await canConvert(price.currency))) return null;
+      const native = price.value;
+      const regular = price.base;
+      const onSale = regular > native;
+      return {
         store: `PS Store ${region.flag}`,
         kind: 'digital',
-        location: 'international',
+        location: region.country === 'IL' ? 'israel' : 'international',
         price: native,
-        currency: region.currency,
-        priceILS: await toILS(native, region.currency),
-        retailPrice: onSale ? regular! : undefined,
-        savings: onSale ? Math.round(((regular! - native) / regular!) * 100) : undefined,
-        region: region.market,
+        currency: price.currency,
+        priceILS: await toILS(native, price.currency),
+        retailPrice: onSale ? regular : undefined,
+        savings: onSale ? Math.round(((regular - native) / regular) * 100) : undefined,
+        region: region.country,
         regionName: region.nameHe,
         flag: region.flag,
         pinned: region.pinned,
-        url: tile.href,
+        url: `${STORE}/${region.locale}/product/${product.id}`,
       };
-      return offer;
-    });
+    }
+    await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT, PSN_REGIONS.length) }, worker));
 
     return results.filter((o): o is Offer => o !== null).sort((a, b) => a.priceILS - b.priceILS);
   },

@@ -1,0 +1,490 @@
+import { useEffect, useMemo, useState } from 'react';
+import { api } from './api';
+import { nis, platformNames, t } from './he';
+import { cleanStoreName, isDirectPurchase, regionLabel, storeFamily } from './source';
+import { offerRisk, boardHasRisk, loadRegionNoticeHidden, saveRegionNoticeHidden, type RowRisk } from './regionRisk';
+import { loadBoardView, type BoardView } from './regions';
+import { safeUrl } from './url';
+import type { GameMeta, Offer, Platform, SourceRef } from './types';
+
+/**
+ * The in-page detail "tab" a search card opens into.
+ *
+ * Two panes (RTL): the game sits on the right — art, title, platform and its
+ * Steam blurb + genre tags — and the departure board fills the left with every
+ * way to buy it, cheapest-first, prices flipping in row by row. A filter bar
+ * lets the user narrow by store type, region, sale and sort. Same live offers
+ * the full game page uses (api.offers); this only reskins and filters them.
+ */
+
+type Cat = 'official' | 'disc' | 'keys';
+type SortKey = 'cheap' | 'region' | 'official';
+
+/**
+ * Which kind of seller an offer is.
+ *
+ * "Official" is about WHO sells it, not whether the row names a region: EA App
+ * and GOG sell direct but price in one place only, and lumping them under
+ * "key resellers" put a first-party storefront in the grey-market bucket.
+ */
+function catOf(o: Offer): Cat {
+  if (o.kind === 'physical') return 'disc';
+  return o.region || isDirectPurchase(storeFamily(o.store).key) ? 'official' : 'keys';
+}
+function onSaleOf(o: Offer): boolean {
+  return (o.retailPrice != null && o.retailPrice > o.price) || (o.savings != null && o.savings > 0);
+}
+/**
+ * The row's real discount: how far the store cut its OWN price.
+ *
+ * This used to compare against Israel's price, silently falling back to the
+ * dearest row on the board when the game isn't sold in Israel — so every row of
+ * such a game showed a huge "-90%" that read as a sale but only meant "cheaper
+ * than the priciest region". A discount now means a discount.
+ */
+function discountOf(o: Offer): number {
+  if (o.retailPrice != null && o.retailPrice > o.price) {
+    return Math.round(((o.retailPrice - o.price) / o.retailPrice) * 100);
+  }
+  return o.savings != null && o.savings > 0 ? Math.round(o.savings) : 0;
+}
+/**
+ * Airport-style code for the flap: the region market code, else what the row is.
+ * A region-less row from the platform itself is a direct purchase, not a key —
+ * calling Steam's or Uplay's own listing "מפתח" mislabelled the safest rows on
+ * the board as the riskiest kind.
+ */
+function codeFor(o: Offer): string {
+  if (o.region) return o.region;
+  if (o.kind === 'physical') return t.depDisc;
+  return isDirectPurchase(storeFamily(o.store).key) ? t.depDirect : t.depKey;
+}
+
+/** How many rows the "top" view shows before the "show the rest" button. */
+const TOP_N = 12;
+
+interface Row {
+  o: Offer;
+  risk: RowRisk;
+  cut: number;
+  best: boolean;
+  /** Other regions of the same storefront, hidden behind this row in collapse view. */
+  folded: Offer[];
+}
+
+export function DepartureBoard({
+  title,
+  platform,
+  image,
+  refs,
+  preferred,
+  absorb,
+  platforms,
+  onSwitchPlatform,
+  onOpenFull,
+  onClose,
+}: {
+  title: string;
+  platform: Platform;
+  image?: string;
+  refs: SourceRef[];
+  preferred: string;
+  /** Card-into-board flight phase: 'active' hides the game pane until the flying
+   *  clone lands, 'done' fades it in there; null/undefined = no flight (open plainly). */
+  absorb?: 'active' | 'done' | null;
+  /** Sibling platforms of this game, so the user can switch without closing. */
+  platforms?: Platform[];
+  onSwitchPlatform?: (p: Platform) => void;
+  onOpenFull: () => void;
+  onClose: () => void;
+}) {
+  const [offers, setOffers] = useState<Offer[] | null>(null);
+  const [error, setError] = useState(false);
+  const [meta, setMeta] = useState<GameMeta | null | undefined>(undefined);
+  // Filters — all permissive by default; a game/platform switch resets them.
+  const [types, setTypes] = useState<Record<Cat, boolean>>({ official: true, disc: true, keys: true });
+  const [region, setRegion] = useState<string>('all');
+  const [onSale, setOnSale] = useState(false);
+  const [sort, setSort] = useState<SortKey>('cheap');
+  /** Storefronts the user has switched OFF. Empty = show everything (the default). */
+  const [hiddenStores, setHiddenStores] = useState<Set<string>>(new Set());
+  /** Opt-in, never on by default: hide rows that need a foreign account or a regional key. */
+  const [onlyBuyable, setOnlyBuyable] = useState(false);
+  /** Layout mode — seeded from the user's setting, switchable per board. */
+  const [view, setView] = useState<BoardView>(() => loadBoardView());
+  /** Storefronts whose folded regions are currently expanded (collapse view). */
+  const [openStores, setOpenStores] = useState<Set<string>>(new Set());
+  const [showAll, setShowAll] = useState(false);
+  const [noticeHidden, setNoticeHidden] = useState(() => loadRegionNoticeHidden());
+  const [noticeDismissedNow, setNoticeDismissedNow] = useState(false);
+
+  const refsKey = refs.map((r) => `${r.sourceId}:${r.sourceGameId}`).join('|');
+
+  useEffect(() => {
+    let live = true;
+    setOffers(null);
+    setError(false);
+    setMeta(undefined);
+    setTypes({ official: true, disc: true, keys: true });
+    setRegion('all');
+    setOnSale(false);
+    setSort('cheap');
+    setHiddenStores(new Set());
+    setOnlyBuyable(false);
+    setView(loadBoardView());
+    setOpenStores(new Set());
+    setShowAll(false);
+    setNoticeDismissedNow(false);
+    if (refs.length === 0) {
+      setOffers([]);
+      setMeta(null);
+      return;
+    }
+    api.offers(refs, platform).then((r) => live && setOffers(r.offers)).catch(() => live && setError(true));
+    api.meta(refs).then((r) => live && setMeta(r.meta)).catch(() => live && setMeta(null));
+    return () => {
+      live = false;
+    };
+  }, [refsKey, platform]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const all = offers ?? [];
+  // Only surface a control when it can actually do something for this game.
+  const cats = useMemo(() => new Set(all.map(catOf)), [all]);
+  const regionsPresent = useMemo(
+    () => [...new Set(all.filter((o) => o.region).map((o) => o.region as string))],
+    [all]
+  );
+  const anyOnSale = useMemo(() => all.some(onSaleOf), [all]);
+  const anyRisk = useMemo(() => boardHasRisk(all, preferred), [all, preferred]);
+  /**
+   * Storefronts on this board, biggest first. A regional storefront contributes
+   * ~30 rows to a PC board, so hiding one is the strongest lever the user has on
+   * a long board — hence the row count on each chip.
+   */
+  const storeFamilies = useMemo(() => {
+    const counts = new Map<string, { key: string; label: string; count: number }>();
+    for (const o of all) {
+      const f = storeFamily(o.store);
+      const prev = counts.get(f.key);
+      if (prev) prev.count++;
+      else counts.set(f.key, { ...f, count: 1 });
+    }
+    return [...counts.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [all]);
+
+  /** Everything the filters let through, before any layout decision. */
+  const filtered = useMemo(() => {
+    let list = all.filter((o) => types[catOf(o)]);
+    // Region narrows the regional offers only; discs/keyshops carry no region and
+    // are governed by their own type toggle.
+    if (region !== 'all') list = list.filter((o) => !o.region || o.region === region);
+    if (onSale) list = list.filter(onSaleOf);
+    if (hiddenStores.size > 0) list = list.filter((o) => !hiddenStores.has(storeFamily(o.store).key));
+    if (onlyBuyable) list = list.filter((o) => offerRisk(o, preferred).level === 'ok');
+    return list;
+  }, [all, types, region, onSale, hiddenStores, onlyBuyable, preferred]);
+
+  const rows = useMemo<Row[]>(() => {
+    let list = filtered;
+    const byPrice = (a: Offer, b: Offer) => a.priceILS - b.priceILS;
+    if (sort === 'region') {
+      list = list.slice().sort((a, b) => (a.region ?? 'zzz').localeCompare(b.region ?? 'zzz') || byPrice(a, b));
+    } else if (sort === 'official') {
+      const rank: Record<Cat, number> = { official: 0, disc: 1, keys: 2 };
+      list = list.slice().sort((a, b) => rank[catOf(a)] - rank[catOf(b)] || byPrice(a, b));
+    } else {
+      list = list.slice().sort(byPrice);
+    }
+
+    // `best` marks the cheapest row of everything that passed the filters, so it
+    // stays meaningful whichever layout is chosen below.
+    const cheapest = list.length ? Math.min(...list.map((o) => o.priceILS)) : 0;
+    const make = (o: Offer, folded: Offer[] = []): Row => ({
+      o,
+      risk: offerRisk(o, preferred),
+      cut: discountOf(o),
+      best: o.priceILS === cheapest,
+      folded,
+    });
+
+    // Sorting stays as chosen; only WHICH rows are shown changes per view.
+    if (view === 'collapse') {
+      // One row per storefront — its cheapest surviving region — with the rest
+      // folded behind it. Discs keep their own row each (different shops).
+      const groups = new Map<string, Offer[]>();
+      for (const o of list) {
+        const key = o.kind === 'physical' ? `disc:${o.store}` : storeFamily(o.store).key;
+        const g = groups.get(key);
+        if (g) g.push(o);
+        else groups.set(key, [o]);
+      }
+      // Head rows race on price; an expanded store's other regions sit directly
+      // under its own head rather than scattering back into the global order.
+      const heads = [...groups].map(([key, group]) => {
+        const sorted = group.slice().sort(byPrice);
+        return { key, head: sorted[0]!, rest: sorted.slice(1) };
+      });
+      heads.sort((a, b) => byPrice(a.head, b.head));
+      const out: Row[] = [];
+      for (const h of heads) {
+        out.push(make(h.head, h.rest));
+        if (openStores.has(h.key)) for (const o of h.rest) out.push(make(o));
+      }
+      return out;
+    }
+
+    if (view === 'pinned') {
+      // Israel and the user's own market first — the rows they can act on today.
+      const rank = (o: Offer) => (o.region === 'IL' || o.location === 'israel' ? 0 : o.region === preferred ? 1 : 2);
+      return list
+        .slice()
+        .sort((a, b) => rank(a) - rank(b) || byPrice(a, b))
+        .map((o) => make(o));
+    }
+
+    if (view === 'top' && !showAll) return list.slice(0, TOP_N).map((o) => make(o));
+
+    return list.map((o) => make(o));
+  }, [filtered, sort, preferred, view, openStores, showAll]);
+
+  /** Rows the "top" view is holding back, for the "show the rest" button. */
+  const hiddenCount = view === 'top' && !showAll ? Math.max(0, filtered.length - TOP_N) : 0;
+
+  const toggleType = (c: Cat) => setTypes((p) => ({ ...p, [c]: !p[c] }));
+  const toggleStore = (key: string) =>
+    setHiddenStores((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  const toggleFold = (key: string) =>
+    setOpenStores((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+
+  const dismissNotice = (forever: boolean) => {
+    if (forever) saveRegionNoticeHidden(true);
+    setNoticeHidden(forever);
+    setNoticeDismissedNow(true);
+  };
+
+  const showNotice = anyRisk && !noticeHidden && !noticeDismissedNow;
+  const absorbClass = absorb === 'active' ? 'absorbing' : absorb === 'done' ? 'absorbed' : '';
+
+  return (
+    <section
+      className={`dt-panel ${absorbClass}`}
+      role="region"
+      aria-label={`${title} — ${platformNames[platform]}`}
+    >
+      <button className="dt-close" onClick={onClose} aria-label={t.depClose}>✕</button>
+      <div className="dt-inner">
+        <aside className="dt-game">
+          {image ? <img className="dt-art" src={safeUrl(image)} alt={title} /> : <div className="dt-noart">{title}</div>}
+          <h3 className="dt-title">{title}</h3>
+          <div className="dt-platform">{platformNames[platform]}</div>
+          {/* Switch platform without leaving the board (the grid card that used
+              to carry these chips is now tucked inside here). */}
+          {platforms && platforms.length > 1 && onSwitchPlatform && (
+            <div className="dt-platforms">
+              {platforms.map((p) => (
+                <button
+                  key={p}
+                  className={`chip ${p} ${p === platform ? 'on' : ''}`}
+                  onClick={() => onSwitchPlatform(p)}
+                >
+                  {platformNames[p]}
+                </button>
+              ))}
+            </div>
+          )}
+          {meta === undefined ? (
+            <p className="dt-meta-loading">{t.depMetaLoading}</p>
+          ) : meta ? (
+            <>
+              {meta.genres.length > 0 && (
+                <div className="dt-tags">
+                  {meta.genres.slice(0, 6).map((g) => (
+                    <span className="dt-tag" key={g}>{g}</span>
+                  ))}
+                </div>
+              )}
+              {meta.description && <p className="dt-desc">{meta.description}</p>}
+            </>
+          ) : null}
+          <button className="dt-full" onClick={onOpenFull}>{t.depFull} ↗</button>
+        </aside>
+
+        <div className="dt-main">
+          <div className="dt-filters">
+            {(['official', 'disc', 'keys'] as Cat[])
+              .filter((c) => cats.has(c))
+              .map((c) => (
+                <button
+                  key={c}
+                  className={`dt-ftoggle ${types[c] ? 'on' : ''}`}
+                  aria-pressed={types[c]}
+                  onClick={() => toggleType(c)}
+                >
+                  {t.depType[c]}
+                </button>
+              ))}
+            {regionsPresent.length > 1 && (
+              <select
+                className="dt-fselect"
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                aria-label={t.depRegionLabel}
+              >
+                <option value="all">{t.depRegionAll}</option>
+                {regionsPresent.includes(preferred) && (
+                  <option value={preferred}>{t.depMyRegion(regionLabel(preferred) ?? preferred)}</option>
+                )}
+                {regionsPresent.map((r) => (
+                  <option key={r} value={r}>{regionLabel(r) ?? r}</option>
+                ))}
+              </select>
+            )}
+            {anyOnSale && (
+              <button
+                className={`dt-ftoggle ${onSale ? 'on' : ''}`}
+                aria-pressed={onSale}
+                onClick={() => setOnSale((v) => !v)}
+              >
+                {t.depOnSale}
+              </button>
+            )}
+            {anyRisk && (
+              <button
+                className={`dt-ftoggle ${onlyBuyable ? 'on' : ''}`}
+                aria-pressed={onlyBuyable}
+                onClick={() => setOnlyBuyable((v) => !v)}
+                title={t.depOnlyBuyableHint}
+              >
+                {t.depOnlyBuyable}
+              </button>
+            )}
+            <select
+              className="dt-fselect dt-sort"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              aria-label={t.depSortLabel}
+            >
+              <option value="cheap">{t.depSortCheap}</option>
+              <option value="region">{t.depSortRegion}</option>
+              <option value="official">{t.depSortOfficial}</option>
+            </select>
+          </div>
+
+          {/* Per-storefront switches. Only worth showing when there's more than
+              one storefront to choose between. */}
+          {storeFamilies.length > 1 && (
+            <div className="dt-stores" role="group" aria-label={t.depStoresLabel}>
+              <span className="dt-stores-label">{t.depStoresLabel}</span>
+              {storeFamilies.map((f) => {
+                const on = !hiddenStores.has(f.key);
+                return (
+                  <button
+                    key={f.key}
+                    className={`dt-store ${on ? 'on' : ''}`}
+                    aria-pressed={on}
+                    onClick={() => toggleStore(f.key)}
+                  >
+                    {f.label}
+                    <span className="dt-store-n">{f.count}</span>
+                  </button>
+                );
+              })}
+              {hiddenStores.size > 0 && (
+                <button className="dt-store-reset" onClick={() => setHiddenStores(new Set())}>
+                  {t.depStoresAll}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* What buying from another region actually involves. Informational —
+              nothing here prevents the user from choosing any row they want. */}
+          {showNotice && (
+            <div className="dt-risk-note" role="note">
+              <strong className="dt-risk-title">⚠️ {t.depRiskTitle}</strong>
+              <p>{t.depRiskBody}</p>
+              <p>{t.depRiskWhatHappens}</p>
+              <p className="dt-risk-disclaimer">{t.depRiskDisclaimer}</p>
+              <div className="dt-risk-actions">
+                <button className="dt-risk-ok" onClick={() => dismissNotice(false)}>{t.depRiskGotIt}</button>
+                <label className="dt-risk-never">
+                  <input type="checkbox" onChange={(e) => dismissNotice(e.target.checked)} />
+                  {t.depRiskDismiss}
+                </label>
+              </div>
+            </div>
+          )}
+
+          <div className="dep-board">
+            {error ? (
+              <div className="dep-msg">{t.depError}</div>
+            ) : offers === null ? (
+              <div className="dep-msg dep-pulse">{t.depLoading}</div>
+            ) : all.length === 0 ? (
+              <div className="dep-msg">{t.depEmpty}</div>
+            ) : rows.length === 0 ? (
+              <div className="dep-msg">{t.depNoMatch}</div>
+            ) : (
+              <>
+                <div className="dep-head">
+                  <span>{t.depColStore}</span>
+                  <span>{t.depColRegion}</span>
+                  <span>{t.depColPrice}</span>
+                  <span>{t.depColSale}</span>
+                </div>
+                <div className="dep-rows">
+                  {rows.map(({ o, risk, cut, best, folded }, i) => {
+                    const famKey = o.kind === 'physical' ? `disc:${o.store}` : storeFamily(o.store).key;
+                    const expanded = openStores.has(famKey);
+                    return (
+                      <div
+                        className={`dep-row ${best ? 'best' : ''} ${risk.level !== 'ok' ? 'risky' : ''}`}
+                        key={`${o.store}-${o.region ?? o.kind}-${i}`}
+                        style={{ animationDelay: `${220 + Math.min(i, 12) * 55}ms` }}
+                        title={
+                          [o.regionName ? `${cleanStoreName(o.store)} · ${o.regionName}` : cleanStoreName(o.store), risk.detail]
+                            .filter(Boolean)
+                            .join('\n\n')
+                        }
+                      >
+                        <span className="dep-where">
+                          {cleanStoreName(o.store)}
+                          {risk.badge && <span className={`dep-risk ${risk.level}`}>{risk.badge}</span>}
+                          {folded.length > 0 && (
+                            <button
+                              className="dep-fold"
+                              aria-expanded={expanded}
+                              onClick={() => toggleFold(famKey)}
+                            >
+                              {expanded ? t.depFewerRegions : t.depMoreRegions(folded.length)}
+                            </button>
+                          )}
+                        </span>
+                        <span className="dep-flap">{codeFor(o)}</span>
+                        <span className="dep-flap amber">{nis(o.priceILS)}</span>
+                        <span className={`dep-flap ${cut > 0 ? 'down' : 'flat'}`}>{cut > 0 ? `-${cut}%` : '—'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {hiddenCount > 0 && (
+                  <button className="dep-showall" onClick={() => setShowAll(true)}>
+                    {t.depShowRest(hiddenCount)}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

@@ -5,8 +5,8 @@
 // Documented expected behavior:
 //  1. "FIFA 2020 PS4"            -> { title: "FIFA 2020", platforms: ["ps4"] }
 //  2. "fifa 2020"                -> { title: "fifa 2020", platforms: [] } (no filter)
-//  3. "elden ring xbox series x" -> { title: "elden ring", platforms: ["xbox-series"] } (no stray "x")
-//  4. "halo xbox"                -> bare "xbox" means BOTH ["xbox-series", "xbox-one"]
+//  3. "elden ring xbox series x" -> { title: "elden ring", platforms: ["xbox"] } (no stray "x")
+//  4. "halo xbox"                -> every xbox token maps to one merged ["xbox"]
 //  5. "פיפא פלייסטיישן 5"        -> Hebrew multi-word token -> ["ps5"]
 //  6. "gta פלייסטיישן"           -> bare "playstation" (Hebrew) -> BOTH ["ps5", "ps4"]
 //  7. "pspice simulator"         -> word boundaries: "pspice" must NOT match "ps"
@@ -35,15 +35,16 @@ test('query with no platform tokens returns empty platform filter', () => {
 test('longest token wins: "xbox series x" leaves no stray "x" and no bare-xbox match', () => {
   assert.deepEqual(parseQuery('elden ring xbox series x'), {
     title: 'elden ring',
-    platforms: ['xbox-series'],
+    platforms: ['xbox'],
   });
 });
 
-test('bare "xbox" maps to both xbox generations', () => {
-  assert.deepEqual(parseQuery('halo xbox'), {
-    title: 'halo',
-    platforms: ['xbox-series', 'xbox-one'],
-  });
+test('every xbox generation token maps to the one merged xbox platform', () => {
+  // Series and One are a single cross-gen platform here, so "xbox one",
+  // "xbox series" and bare "xbox" all resolve to the same ['xbox'] — deduped.
+  assert.deepEqual(parseQuery('halo xbox'), { title: 'halo', platforms: ['xbox'] });
+  assert.deepEqual(parseQuery('forza xbox one'), { title: 'forza', platforms: ['xbox'] });
+  assert.deepEqual(parseQuery('gears xbox series s'), { title: 'gears', platforms: ['xbox'] });
 });
 
 test('Hebrew multi-word token "פלייסטיישן 5" maps to ps5', () => {

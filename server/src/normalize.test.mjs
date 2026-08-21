@@ -39,7 +39,7 @@ test('a platform-only parenthetical is stripped for grouping', () => {
 });
 
 test('localized PSN prices parse across regional number formats', async () => {
-  const { parseLocalizedPrice } = await import('./adapters/psn.ts');
+  const { parseLocalizedPrice } = await import('./normalize.ts');
   assert.equal(parseLocalizedPrice('1.399,50 TL'), 1399.5); // Turkey: . thousands, , decimal
   assert.equal(parseLocalizedPrice('₹2,499'), 2499); // India: , thousands, no decimals
   assert.equal(parseLocalizedPrice('R 1,559.00'), 1559); // South Africa: , thousands . decimal

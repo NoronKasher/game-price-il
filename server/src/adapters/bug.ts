@@ -27,8 +27,8 @@ function manufacturerPlatform(manufacturer: string): Platform | null {
   const s = manufacturer.toUpperCase();
   if (s.includes('PS5')) return 'ps5';
   if (s.includes('PS4')) return 'ps4';
-  if (s.includes('XBOX SERIES')) return 'xbox-series';
-  if (s.includes('XBOX ONE')) return 'xbox-one';
+  if (s.includes('XBOX SERIES')) return 'xbox';
+  if (s.includes('XBOX ONE')) return 'xbox';
   if (s.includes('SWITCH')) return 'switch';
   return null;
 }
@@ -51,7 +51,7 @@ export const bug: SourceAdapter = {
   id: 'bug',
   name: 'Bug (Israel)',
   nameHe: 'באג (Bug)',
-  platforms: ['ps5', 'ps4', 'xbox-series', 'xbox-one', 'switch'],
+  platforms: ['ps5', 'ps4', 'xbox', 'switch'],
   enabled: true,
 
   async search(title: string, platforms: Platform[]): Promise<GameHit[]> {

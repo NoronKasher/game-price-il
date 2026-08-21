@@ -4,18 +4,19 @@ import { toILS } from '../rates.ts';
 import { describeProduct } from '../normalize.ts';
 import { ggdeals } from './ggdeals.ts';
 import { itad } from './itad.ts';
+import { CHEAPSHARK_HEADERS, getStores } from './cheapsharkStores.ts';
+import { RateLimitedError } from './politeFetch.ts';
 
 /**
  * CheapShark — free, keyless aggregator of ~30 PC digital stores (Steam, GOG,
  * Epic, Fanatical, GMG...). Prices are in USD. https://apidocs.cheapshark.com/
+ *
+ * The store registry lives in cheapsharkStores.ts, which ITAD also reads.
  */
 
 const BASE = 'https://www.cheapshark.com/api/1.0';
 
-/** CheapShark now rejects requests without a descriptive User-Agent (HTTP 400). */
-export const CHEAPSHARK_HEADERS = {
-  'User-Agent': 'GamePriceIL/0.1 (personal game price tracker; noron10@gmail.com)',
-};
+export { CHEAPSHARK_HEADERS };
 
 interface CsGame {
   gameID: string;
@@ -25,30 +26,12 @@ interface CsGame {
   cheapest: string;
 }
 
-interface CsStore {
-  storeID: string;
-  storeName: string;
-  isActive: number;
-  images: { logo: string; icon: string };
-}
-
 interface CsDeal {
   storeID: string;
   dealID: string;
   price: string;
   retailPrice: string;
   savings: string;
-}
-
-let storeCache: Map<string, CsStore> | null = null;
-
-async function getStores(): Promise<Map<string, CsStore>> {
-  if (storeCache) return storeCache;
-  const res = await fetch(`${BASE}/stores`, { headers: CHEAPSHARK_HEADERS });
-  if (!res.ok) throw new Error(`cheapshark stores ${res.status}`);
-  const stores = (await res.json()) as CsStore[];
-  storeCache = new Map(stores.map((s) => [s.storeID, s]));
-  return storeCache;
 }
 
 /** Steam header art is much nicer than CheapShark's tiny thumb. */
@@ -70,6 +53,13 @@ export const cheapshark: SourceAdapter = {
     const res = await fetch(`${BASE}/games?title=${encodeURIComponent(title)}&limit=24`, {
       headers: CHEAPSHARK_HEADERS,
     });
+    // CheapShark throttles a burst of searches with 403 (not 429). Reported as a
+    // plain error it read as "this source is broken" — alarming, and wrong: the
+    // next search a moment later succeeds. Name it for what it is so the UI can
+    // say we're resting rather than that CheapShark failed.
+    if (res.status === 403 || res.status === 429) {
+      throw new RateLimitedError('www.cheapshark.com', 'backoff', 60_000);
+    }
     if (!res.ok) throw new Error(`cheapshark search ${res.status}`);
     const games = (await res.json()) as CsGame[];
     const hits: GameHit[] = [];

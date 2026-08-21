@@ -3,6 +3,7 @@ import type {
   AlertRule,
   AlertScope,
   AppNotification,
+  GameMeta,
   HistoryPoint,
   KeysResponse,
   Offer,
@@ -30,6 +31,14 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refs, platform }),
     }).then((r) => json<{ offers: Offer[]; partial?: boolean; sources?: SourceStatus[] }>(r)),
+
+  /** Steam description + genres for a searched game (meta is null when it has no Steam ref). */
+  meta: (refs: SourceRef[]) =>
+    fetch('/api/meta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refs }),
+    }).then((r) => json<{ meta: GameMeta | null }>(r)),
 
   wishlist: () => fetch('/api/wishlist').then((r) => json<{ items: WishlistItem[] }>(r)),
 

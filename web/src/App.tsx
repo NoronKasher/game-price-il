@@ -2,6 +2,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -17,8 +18,15 @@ import {
   savePreferredRegion,
   loadHideAllDesc,
   saveHideAllDesc,
+  loadOpenAnim,
+  saveOpenAnim,
+  loadBoardView,
+  saveBoardView,
+  BOARD_VIEWS,
+  type BoardView,
 } from './regions';
 import { PriceGraph, TrackGraph } from './PriceGraph';
+import { DepartureBoard } from './DepartureBoard';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
 import {
@@ -69,6 +77,19 @@ export function App() {
   const changePreferred = (m: string) => {
     setPreferred(m);
     savePreferredRegion(m);
+  };
+
+  // Whether a search card animates "into" its price board when opened. Global,
+  // persisted, and toggleable from the settings page.
+  const [openAnim, setOpenAnim] = useState<boolean>(() => loadOpenAnim());
+  const [boardView, setBoardView] = useState<BoardView>(() => loadBoardView());
+  const changeOpenAnim = (v: boolean) => {
+    setOpenAnim(v);
+    saveOpenAnim(v);
+  };
+  const changeBoardView = (v: BoardView) => {
+    setBoardView(v);
+    saveBoardView(v);
   };
 
   // Display currency — global. Prices are stored in ILS and converted for display;
@@ -186,6 +207,8 @@ export function App() {
             autoQuery={autoQuery}
             onAutoConsumed={() => setAutoQuery(null)}
             onOpen={(group, platform) => setView({ name: 'offers', group, platform })}
+            preferred={preferred}
+            openAnim={openAnim}
           />
         )}
         {view.name === 'offers' && (
@@ -205,7 +228,16 @@ export function App() {
             onFocusConsumed={() => setFocusTrack(null)}
           />
         )}
-        {view.name === 'settings' && <SettingsView />}
+        {view.name === 'settings' && (
+          <SettingsView
+            preferred={preferred}
+            onChangePreferred={changePreferred}
+            openAnim={openAnim}
+            onChangeOpenAnim={changeOpenAnim}
+            boardView={boardView}
+            onChangeBoardView={changeBoardView}
+          />
+        )}
       </main>
 
       <AlertToasts
@@ -773,6 +805,8 @@ function SearchView({
   autoQuery,
   onAutoConsumed,
   onOpen,
+  preferred,
+  openAnim,
 }: {
   query: string;
   setQuery: (q: string) => void;
@@ -781,20 +815,88 @@ function SearchView({
   autoQuery: string | null;
   onAutoConsumed: () => void;
   onOpen: (group: GameGroup, platform: Platform) => void;
+  preferred: string;
+  openAnim: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [example] = useState(
     () => searchExamples[Math.floor(Math.random() * searchExamples.length)]
   );
+  // Which card is expanded into its inline price board (one at a time). The
+  // opened card is REMOVED from the grid — it has "gone into" the board — and,
+  // when animation is on, a fixed clone flies from the card's old spot into the
+  // board's game pane so the move reads as one object. `absorb` tracks that
+  // flight so the board's game pane stays hidden until the clone lands.
+  const [expanded, setExpanded] = useState<{ key: string; platform: Platform } | null>(null);
+  const [flight, setFlight] = useState<FlightState | null>(null);
+  const [absorb, setAbsorb] = useState<'active' | 'done' | null>(null);
+
+  const prefersReducedMotion = () =>
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  const openBoard = (g: GameGroup, platform: Platform, cardEl: HTMLElement | null) => {
+    // Clicking the platform already open closes the board and restores the card.
+    if (expanded && expanded.key === g.key && expanded.platform === platform) {
+      setExpanded(null);
+      setFlight(null);
+      setAbsorb(null);
+      return;
+    }
+    const animate = openAnim && !prefersReducedMotion() && !!cardEl;
+    // Capture the card's on-screen box BEFORE React removes it from the grid.
+    const fromRect = animate && cardEl ? cardEl.getBoundingClientRect() : null;
+    setExpanded({ key: g.key, platform });
+    if (fromRect) {
+      setAbsorb('active');
+      setFlight({ fromRect, image: g.image, title: g.title });
+    } else {
+      setAbsorb(null);
+      setFlight(null);
+    }
+  };
+
+  const switchPlatform = (key: string, platform: Platform) => {
+    // Switching platform inside an open board never re-flies; just reload it.
+    setFlight(null);
+    setAbsorb('done');
+    setExpanded({ key, platform });
+  };
+
+  const closeBoard = () => {
+    setExpanded(null);
+    setFlight(null);
+    setAbsorb(null);
+  };
+
+  /**
+   * Sequence number of the newest search. Searches fan out across every source,
+   * so they finish in whatever order the slowest store allows — without this,
+   * whichever request RESOLVED last won, and a slow "far cry" could land on top
+   * of the "far cry 6" the user actually asked for. Only the newest request is
+   * allowed to write state; older ones land and are discarded.
+   */
+  const searchSeq = useRef(0);
 
   const run = async (q: string = query) => {
     const term = q.trim();
     if (!term) return;
+    const seq = ++searchSeq.current;
     setBusy(true);
+    setFailed(false);
     try {
-      setResult(await api.search(term));
+      const r = await api.search(term);
+      if (seq === searchSeq.current) setResult(r);
+    } catch {
+      // A failed search used to reject silently, leaving the previous results on
+      // screen as though they answered the new query.
+      if (seq === searchSeq.current) {
+        setResult(null);
+        setFailed(true);
+      }
     } finally {
-      setBusy(false);
+      if (seq === searchSeq.current) setBusy(false);
     }
   };
 
@@ -847,6 +949,8 @@ function SearchView({
       </div>
       <p className="hint">{t.searchHint}</p>
 
+      {failed && <div className="empty">{t.searchFailed}</div>}
+
       {result && <SourceNotice sources={result.sources} />}
 
       {result && groups.length === 0 && (
@@ -861,32 +965,144 @@ function SearchView({
       )}
 
       <div className="results">
-        {groups.map((g) => (
-          <article className="card" key={g.key}>
-            {g.image ? <img src={safeUrl(g.image)} alt={g.title} loading="lazy" /> : <div className="noart">{g.title}</div>}
-            <div className="body">
-              <h3>{g.title}</h3>
-              <div className="chips">
-                {[...g.byPlatform.keys()].map((platform) => (
-                  <button
-                    key={platform}
-                    className={`chip ${platform}`}
-                    onClick={() => onOpen(g, platform)}
-                  >
-                    {platformNames[platform]}
-                  </button>
-                ))}
-                {soonPlatforms.map((p) => (
-                  <span key={p} className="chip soon">
-                    {platformNames[p]} · {t.comingSoonPlatform}
-                  </span>
-                ))}
+        {groups.map((g) => {
+          const isOpen = expanded != null && expanded.key === g.key;
+          // The opened card has gone INTO the board, so it isn't drawn in the
+          // grid anymore — the board (which carries the same art + title) takes
+          // its place. Every other card renders as usual.
+          if (isOpen && expanded) {
+            return (
+              <DepartureBoard
+                key={g.key}
+                title={g.title}
+                platform={expanded.platform}
+                image={g.image}
+                preferred={preferred}
+                absorb={absorb}
+                platforms={[...g.byPlatform.keys()]}
+                onSwitchPlatform={(p) => switchPlatform(g.key, p)}
+                refs={(g.byPlatform.get(expanded.platform) ?? []).map((h) => ({
+                  sourceId: h.sourceId,
+                  sourceGameId: h.sourceGameId,
+                }))}
+                onOpenFull={() => onOpen(g, expanded.platform)}
+                onClose={closeBoard}
+              />
+            );
+          }
+          return (
+            <article className="card" key={g.key}>
+              {g.image ? <img src={safeUrl(g.image)} alt={g.title} loading="lazy" /> : <div className="noart">{g.title}</div>}
+              <div className="body">
+                <h3>{g.title}</h3>
+                <div className="chips">
+                  {[...g.byPlatform.keys()].map((platform) => (
+                    <button
+                      key={platform}
+                      className={`chip ${platform}`}
+                      onClick={(e) => openBoard(g, platform, e.currentTarget.closest('.card'))}
+                    >
+                      {platformNames[platform]}
+                    </button>
+                  ))}
+                  {soonPlatforms.map((p) => (
+                    <span key={p} className="chip soon">
+                      {platformNames[p]} · {t.comingSoonPlatform}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
+
+      {/* The card-into-board flight: a fixed clone morphing from the card's old
+          box into the board's game pane. Fast on purpose; it clears itself. */}
+      {flight && (
+        <AbsorbClone
+          flight={flight}
+          onDone={() => {
+            setFlight(null);
+            setAbsorb('done');
+          }}
+        />
+      )}
     </section>
+  );
+}
+
+/** The card box + art captured at click time, so a clone can fly from it. */
+interface FlightState {
+  fromRect: DOMRect;
+  image?: string;
+  title: string;
+}
+
+/**
+ * A one-shot flying clone of a search card that morphs from where the card sat
+ * in the grid into the price board's game pane, so opening a game reads as the
+ * card itself sliding inside the board. Deliberately quick (~200ms) — noticeable
+ * but never in the user's way. It measures the board's game art as its landing
+ * target, animates there, then removes itself (`onDone`) so the board's own game
+ * pane fades in exactly where the clone came to rest.
+ */
+function AbsorbClone({ flight, onDone }: { flight: FlightState; onDone: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  // useLayoutEffect (not useEffect): the clone was just committed at the card's
+  // old box, so we can lock that start state with a forced reflow and then set
+  // the end transform — no requestAnimationFrame needed (some throttle it).
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const done = () => onDone();
+    // The board mounts in the same commit; its game art is our landing target.
+    const target =
+      document.querySelector<HTMLElement>('.dt-panel .dt-art') ??
+      document.querySelector<HTMLElement>('.dt-panel .dt-noart');
+    if (!target) {
+      done();
+      return;
+    }
+    const to = target.getBoundingClientRect();
+    const { fromRect: from } = flight;
+    if (to.width === 0 || from.width === 0) {
+      done();
+      return;
+    }
+    // Force the start box to be laid out, THEN switch on the transition and move
+    // to the pane's box — the browser now has two states to animate between.
+    void el.getBoundingClientRect();
+    el.classList.add('fly');
+    el.style.transform = `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${
+      to.width / from.width
+    }, ${to.height / from.height})`;
+    el.addEventListener('transitionend', done, { once: true });
+    // Safety net: if the transition never fires (identical boxes, a tab that
+    // isn't painting), clean up anyway so the board never gets stuck behind it.
+    const timer = window.setTimeout(done, 360);
+    return () => {
+      el.removeEventListener('transitionend', done);
+      window.clearTimeout(timer);
+    };
+  }, [flight, onDone]);
+
+  const { fromRect, image, title } = flight;
+  return (
+    <div
+      ref={ref}
+      className="absorb-clone"
+      style={{
+        top: fromRect.top,
+        left: fromRect.left,
+        width: fromRect.width,
+        height: fromRect.height,
+      }}
+      aria-hidden="true"
+    >
+      {image ? <img src={safeUrl(image)} alt="" /> : <div className="absorb-noart">{title}</div>}
+    </div>
   );
 }
 
@@ -1451,7 +1667,21 @@ function ServerDown({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function SettingsView() {
+function SettingsView({
+  preferred,
+  onChangePreferred,
+  openAnim,
+  onChangeOpenAnim,
+  boardView,
+  onChangeBoardView,
+}: {
+  preferred: string;
+  onChangePreferred: (m: string) => void;
+  openAnim: boolean;
+  onChangeOpenAnim: (v: boolean) => void;
+  boardView: BoardView;
+  onChangeBoardView: (v: BoardView) => void;
+}) {
   const [keys, setKeys] = useState<KeysResponse | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const loadKeys = () =>
@@ -1467,15 +1697,75 @@ function SettingsView() {
   }, []);
   const save = async (patch: { ggdeals?: string; itad?: string }) => setKeys(await api.setKeys(patch));
 
-  // A dead server used to leave this page blank below the heading, which read as
-  // "you can't enter API keys here" rather than "the server isn't answering".
-  if (loadFailed) return <ServerDown onRetry={loadKeys} />;
-
   return (
     <section className="settings-view">
-      <h2>{t.keysTitle}</h2>
+      {/* General preferences — stored locally in the browser, so they work even
+          when the server is unreachable. */}
+      <h2>{t.generalTitle}</h2>
+
+      <div className="setting-row">
+        <div className="setting-text">
+          <span className="setting-label">{t.defaultCountryLabel}</span>
+          <p className="setting-note">{t.defaultCountryNote}</p>
+        </div>
+        <select
+          className="pref-select"
+          value={preferred}
+          onChange={(e) => onChangePreferred(e.target.value)}
+          aria-label={t.defaultCountryLabel}
+        >
+          {REGIONS.map((r) => (
+            <option key={r.market} value={r.market}>
+              {r.nameHe}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="setting-row">
+        <div className="setting-text">
+          <span className="setting-label">{t.openAnimLabel}</span>
+          <p className="setting-note">{t.openAnimNote}</p>
+        </div>
+        <button
+          className={`toggle ${openAnim ? 'on' : ''}`}
+          role="switch"
+          aria-checked={openAnim}
+          aria-label={t.openAnimLabel}
+          onClick={() => onChangeOpenAnim(!openAnim)}
+        >
+          <span className="toggle-knob" aria-hidden="true" />
+          <span className="toggle-text">{openAnim ? t.animOn : t.animOff}</span>
+        </button>
+      </div>
+
+      <div className="setting-row setting-row-block">
+        <div className="setting-text">
+          <span className="setting-label">{t.boardViewTitle}</span>
+          <p className="setting-note">{t.boardViewHint}</p>
+          <div className="board-view-list">
+            {BOARD_VIEWS.map((v) => (
+              <label className="board-view-opt" key={v}>
+                <input
+                  type="radio"
+                  name="board-view"
+                  checked={boardView === v}
+                  onChange={() => onChangeBoardView(v)}
+                />
+                <span>{t.boardViewNames[v]}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <h2 className="settings-section">{t.keysTitle}</h2>
       <p className="settings-intro">{t.keysIntro}</p>
-      {keys ? (
+      {/* Only the API-key panel needs the server; a dead server shows the notice
+          here instead of blanking the whole page (or the general prefs above). */}
+      {loadFailed ? (
+        <ServerDown onRetry={loadKeys} />
+      ) : keys ? (
         <>
           <KeyRow
             label="GG.deals"
@@ -1491,6 +1781,8 @@ function SettingsView() {
             blurb={t.keysItadBlurb}
             onSave={(v) => save({ itad: v })}
           />
+          {/* Why EA looks different from every other storefront here. */}
+          <p className="key-note">{t.keysEaNote}</p>
         </>
       ) : (
         <p className="settings-intro">{t.loadingDetails}</p>

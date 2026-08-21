@@ -11,7 +11,11 @@
 /**
  * A supported gaming platform identifier.
  */
-export type Platform = 'pc' | 'ps5' | 'ps4' | 'xbox-series' | 'xbox-one' | 'switch';
+// Xbox Series and Xbox One are one cross-gen platform here: Microsoft sells a
+// single Smart Delivery SKU and one disc plays on both, so a per-generation
+// split only scattered the same game's offers across two boards. PS4/PS5 stay
+// separate — those really are different discs at different prices.
+export type Platform = 'pc' | 'ps5' | 'ps4' | 'xbox' | 'switch';
 
 /**
  * The result of parsing a free-text search query.
@@ -62,17 +66,17 @@ const TOKEN_RULES: TokenRule[] = [
   // PlayStation (generation unspecified -> both)
   { words: ['playstation'], platforms: ['ps5', 'ps4'] },
   { words: ['פלייסטיישן'], platforms: ['ps5', 'ps4'] },
-  // Xbox Series
-  { words: ['xbox', 'series', 'x'], platforms: ['xbox-series'] },
-  { words: ['xbox', 'series', 's'], platforms: ['xbox-series'] },
-  { words: ['xbox', 'series'], platforms: ['xbox-series'] },
-  { words: ['אקסבוקס', 'סריס'], platforms: ['xbox-series'] },
-  // Xbox One
-  { words: ['xbox', 'one'], platforms: ['xbox-one'] },
-  { words: ['אקסבוקס', 'וואן'], platforms: ['xbox-one'] },
-  // Xbox (generation unspecified -> both)
-  { words: ['xbox'], platforms: ['xbox-series', 'xbox-one'] },
-  { words: ['אקסבוקס'], platforms: ['xbox-series', 'xbox-one'] },
+  // Xbox — Series X/S and One are one platform here (see Platform type). The
+  // longer generation tokens still need their own rules so their trailing words
+  // ("series x", "one") are consumed and don't leak into the cleaned title.
+  { words: ['xbox', 'series', 'x'], platforms: ['xbox'] },
+  { words: ['xbox', 'series', 's'], platforms: ['xbox'] },
+  { words: ['xbox', 'series'], platforms: ['xbox'] },
+  { words: ['אקסבוקס', 'סריס'], platforms: ['xbox'] },
+  { words: ['xbox', 'one'], platforms: ['xbox'] },
+  { words: ['אקסבוקס', 'וואן'], platforms: ['xbox'] },
+  { words: ['xbox'], platforms: ['xbox'] },
+  { words: ['אקסבוקס'], platforms: ['xbox'] },
   // Nintendo Switch
   { words: ['nintendo', 'switch'], platforms: ['switch'] },
   { words: ['switch'], platforms: ['switch'] },

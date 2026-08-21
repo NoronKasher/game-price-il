@@ -44,3 +44,68 @@ export function sourceLabel(store: string, region?: string | null): string {
   const place = regionLabel(region);
   return place ? `${name} · ${place}` : name;
 }
+
+/**
+ * The storefront a price belongs to, independent of which region or which
+ * aggregator reported it.
+ *
+ * One storefront reaches the board under several names — Steam arrives 30 times
+ * as "Steam 🇺🇸".."Steam 🇯🇵", and Ubisoft arrives both from our own regional
+ * adapter ("Ubisoft 🇹🇷") and from CheapShark under its old brand ("Uplay").
+ * Folding those into one family is what lets a single chip hide all of them, and
+ * is why the test is on the name rather than the adapter id.
+ *
+ * Anything unrecognised becomes its own family under its own name, so a keyshop
+ * we've never heard of is still filterable and never silently lumped in.
+ */
+const FAMILIES: { key: string; label: string; test: RegExp }[] = [
+  { key: 'steam', label: 'Steam', test: /\bsteam\b/i },
+  { key: 'epic', label: 'Epic Games', test: /\bepic\b/i },
+  { key: 'ubisoft', label: 'Ubisoft Connect', test: /\bubisoft\b|\buplay\b/i },
+  { key: 'ea', label: 'EA App', test: /\bea(\s*app)?\b|\borigin\b/i },
+  { key: 'gog', label: 'GOG', test: /\bgog\b/i },
+  { key: 'playstation', label: 'PlayStation Store', test: /\bps\s*store\b|playstation/i },
+  { key: 'xbox', label: 'Xbox Store', test: /\bxbox\b|microsoft/i },
+  { key: 'nintendo', label: 'Nintendo eShop', test: /\beshop\b|nintendo/i },
+  { key: 'battlenet', label: 'Battle.net', test: /battle\.?net|blizzard/i },
+];
+
+/**
+ * Families where the user buys from the platform ITSELF — the purchase lands in
+ * their library directly, so there is no separate key to be locked to a country.
+ * Everything else on the board (GMG, Fanatical, Humble, GG.deals, the ITAD
+ * keyshops…) delivers a KEY, and a key can be region-restricted no matter where
+ * it was bought. That distinction drives the caveat badges in regionRisk.ts, so
+ * it lives here beside the names it's derived from.
+ *
+ * GOG counts as direct: its purchases are DRM-free, not keys for another store.
+ */
+const DIRECT_PURCHASE = new Set([
+  'steam',
+  'epic',
+  'ubisoft',
+  'ea',
+  'gog',
+  'playstation',
+  'xbox',
+  'nintendo',
+  'battlenet',
+]);
+
+export interface StoreFamily {
+  key: string;
+  label: string;
+}
+
+export function storeFamily(store: string): StoreFamily {
+  const name = cleanStoreName(store);
+  for (const f of FAMILIES) {
+    if (f.test.test(name)) return { key: f.key, label: f.label };
+  }
+  return { key: `x:${name.toLowerCase()}`, label: name };
+}
+
+/** True when buying here puts the game straight in the user's library (no key). */
+export function isDirectPurchase(familyKey: string): boolean {
+  return DIRECT_PURCHASE.has(familyKey);
+}

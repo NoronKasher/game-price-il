@@ -69,6 +69,16 @@ export const t = {
   currencyHint: 'כל המחירים בכלי יוצגו במטבע הזה. המחירים נאספים ונשמרים בשקלים ומומרים לתצוגה לפי שער יציג.',
   currencySettingsNote:
     'מטבע התצוגה עבר לכפתור ₪ / $ / € שבראש העמוד — אפשר להחליף אותו מכל מסך, והמחירים מתעדכנים מיד. המחירים תמיד נאספים ונשמרים בשקלים ומומרים לתצוגה לפי שער יציג.',
+  // General preferences (settings page)
+  generalTitle: 'העדפות כלליות',
+  defaultCountryLabel: 'מדינה מועדפת כברירת מחדל',
+  defaultCountryNote:
+    'האזור שנבחר כאן נצמד לראש כל השוואת מחירים ומשמש כבסיס לחיסכון. אפשר גם לשנות אותו תוך כדי צפייה במשחק.',
+  openAnimLabel: 'אנימציית פתיחת כרטיס לתוך הלוח',
+  openAnimNote:
+    'בלחיצה על משחק, כרטיס המשחק "נכנס" אל תוך לוח המחירים בתנועה קצרה. אפשר לכבות אם מעדיפים פתיחה מיידית.',
+  animOn: 'מופעל',
+  animOff: 'כבוי',
   deltaNoiseHint: 'ללא שינוי מהותי — הפרש זעיר שנובע משער החליפין, לא משינוי מחיר בחנות',
   // "Is this a good price?" — judged against the game's own recorded history
   verdictRecord: 'הזול ביותר שנרשם',
@@ -114,6 +124,65 @@ export const t = {
   errorBoundaryBody:
     'חלק מהמסך נתקל בתקלה, אבל הנתונים שלכם — רשימת המעקב והיסטוריית המחירים — שמורים במקום. אפשר לרענן ולהמשיך.',
   errorBoundaryReload: 'רענון הדף',
+  // Departure-board price reveal (prototype): click a card → it flips open into a board.
+  depFull: 'לדף המלא',
+  depClose: 'סגירה',
+  depLoading: 'טוען מחירים…',
+  depError: 'לא הצלחנו לטעון מחירים כרגע. אפשר לנסות שוב.',
+  depEmpty: 'אין מחירים להצגה למשחק הזה כרגע.',
+  depDisc: 'דיסק',
+  depKey: 'מפתח',
+  depDirect: 'ישיר',
+  depColStore: 'מקור',
+  depColRegion: 'אזור',
+  depColPrice: 'מחיר',
+  depColDelta: 'חיסכון',
+  depNoMatch: 'אין הצעות שמתאימות לסינון — נסו לשחרר פילטר.',
+  depMetaLoading: 'טוען פרטים…',
+  // Filter bar: store-type chips, region, on-sale, sort.
+  depType: { official: 'רשמי', disc: 'דיסק', keys: 'מוכרי מפתחות' } as Record<
+    'official' | 'disc' | 'keys',
+    string
+  >,
+  depRegionAll: 'כל האזורים',
+  depRegionLabel: 'סינון לפי אזור',
+  depMyRegion: (name: string) => `האזור שלי · ${name}`,
+  depOnSale: 'רק במבצע',
+  depStoresLabel: 'חנויות',
+  depStoresAll: 'הכל',
+  // Region / key caveats. The tool never blocks a purchase — it explains.
+  depRiskTitle: 'לפני שקונים מאזור אחר',
+  depRiskBody:
+    'המחירים מאזורים אחרים אמיתיים, אבל לא תמיד אפשר לשלם אותם מכאן: חנות שמוכרת לפי אזור דורשת בדרך כלל חשבון ואמצעי תשלום מאותה מדינה, ומפתח שנקנה אצל מוכר חיצוני עלול להיות נעול לאזור מסוים ולא להיפתח בחשבון ישראלי.',
+  depRiskWhatHappens:
+    'מה קורה אם המפתח לא מתאים לאזור שלכם? בדרך כלל הוא פשוט לא ייפתח, ואצל רוב המוכרים אין החזר על מפתח שכבר נוסה. לכן כדאי לבדוק באתר המוכר לאיזה אזור המוצר מיועד לפני התשלום.',
+  depRiskDisclaimer:
+    'הכלי מציג מידע בלבד ואינו מוכר דבר — הבחירה והאחריות על הרכישה הן שלכם, ואיננו אחראים לנזק או להפסד שנגרמו מרכישה שלא התאימה לאזור.',
+  depRiskDismiss: 'אל תציגו לי את ההסבר הזה שוב',
+  depRiskGotIt: 'הבנתי',
+  depRiskShowAgain: 'הצג שוב הסבר על קנייה מאזור אחר',
+  depOnlyBuyable: 'רק מה שאפשר לקנות מכאן',
+  depOnlyBuyableHint: 'מסתיר שורות שדורשות חשבון זר או מפתח אזורי — אפשר להחזיר אותן בכל רגע',
+  // Board layout
+  depMoreRegions: (n: number) => `עוד ${n} אזורים`,
+  depFewerRegions: 'הסתר אזורים',
+  depShowRest: (n: number) => `הצג עוד ${n} הצעות`,
+  depColSale: 'מבצע',
+  boardViewTitle: 'תצוגת לוח המחירים',
+  boardViewHint:
+    'משחק למחשב יכול להגיע ל־70 שורות (חנות אחת × 30 אזורים). כך ייראה הלוח כברירת מחדל:',
+  keysEaNote:
+    'הערה על EA App: חנות EA קובעת מחיר לפי מיקום גיאוגרפי ולא לפי כתובת האתר, ולכן אי אפשר לקרוא ממנה מחירים של מדינות אחרות בלי להתחזות למיקום אחר — דבר שהכלי הזה לא עושה. לכן EA App מוצגת כשורה אחת: המחיר שEA תגבה מכם בפועל. מחירי EA לפי אזור יתאפשרו רק דרך תוסף הדפדפן המתוכנן, שיקרא אותם מהחשבון שלכם. אם מוגדר מפתח IsThereAnyDeal, יופיעו גם הצעות EA App שנאספו דרכו.',
+  boardViewNames: {
+    collapse: 'מכווץ — שורה אחת לכל חנות (האזור הזול ביותר), עם אפשרות לפתוח',
+    pinned: 'ישראל והמדינה שלי למעלה, השאר לפי מחיר',
+    top: '12 ההצעות הזולות, עם כפתור להצגת השאר',
+    full: 'הכל — כל השורות לפי מחיר',
+  } as Record<string, string>,
+  depSortLabel: 'מיון',
+  depSortCheap: 'הזול ביותר',
+  depSortRegion: 'לפי אזור',
+  depSortOfficial: 'רשמי תחילה',
   currencyNames: { ILS: '₪ שקל (ILS)', USD: '$ דולר (USD)', EUR: '€ אירו (EUR)' } as Record<string, string>,
   // BYOK API-key setup
   keysTitle: 'מפתחות API — מקורות מחיר נוספים',
@@ -134,6 +203,7 @@ export const t = {
   searchButton: 'חפש',
   searching: 'מחפש…',
   noResults: 'לא נמצאו תוצאות. נסו שם באנגלית — כך המשחקים רשומים בחנויות.',
+  searchFailed: 'החיפוש נכשל — ייתכן שהשרת לא זמין. נסו שוב.',
   noSourcesForPlatform: 'מקורות המחירים לפלטפורמה הזו עוד בדרך — בקרוב. בינתיים אפשר לחפש מחירים למחשב (PC).',
   comingSoonPlatform: 'בקרוב',
   offersTitle: 'מי מוכר ובכמה',
@@ -269,8 +339,7 @@ export const platformNames: Record<Platform, string> = {
   pc: 'מחשב',
   ps5: 'PS5',
   ps4: 'PS4',
-  'xbox-series': 'Xbox Series',
-  'xbox-one': 'Xbox One',
+  xbox: 'Xbox',
   switch: 'Switch',
 };
 

@@ -16,8 +16,8 @@ const CAT_PLATFORM: [string, Platform][] = [
   ['product_cat--ps5', 'ps5'],
   ['product_cat-playstation-4', 'ps4'],
   ['product_cat--ps4', 'ps4'],
-  ['product_cat-xbox-series', 'xbox-series'],
-  ['product_cat-xbox-one', 'xbox-one'],
+  ['product_cat-xbox-series', 'xbox'],
+  ['product_cat-xbox-one', 'xbox'],
   ['product_cat-nintendo-switch', 'switch'],
 ];
 
@@ -47,7 +47,7 @@ export const vgs: SourceAdapter = {
   id: 'vgs',
   name: 'VGS (Israel)',
   nameHe: 'וי ג׳י אס (VGS)',
-  platforms: ['ps5', 'ps4', 'xbox-series', 'xbox-one', 'switch'],
+  platforms: ['ps5', 'ps4', 'xbox', 'switch'],
   enabled: true,
 
   async search(title: string, platforms: Platform[]): Promise<GameHit[]> {

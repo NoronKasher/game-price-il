@@ -213,3 +213,34 @@ export function parseNis(text: string): number | null {
 export function looksDigital(title: string): boolean {
   return /digital|דיגיטלי|קוד/i.test(title);
 }
+
+/**
+ * Parse a localized price string ("1.399,50 TL", "₪249.90", "¥ 2,640") to a
+ * number. Storefronts that only render a formatted price — rather than a
+ * machine-readable amount — are read through this, so it has to survive every
+ * separator convention we meet.
+ *
+ * The trailing separator is a decimal point only when it is followed by 1–2
+ * digits ("1.399,50"→1399.5, "£59.99"→59.99); a separator followed by 3 digits
+ * is a thousands group ("₹2,499"→2499, "R 1,559"→1559). Non-decimal separators
+ * are thousands and are stripped.
+ */
+export function parseLocalizedPrice(text: string): number | null {
+  const digits = text.replace(/[^\d.,]/g, '');
+  if (!digits) return null;
+  const lastSep = Math.max(digits.lastIndexOf(','), digits.lastIndexOf('.'));
+  let normalized: string;
+  if (lastSep === -1) {
+    normalized = digits;
+  } else {
+    const decimals = digits.length - lastSep - 1;
+    if (decimals >= 1 && decimals <= 2) {
+      const intPart = digits.slice(0, lastSep).replace(/[.,]/g, '');
+      normalized = `${intPart}.${digits.slice(lastSep + 1)}`;
+    } else {
+      normalized = digits.replace(/[.,]/g, '');
+    }
+  }
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+}

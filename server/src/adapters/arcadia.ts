@@ -29,7 +29,7 @@ export const arcadia: SourceAdapter = {
   id: 'arcadia',
   name: 'Arcadia (Israel)',
   nameHe: 'ארקדיה (Arcadia)',
-  platforms: ['ps5', 'ps4', 'xbox-series', 'xbox-one', 'switch'],
+  platforms: ['ps5', 'ps4', 'xbox', 'switch'],
   enabled: true,
 
   async search(title: string, platforms: Platform[]): Promise<GameHit[]> {

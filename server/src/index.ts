@@ -5,6 +5,9 @@ import { parseQuery, type Platform } from './search.ts';
 import type { GameHit, Offer, SourceAdapter } from './adapters/types.ts';
 import { cheapshark, CHEAPSHARK_HEADERS } from './adapters/cheapshark.ts';
 import { steamRegional } from './adapters/steam.ts';
+import { epic } from './adapters/epic.ts';
+import { ubisoft } from './adapters/ubisoft.ts';
+import { ea } from './adapters/ea.ts';
 import { ggdeals } from './adapters/ggdeals.ts';
 import { itad } from './adapters/itad.ts';
 import { vgs } from './adapters/vgs.ts';
@@ -59,7 +62,7 @@ import { captureFromView } from './capture.ts';
 import { priceVerdict } from './verdict.ts';
 import { isAllowedRequestOrigin, resolveListenConfig } from './net.ts';
 
-const ALL_PLATFORMS: Platform[] = ['pc', 'ps5', 'ps4', 'xbox-series', 'xbox-one', 'switch'];
+const ALL_PLATFORMS: Platform[] = ['pc', 'ps5', 'ps4', 'xbox', 'switch'];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Gentle spacing between games in a batch capture, so many tracked games don't
@@ -86,6 +89,9 @@ function statusFor(source: SourceAdapter, err: unknown): SourceStatus {
 const sources: SourceAdapter[] = [
   cheapshark,
   steamRegional,
+  epic,
+  ubisoft,
+  ea,
   ggdeals,
   itad,
   vgs,
@@ -175,8 +181,32 @@ app.post('/api/offers', async (req, res) => {
       }
     })
   );
-  offers.sort((a, b) => a.priceILS - b.priceILS);
-  res.json({ offers, partial: status.some((s) => !s.ok), sources: status });
+  // A game's several editions (and the odd source that returns it twice) each
+  // price across every region, so the same store+region can arrive many times.
+  // Collapse to the cheapest per store+region+kind — each region shows once per
+  // store, the actual cheapest way to buy the game there. (The full game page's
+  // edition selector still narrows to one edition when the user wants that.)
+  const bestByKey = new Map<string, Offer>();
+  for (const o of offers) {
+    const key = `${o.store}|${o.region ?? ''}|${o.kind}`;
+    const prev = bestByKey.get(key);
+    if (!prev || o.priceILS < prev.priceILS) bestByKey.set(key, o);
+  }
+  const deduped = [...bestByKey.values()].sort((a, b) => a.priceILS - b.priceILS);
+  res.json({ offers: deduped, partial: status.some((s) => !s.ok), sources: status });
+});
+
+/**
+ * Steam description + genres for a searched game, so a result can show its info
+ * without being tracked. `meta` is null when the game has no Steam ref (most
+ * console-only titles) — the client then shows just art, title and platform.
+ * Body: { refs: [{sourceId, sourceGameId}] }
+ */
+app.post('/api/meta', async (req, res) => {
+  const { refs } = (req.body ?? {}) as { refs?: SourceRef[] };
+  const appId = Array.isArray(refs) ? steamAppIdOf(refs) : null;
+  const meta = appId ? await steamMeta(appId) : null;
+  res.json({ meta });
 });
 
 app.get('/api/wishlist', (_req, res) => {
