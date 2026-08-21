@@ -3,11 +3,17 @@ import type { GameHit, Offer, SourceAdapter } from './types.ts';
 import type { Platform } from '../search.ts';
 import { politeFetch } from './politeFetch.ts';
 import { describeProduct, looksDigital, parseNis, titleMatchesQuery } from '../normalize.ts';
+import { wooSearch } from './wooStore.ts';
 
 /**
- * VGS (vgs.co.il) — Israeli gaming chain, Tel Aviv. Standard WooCommerce
- * markup, no bot protection observed. Physical console games priced in ILS.
- * sourceGameId = product page URL.
+ * VGS (vgs.co.il) — Israeli gaming chain, Tel Aviv. Standard WooCommerce,
+ * physical console games priced in ILS. sourceGameId = product page URL.
+ *
+ * Tries the shop's public Store API first and parses the rendered markup
+ * otherwise. NOTE: unlike Arcadia's, the API path here is unverified — vgs.co.il
+ * answered 503 throughout the work that added it — which is exactly why it
+ * returns to the HTML path whenever the API gives nothing usable, including
+ * when it cannot place a product on a console.
  */
 
 /** WooCommerce category-class → platform, more reliable than title words. */
@@ -31,6 +37,59 @@ function classPlatform(classes: string): Platform | null {
   return null;
 }
 
+/**
+ * Platform from the Store API's category slugs. VGS files games by console far
+ * more reliably than it names the console in the title, so this mirrors the
+ * class-based lookup above rather than falling back to title parsing.
+ */
+function slugPlatform(slugs: string[]): Platform | null {
+  const joined = slugs.join(' ');
+  if (/playstation-5|(^|\s)ps5/.test(joined)) return 'ps5';
+  if (/playstation-4|(^|\s)ps4/.test(joined)) return 'ps4';
+  if (/xbox/.test(joined)) return 'xbox';
+  if (/switch|nintendo/.test(joined)) return 'switch';
+  return null;
+}
+
+/**
+ * The Store API path. Returns null when the API is unavailable OR when it
+ * yields nothing we can place on a console — either way the caller falls back
+ * to the markup, which is the only path proven against this shop.
+ */
+async function searchViaStoreApi(title: string, platforms: Platform[]): Promise<GameHit[] | null> {
+  const products = await wooSearch('https://vgs.co.il', title);
+  if (!products) return null;
+  const hits: GameHit[] = [];
+  const seen = new Set<string>();
+  for (const p of products) {
+    if (seen.has(p.url)) continue;
+    if (!titleMatchesQuery(title, p.name)) continue;
+    const d = describeProduct(p.name);
+    if (d.accessory) continue;
+    const platform = slugPlatform(p.categories) ?? d.platforms[0] ?? null;
+    if (!platform || platform === 'pc') continue;
+    if (platforms.length && !platforms.includes(platform)) continue;
+    seen.add(p.url);
+
+    const offer = makeOffer(p.name, p.price, p.url);
+    if (p.regularPrice != null) {
+      offer.retailPrice = p.regularPrice;
+      offer.savings = Math.round(((p.regularPrice - p.price) / p.regularPrice) * 100);
+    }
+    offerCache.set(p.url, offer);
+    hits.push({
+      sourceId: 'vgs',
+      sourceGameId: p.url,
+      title: d.base,
+      groupKey: d.groupKey,
+      edition: d.edition,
+      image: p.image,
+      platform,
+    });
+  }
+  return hits.length > 0 ? hits : null;
+}
+
 function makeOffer(title: string, price: number, url: string): Offer {
   return {
     store: 'VGS',
@@ -51,6 +110,8 @@ export const vgs: SourceAdapter = {
   enabled: true,
 
   async search(title: string, platforms: Platform[]): Promise<GameHit[]> {
+    const viaApi = await searchViaStoreApi(title, platforms);
+    if (viaApi) return viaApi;
     const html = await politeFetch(
       `https://vgs.co.il/?s=${encodeURIComponent(title)}&post_type=product`
     );

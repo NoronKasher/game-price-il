@@ -905,3 +905,37 @@ body {
   color: var(--text); font-size: 12.5px; line-height: 1.6;
 }
 .dt-eilat-note strong { color: #6fc3d9; }
+
+/* Adapter health canary panel. */
+.health-actions { display: flex; align-items: center; gap: 12px; margin: 10px 0 12px; direction: rtl; }
+.health-run {
+  font: inherit; font-size: 13px; padding: 6px 16px; border-radius: 8px; cursor: pointer;
+  background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber);
+  border: 1px solid color-mix(in srgb, var(--amber) 50%, var(--line));
+}
+.health-run:disabled { opacity: 0.6; cursor: default; }
+.health-when { color: var(--muted); font-size: 12px; }
+.health-list { list-style: none; margin: 0; padding: 0; direction: rtl; }
+.health-row {
+  display: grid; grid-template-columns: 10px 1fr auto 40px; gap: 10px; align-items: center;
+  padding: 7px 4px; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  font-size: 13px;
+}
+.health-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.health-row.ok .health-dot { background: var(--down); }
+.health-row.empty .health-dot, .health-row.error .health-dot { background: var(--up); }
+.health-row.rate_limited .health-dot { background: var(--amber); }
+.health-row.disabled { opacity: 0.55; }
+.health-name { color: var(--text); }
+.health-state { color: var(--muted); font-size: 12px; }
+.health-row.empty .health-state, .health-row.error .health-state { color: var(--up); }
+.health-count {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px;
+  color: var(--muted); text-align: center;
+}
+.health-hint {
+  margin-top: 10px; padding: 9px 12px; border-radius: 8px; direction: rtl;
+  background: color-mix(in srgb, var(--up) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--up) 26%, var(--line));
+  color: var(--text); font-size: 12px; line-height: 1.6;
+}

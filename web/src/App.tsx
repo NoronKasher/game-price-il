@@ -28,6 +28,7 @@ import {
 import { PriceGraph, TrackGraph } from './PriceGraph';
 import { DepartureBoard } from './DepartureBoard';
 import { SearchBox, rememberSearch } from './SearchBox';
+import type { HealthReport } from './types';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
 import {
@@ -1664,6 +1665,73 @@ function ServerDown({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+/**
+ * Adapter health panel. The canary runs itself daily; this shows the last
+ * result and lets the user force a round. "empty" is called out separately from
+ * "error" on purpose — a source that returns nothing is the failure mode that
+ * otherwise looks exactly like a game simply not being sold.
+ */
+function HealthPanel() {
+  const [report, setReport] = useState<HealthReport | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    api
+      .getHealth()
+      .then((r) => setReport(r.report))
+      .catch(() => undefined)
+      .finally(() => setLoaded(true));
+  }, []);
+
+  const run = async () => {
+    setRunning(true);
+    try {
+      setReport((await api.runHealth()).report);
+    } catch {
+      /* leave the previous report on screen */
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const anyEmpty = report?.adapters.some((a) => a.state === 'empty' || a.state === 'error');
+
+  return (
+    <>
+      <h2 className="settings-section">{t.healthTitle}</h2>
+      <p className="settings-intro">{t.healthIntro}</p>
+      <div className="health-actions">
+        <button className="health-run" onClick={run} disabled={running}>
+          {running ? t.healthRunning : t.healthRun}
+        </button>
+        {report && (
+          <span className="health-when">{t.healthCheckedAt(new Date(report.checkedAt).toLocaleString('he-IL'))}</span>
+        )}
+      </div>
+      {!loaded ? (
+        <p className="settings-intro">{t.loadingDetails}</p>
+      ) : !report ? (
+        <p className="settings-intro">{t.healthNever}</p>
+      ) : (
+        <>
+          <ul className="health-list">
+            {report.adapters.map((a) => (
+              <li className={`health-row ${a.state}`} key={a.id} title={a.detail ?? t.healthProbe(a.probe)}>
+                <span className="health-dot" aria-hidden="true" />
+                <span className="health-name">{a.name}</span>
+                <span className="health-state">{t.healthStates[a.state] ?? a.state}</span>
+                <span className="health-count">{a.state === 'disabled' ? '—' : `${a.count}`}</span>
+              </li>
+            ))}
+          </ul>
+          {anyEmpty && <p className="health-hint">{t.healthEmptyHint}</p>}
+        </>
+      )}
+    </>
+  );
+}
+
 function SettingsView({
   preferred,
   onChangePreferred,
@@ -1784,6 +1852,8 @@ function SettingsView({
       ) : (
         <p className="settings-intro">{t.loadingDetails}</p>
       )}
+
+      <HealthPanel />
 
       <h2 className="settings-section">{t.currencyTitle}</h2>
       <p className="settings-intro">{t.currencySettingsNote}</p>

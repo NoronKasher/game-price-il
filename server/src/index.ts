@@ -62,6 +62,7 @@ import { captureFromView } from './capture.ts';
 import { priceVerdict } from './verdict.ts';
 import { isAllowedRequestOrigin, resolveListenConfig } from './net.ts';
 import { suggestTitles } from './suggest.ts';
+import { runHealthCheck, lastHealthReport, healthCheckDue } from './health.ts';
 
 const ALL_PLATFORMS: Platform[] = ['pc', 'ps5', 'ps4', 'xbox', 'switch'];
 
@@ -165,6 +166,17 @@ app.get('/api/search', async (req, res) => {
 app.get('/api/suggest', async (req, res) => {
   const q = String(req.query.q ?? '');
   res.json({ suggestions: await suggestTitles(q) });
+});
+
+/**
+ * Adapter health — which sources are actually returning data. GET reads the
+ * stored report (no requests); POST forces a fresh round of real probes.
+ */
+app.get('/api/health', (_req, res) => {
+  res.json({ report: lastHealthReport(), due: healthCheckDue() });
+});
+app.post('/api/health/run', async (_req, res) => {
+  res.json({ report: await runHealthCheck(sources) });
 });
 
 /**
@@ -582,9 +594,30 @@ async function autoCapture(): Promise<void> {
   }
 }
 setInterval(autoCapture, CAPTURE_CHECK_MS);
+
+/**
+ * Health canary, on the same lazy schedule as auto-capture: we look often but
+ * only actually probe when a day has passed (see MIN_INTERVAL_MS), so a server
+ * left running does not re-poll every store every few hours.
+ */
+async function autoHealth(): Promise<void> {
+  if (!healthCheckDue()) return;
+  try {
+    const report = await runHealthCheck(sources);
+    const bad = report.adapters.filter((a) => a.state === 'empty' || a.state === 'error');
+    console.log(
+      `health: ${report.adapters.length - bad.length}/${report.adapters.length} sources ok` +
+        (bad.length ? ` — check ${bad.map((b) => b.id).join(', ')}` : '')
+    );
+  } catch (err) {
+    console.error('health check failed:', err);
+  }
+}
+setInterval(autoHealth, CAPTURE_CHECK_MS);
 // Also shortly after startup, so a tool that isn't always on still fills in due
 // points when it's reopened (the interval guard keeps this from over-scraping).
 setTimeout(autoCapture, 60 * 1000);
+setTimeout(autoHealth, 5 * 60 * 1000);
 
 /**
  * Production/demo mode: when the web app has been built (npm run build), this

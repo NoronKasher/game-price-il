@@ -60,6 +60,22 @@ export interface SourceAdapter {
   platforms: Platform[];
   /** True once the adapter has a working implementation. */
   enabled: boolean;
+  /**
+   * True when this source has no standalone search and is only ever reached via
+   * a companion hit emitted by another adapter (Steam, GG.deals and ITAD all
+   * ride on CheapShark's Steam appID). Their `search` returns [] by design, so
+   * the health canary must probe them through `getOffers` with
+   * `healthProbeId` instead of reporting them as silently broken.
+   */
+  companion?: boolean;
+  /**
+   * Title for the health canary to search, when the platform's default probe
+   * wouldn't be in this store's catalogue — Ubisoft doesn't sell Elden Ring, so
+   * "no results" there would mean nothing.
+   */
+  healthProbe?: string;
+  /** A known-good sourceGameId for canary probing of a `companion` adapter. */
+  healthProbeId?: string;
   search(title: string, platforms: Platform[]): Promise<GameHit[]>;
   getOffers(sourceGameId: string, platform: Platform): Promise<Offer[]>;
 }

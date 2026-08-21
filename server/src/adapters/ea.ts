@@ -144,6 +144,7 @@ export const ea: SourceAdapter = {
   name: 'EA App',
   nameHe: 'EA App',
   platforms: ['pc'],
+  healthProbe: 'battlefield',
   enabled: true,
 
   async search(title: string): Promise<GameHit[]> {

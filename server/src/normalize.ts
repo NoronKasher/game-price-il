@@ -42,7 +42,7 @@ const TRAILING_EDITION_HE = /\s*[-–|]?\s*(מהדורת\s+\S+|מהדורה(?:\s
 const ACCESSORY_EN =
   /\b(controller|gamepad|joystick|headset|headphones?|thrustmaster|eswap|cockpit|pedals?|shifter|steering|racing wheel|driving wheel|funko|pop!|amiibo|figure|figurine|statue|carrying case|charging|charger|keyboard|mousepad|webcam|dualsense|dualshock|console|oled)\b/i;
 const ACCESSORY_HE =
-  /(אוזניות|בקר\b|ג'ויסטיק|הגה|חבילת נהיגה|דוושות|כיסא גיימינג|מטען|פאנקו|בובת|דמות אספנים|תיק נשיאה|מעמד טעינה|קונסולה|עם שלט)/;
+  /(אוזניות|בקר\b|ג'ויסטיק|הגה|חבילת נהיגה|דוושות|כיסא גיימינג|מטען|פאנקו|בובת|דמות אספנים|תיק נשיאה|מעמד טעינה|קונסולה|עם שלט|שלט אלחוטי|שלט למשחק|שלט)/;
 
 /** True when a store listing looks like an accessory/collectible rather than a game. */
 export function looksLikeAccessory(title: string): boolean {

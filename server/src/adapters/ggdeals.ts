@@ -52,6 +52,8 @@ export const ggdeals: SourceAdapter = {
   name: 'GG.deals (keyshops)',
   nameHe: 'GG.deals — מוכרי מפתחות',
   platforms: ['pc'],
+  companion: true,
+  healthProbeId: '1245620',
   get enabled() {
     return hasApiKey('ggdeals');
   },

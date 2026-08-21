@@ -6,11 +6,18 @@ import { absoluteUrl } from '../net.ts';
 import { describeProduct, looksDigital, parseNis, titleMatchesQuery } from '../normalize.ts';
 
 /**
- * Game Storm (gamestorm.co.il) — Israeli gaming/computer store. Custom store
- * engine with server-rendered `.product_preview` tiles (name, current/original
- * price, image). No bot protection observed. The platform is in the product
- * name. Search returns non-games too (e.g. accessories) — those lack a platform
- * token and are skipped. sourceGameId = absolute product URL.
+ * Game Storm (gamestorm.co.il) — Israeli gaming/computer store, custom engine.
+ *
+ * Its visible search is a POST to /search carrying a per-page CSRF token, and a
+ * plain GET of that path quietly returns a "לא נמצא" page full of unrelated menu
+ * products — which is how this adapter came to return nothing at all while
+ * looking perfectly healthy. (The health canary is what caught it.) The store's
+ * own type-ahead calls a simple GET instead, so that is what we read; it answers
+ * with names and product links, and the price comes from the product page in
+ * getOffers, exactly as before.
+ *
+ * The platform is in the product name; search returns accessories too, and those
+ * lack a platform token and are skipped. sourceGameId = absolute product URL.
  */
 
 const BASE = 'https://www.gamestorm.co.il';
@@ -38,42 +45,37 @@ export const gamestorm: SourceAdapter = {
   enabled: true,
 
   async search(title: string, platforms: Platform[]): Promise<GameHit[]> {
-    const html = await politeFetch(`${BASE}/search?q=${encodeURIComponent(title)}`);
+    // The type-ahead endpoint the store's own search box calls.
+    const html = await politeFetch(
+      `${BASE}/scripts/search_results_load.php?p=products&q=${encodeURIComponent(title)}`
+    );
     const $ = cheerio.load(html);
     const hits: GameHit[] = [];
     const seen = new Set<string>();
 
-    $('.product_preview').each((_i, el) => {
+    $('.livesearch_option').each((_i, el) => {
       const $el = $(el);
-      const link = $el.find('.product_preview_name a').first();
-      const rawTitle = link.find('[itemprop="name"]').text().trim() || link.text().trim();
-      const href = link.attr('href');
-      if (!rawTitle || !href) return;
+      const href = $el.find('a').first().attr('href');
+      const rawTitle = $el.find('.livesearch_text').first().text().trim();
+      if (!href || !rawTitle) return;
       const url = absoluteUrl(BASE, href);
-      if (seen.has(url)) return;
-      seen.add(url);
+      if (!url || seen.has(url)) return;
 
-      // The shop search matches descriptions/tags too, so drop products whose
-      // name has nothing to do with the query (repair services, other games).
+      // The store search matches descriptions too, so drop products whose name
+      // has nothing to do with the query.
       if (!titleMatchesQuery(title, rawTitle)) return;
 
       const d = describeProduct(rawTitle);
       if (d.accessory) return;
       const platform = d.platforms[0];
-      if (!platform || platform === 'pc') return; // physical stores sell console discs; a "pc" match is a gaming PC, not a game
+      // Physical shops sell console discs; a "pc" match here is a gaming PC.
+      if (!platform || platform === 'pc') return;
       if (platforms.length && !platforms.includes(platform)) return;
+      seen.add(url);
 
-      const price = parseNis($el.find('.product_preview_price_current').first().text());
-      if (price == null) return;
-      const oldPrice = parseNis($el.find('.product_preview_price_original').first().text()) ?? undefined;
+      let image = $el.find('img').first().attr('src') ?? undefined;
+      if (image) image = absoluteUrl(BASE, image) ?? undefined;
 
-      let image =
-        $el.find('.product_preview_image img').attr('data-src') ??
-        $el.find('.product_preview_image img').attr('src') ??
-        undefined;
-      if (image?.startsWith('//')) image = 'https:' + image;
-
-      offerCache.set(url, makeOffer(rawTitle, price, url, oldPrice));
       hits.push({
         sourceId: 'gamestorm',
         sourceGameId: url,
@@ -93,8 +95,13 @@ export const gamestorm: SourceAdapter = {
     const html = await politeFetch(sourceGameId);
     const $ = cheerio.load(html);
     const title = $('h1').first().text().trim();
-    const price = parseNis($('.product_preview_price_current, .price_current, [itemprop="price"]').first().text());
+    // THIS product's price only. A product page also renders ~58 related-item
+    // tiles that carry `.product_preview_price_current`, so a generic selector
+    // list picked whichever menu item happened to come first and every game in
+    // the store came back at the same price.
+    const price = parseNis($('#price_total_value, #product_prices [itemprop="price"]').first().text());
     if (price == null) return [];
-    return [makeOffer(title, price, sourceGameId)];
+    const original = parseNis($('#product_prices .price_original_value').first().text());
+    return [makeOffer(title, price, sourceGameId, original ?? undefined)];
   },
 };

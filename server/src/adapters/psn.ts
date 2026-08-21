@@ -2,6 +2,7 @@ import type { GameHit, Offer, SourceAdapter } from './types.ts';
 import type { Platform } from '../search.ts';
 import { toILS, canConvert } from '../rates.ts';
 import { describeProduct, parseLocalizedPrice } from '../normalize.ts';
+import { getSetting } from '../db.ts';
 import { REGIONS } from '../regions.ts';
 
 /**
@@ -17,7 +18,7 @@ import { REGIONS } from '../regions.ts';
  *   1. SEARCH — the store's GraphQL endpoint (`getSearchResults`), which takes an
  *      explicit `countryCode` and returns each region's products (with the stable
  *      cross-region product code) but NOT their price. This is the one call that
- *      needs a persisted-query hash (see SEARCH_HASH).
+ *      needs a persisted-query hash (see currentSearchHash()).
  *   2. PRICE — the product page IS still server-rendered with its price embedded
  *      in `__NEXT_DATA__` (`batarangs.cta`). We fetch `/{locale}/product/{id}` and
  *      read the buyable ("APPLICABLE") price. No hash, no scraping of protected
@@ -52,7 +53,34 @@ const MAX_CONCURRENT = 8;
  * Captured 2026-08-20 from @sie-ppr-web-store/app 0.113.0.
  */
 const SEARCH_OP = 'getSearchResults';
-const SEARCH_HASH = '4df6284f982e57bec70f23c77e2c219dc792eb19af7fb3d3a81767aa3f1958aa';
+const DEFAULT_SEARCH_HASH = '4df6284f982e57bec70f23c77e2c219dc792eb19af7fb3d3a81767aa3f1958aa';
+
+/**
+ * Recovering from a rotated hash, without a code change.
+ *
+ * The obvious fix — derive the hash ourselves — was tried and rejected. Apollo
+ * hashes the AST-PRINTED document, so reproducing it means pulling the query AND
+ * every fragment it spreads out of a minified Next.js bundle and reassembling
+ * them in Apollo's exact order. That extractor would break on any bundle
+ * refactor, i.e. a self-heal that itself needs healing, replacing a one-line fix
+ * with a silent one. (Verified: no plain-string normalisation of the extracted
+ * document reproduces the live hash.)
+ *
+ * So recovery is made cheap rather than automatic. The hash is read at call time
+ * from PSN_SEARCH_HASH (env) or the `psn_search_hash` setting, so a rotation is
+ * fixed by setting a value — no rebuild, no redeploy. The health canary reports
+ * PSN as failing the moment it rotates, which is the part that actually used to
+ * be missing: 22 regions could vanish and look like "not sold there".
+ *
+ * To refresh: open store.playstation.com, search anything, and copy `sha256Hash`
+ * from the getSearchResults request in the network tab.
+ */
+export function currentSearchHash(): string {
+  const fromEnv = process.env.PSN_SEARCH_HASH?.trim();
+  if (fromEnv) return fromEnv;
+  const fromSettings = getSetting('psn_search_hash')?.trim();
+  return fromSettings || DEFAULT_SEARCH_HASH;
+}
 
 /**
  * The markets PSN serves, each mapped to the store locale its product pages
@@ -112,9 +140,13 @@ async function fetchText(url: string, headers: Record<string, string>): Promise<
 }
 
 /** Thrown when the store's GraphQL rejects our persisted-query hash (rotated). */
-class PsnHashError extends Error {
+export class PsnHashError extends Error {
   constructor(detail: string) {
-    super(`PSN search hash rejected (rotated?) — refresh SEARCH_HASH in psn.ts. ${detail}`);
+    super(
+      'PSN search hash rejected (rotated). Set PSN_SEARCH_HASH, or the psn_search_hash setting, ' +
+        'to the sha256Hash of a getSearchResults request from store.playstation.com. ' +
+        detail
+    );
     this.name = 'PsnHashError';
   }
 }
@@ -154,7 +186,7 @@ async function gqlSearch(term: string, country: string, lang: string, pageSize =
     JSON.stringify({ countryCode: country, languageCode: lang, nextCursor: '', pageOffset: 0, pageSize, searchTerm: term })
   );
   const extensions = encodeURIComponent(
-    JSON.stringify({ persistedQuery: { version: 1, sha256Hash: SEARCH_HASH } })
+    JSON.stringify({ persistedQuery: { version: 1, sha256Hash: currentSearchHash() } })
   );
   const url = `${GQL}?operationName=${SEARCH_OP}&variables=${variables}&extensions=${extensions}`;
   const body = await fetchText(url, {

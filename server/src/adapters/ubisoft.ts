@@ -205,6 +205,7 @@ export const ubisoft: SourceAdapter = {
   name: 'Ubisoft Store (regional)',
   nameHe: 'יוביסופט קונקט — לפי אזור',
   platforms: ['pc'],
+  healthProbe: 'far cry',
   enabled: true,
 
   async search(title: string): Promise<GameHit[]> {

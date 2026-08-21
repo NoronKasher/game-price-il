@@ -109,6 +109,8 @@ export const itad: SourceAdapter = {
   name: 'IsThereAnyDeal',
   nameHe: 'IsThereAnyDeal — משווה מחירים',
   platforms: ['pc'],
+  companion: true,
+  healthProbeId: '1245620',
   get enabled() {
     return hasApiKey('itad');
   },

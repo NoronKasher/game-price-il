@@ -81,6 +81,7 @@ export const epic: SourceAdapter = {
   name: 'Epic Games Store (regional)',
   nameHe: 'אפיק גיימס — לפי אזור',
   platforms: ['pc'],
+  healthProbe: 'stray',
   enabled: true,
 
   async search(title: string): Promise<GameHit[]> {

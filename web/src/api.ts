@@ -1,5 +1,7 @@
 import type {
   AlertMode,
+  HealthReport,
+  HealthResponse,
   AlertRule,
   AlertScope,
   AppNotification,
@@ -24,6 +26,11 @@ async function json<T>(res: Response): Promise<T> {
 export const api = {
   search: (q: string) =>
     fetch(`/api/search?q=${encodeURIComponent(q)}`).then((r) => json<SearchResponse>(r)),
+
+  /** Adapter health: which sources actually returned data on the last probe. */
+  getHealth: () => fetch('/api/health').then((r) => json<HealthResponse>(r)),
+  runHealth: () =>
+    fetch('/api/health/run', { method: 'POST' }).then((r) => json<{ report: HealthReport }>(r)),
 
   /** Fast title suggestions for the search box (never runs the full fan-out). */
   suggest: (q: string, signal?: AbortSignal) =>

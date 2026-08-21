@@ -108,6 +108,8 @@ export const steamRegional: SourceAdapter = {
   name: 'Steam (regional)',
   nameHe: 'Steam — לפי אזור',
   platforms: ['pc'],
+  companion: true,
+  healthProbeId: '1245620',
   enabled: true,
 
   // Discovery happens via CheapShark's companion hit; no standalone search.

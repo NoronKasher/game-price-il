@@ -3,12 +3,15 @@ import type { GameHit, Offer, SourceAdapter } from './types.ts';
 import type { Platform } from '../search.ts';
 import { politeFetch } from './politeFetch.ts';
 import { describeProduct, looksDigital, parseNis, titleMatchesQuery } from '../normalize.ts';
+import { wooSearch } from './wooStore.ts';
 
 /**
- * Arcadia (arcadia.co.il) — Israeli gaming chain. WooCommerce with a custom
- * "rt-" theme; product tiles are server-rendered, no bot protection observed.
- * The platform is embedded in the product title ("PS4 Elden Ring…").
- * sourceGameId = product page URL.
+ * Arcadia (arcadia.co.il) — Israeli gaming chain, running WooCommerce.
+ *
+ * Reads the shop's public Store API (JSON: exact price in minor units, stock,
+ * permalink) and falls back to parsing the "rt-" theme's server-rendered tiles
+ * if that API ever goes away. The platform is embedded in the product title
+ * ("PS4 Elden Ring…"). sourceGameId = product page URL.
  */
 
 const offerCache = new Map<string, Offer>();
@@ -25,6 +28,47 @@ function makeOffer(title: string, price: number, url: string): Offer {
   };
 }
 
+/**
+ * The Store API path. Returns null when the shop doesn't answer it, so `search`
+ * drops back to scraping rather than reporting the store as empty.
+ */
+async function searchViaStoreApi(title: string, platforms: Platform[]): Promise<GameHit[] | null> {
+  const products = await wooSearch('https://arcadia.co.il', title);
+  if (!products) return null;
+  const hits: GameHit[] = [];
+  const seen = new Set<string>();
+  for (const p of products) {
+    if (seen.has(p.url)) continue;
+    // The shop search matches descriptions and tags too, so drop products whose
+    // name has nothing to do with the query (repair services, other games).
+    if (!titleMatchesQuery(title, p.name)) continue;
+    const d = describeProduct(p.name);
+    if (d.accessory) continue;
+    const platform = d.platforms[0];
+    // Physical shops sell console discs; a "pc" match here is a gaming PC.
+    if (!platform || platform === 'pc') continue;
+    if (platforms.length && !platforms.includes(platform)) continue;
+    seen.add(p.url);
+
+    const offer = makeOffer(p.name, p.price, p.url);
+    if (p.regularPrice != null) {
+      offer.retailPrice = p.regularPrice;
+      offer.savings = Math.round(((p.regularPrice - p.price) / p.regularPrice) * 100);
+    }
+    offerCache.set(p.url, offer);
+    hits.push({
+      sourceId: 'arcadia',
+      sourceGameId: p.url,
+      title: d.base,
+      groupKey: d.groupKey,
+      edition: d.edition,
+      image: p.image,
+      platform,
+    });
+  }
+  return hits;
+}
+
 export const arcadia: SourceAdapter = {
   id: 'arcadia',
   name: 'Arcadia (Israel)',
@@ -33,6 +77,8 @@ export const arcadia: SourceAdapter = {
   enabled: true,
 
   async search(title: string, platforms: Platform[]): Promise<GameHit[]> {
+    const viaApi = await searchViaStoreApi(title, platforms);
+    if (viaApi) return viaApi;
     const html = await politeFetch(
       `https://arcadia.co.il/?s=${encodeURIComponent(title)}&post_type=product`
     );

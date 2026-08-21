@@ -178,3 +178,24 @@ export interface TrackDetail {
   captured?: boolean;
   history: HistoryPoint[];
 }
+
+/** One adapter's last probe result (server/src/health.ts). */
+export interface AdapterHealth {
+  id: string;
+  name: string;
+  state: 'ok' | 'empty' | 'error' | 'rate_limited' | 'disabled';
+  count: number;
+  ms: number;
+  probe: string;
+  detail?: string;
+}
+
+export interface HealthReport {
+  checkedAt: string;
+  adapters: AdapterHealth[];
+}
+
+export interface HealthResponse {
+  report: HealthReport | null;
+  due: boolean;
+}
