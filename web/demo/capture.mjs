@@ -111,7 +111,16 @@ const previous = !fresh && fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, 
 
 const snapshot = {
   capturedAt: new Date().toISOString(),
-  seeds: SEEDS,
+  /**
+   * What the demo may advertise: titles actually in the file.
+   *
+   * This used to be all sixty, which is the WANTED list, not the recorded one —
+   * so the demo's banner offered forty-six games it could not answer for, and
+   * every one of them was a visitor clicking a button and being told nothing was
+   * found. `catalogue` keeps the goal visible without promising it.
+   */
+  seeds: [],
+  catalogue: SEEDS,
   searches: previous?.searches ?? {},
   searchesDlc: previous?.searchesDlc ?? {},
   offers: previous?.offers ?? {},
@@ -311,6 +320,10 @@ async function main() {
       fs.writeFileSync(path.join(OUT_DIR, file), Buffer.from(await res.arrayBuffer()));
     }
   }
+
+  // Written last, from what actually landed in the file — never from the wanted
+  // list. A title whose capture failed halfway is not something to advertise.
+  snapshot.seeds = SEEDS.filter((title) => snapshot.searches[title.trim().toLowerCase()]);
 
   fs.writeFileSync(OUT, JSON.stringify(snapshot));
   const kb = Math.round(fs.statSync(OUT).size / 1024);

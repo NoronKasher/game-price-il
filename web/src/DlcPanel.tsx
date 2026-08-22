@@ -191,7 +191,12 @@ export function DlcPanel({ title, platform }: { title: string; platform: Platfor
                         {o.store}
                       </span>
                       {o.url ? (
-                        <a className="dlc-offer-price" href={o.url} target="_blank" rel="noopener noreferrer">
+                        <a
+                          className="dlc-offer-price"
+                          href={safeUrl(o.url)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
                           {nis(o.priceILS)}
                         </a>
                       ) : (

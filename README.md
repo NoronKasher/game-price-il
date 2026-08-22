@@ -75,10 +75,11 @@ The [live demo](https://noronkasher.github.io/game-price-il/) is honest about be
 | | In the demo |
 |---|---|
 | Prices | **Real, recorded on one day.** Frozen — nothing updates. |
-| Games | Six titles were captured in full, plus everything that appeared alongside them. Other searches find nothing. |
+| Games | The banner names every title in the recording, and clicking one searches it. Anything else finds nothing. |
+| Results | **Only cards the snapshot can actually price are shown.** A recorded search returns dozens of games; the capture can afford boards for a few of them, so the rest are hidden rather than opening onto an empty board. |
 | Changes you make | Kept for your visit, gone on reload — there is no database. |
-| Price history & graphs | Real: ~470 recorded price points across four games over a month. |
-| Add-on (DLC) search | Not captured; the opt-in box has nothing extra to reveal. |
+| Price history & graphs | Real: ~700 recorded price points across four games over a month. |
+| Add-on (DLC) search | Recorded for a couple of titles, so the add-on panel has real data to open. |
 | Sale alerts | The bell is empty on purpose — alert messages are one person's inbox, so they aren't published. |
 | Live scraping, alerts, auto-capture | Server features — they need a running Node process. |
 | **With the extension installed** | **The demo goes live**: searches run against the real stores instead of the snapshot. See below. |
@@ -233,9 +234,22 @@ they refuse automated access still refuse it, and running from a user's browser
 would only make that undetected rather than permitted. Coverage is decided by
 the rules above, not by what happens to be technically reachable.
 
-Not yet wired: the search autocomplete (it races store typeaheads on every
-keystroke, which behind a message port means waking the worker per character),
-the deals ticker and the adapter canary — both scheduled server jobs.
+**Your tracked list follows the browser account.** It is mirrored into
+`chrome.storage.sync`, so another browser signed into the same account gets it —
+no account with us, no OAuth screen, no credential this extension ever sees.
+Price history stays local: the sync quota is 100KB in 8KB items and a real
+history is around 90KB and growing, so including it would mean discarding most
+of it and calling the rest a backup. A pull only ever adds, never deletes, so
+nothing you track here can disappear because of something that happened
+elsewhere. Six tests cover the chunking, the quota overflow and the merge; the
+desktop app's file backup is the answer for keeping history
+([docs/CLOUD-BACKUP.md](docs/CLOUD-BACKUP.md)).
+
+Not yet wired: background price capture (the `alarms` permission is declared but
+no alarm is registered, so the extension only re-prices when the app is open),
+the search autocomplete (it races store typeaheads on every keystroke, which
+behind a message port means waking the worker per character), the deals ticker
+and the adapter canary — both scheduled server jobs.
 
 ## Desktop app
 
@@ -274,6 +288,56 @@ runs when someone remembers to open it records gaps.
 **Verified end to end**: with a tracked list due for a check, the background
 process recorded 261 new price points on its own, with no window open and no
 browser running. One shop was politely backed off; the rest carried on.
+
+### It repairs PlayStation with its own browser
+
+When Sony rotates the persisted-query hash its store search uses, 22 PlayStation
+regions vanish at once. The source build recovers it by driving an installed
+Chrome or Edge through `playwright-core` — which a packaged desktop build cannot
+do, because its server is bundled into a single file and Playwright resolves
+browser paths at runtime in a way no bundler can follow.
+
+So the desktop build uses the Chromium it already is. It loads the public store
+page out of sight, reads the hash out of the request that page makes, and hands
+it back to its own server. No dependency, no download, and **nothing is touched
+until the store has actually refused us** — the server raises a flag only after a
+live call was rejected, and all that runs on a timer is a question asked over
+localhost.
+
+```bash
+npm run desktop:psn-hash   # PSN HASH OK: 4df6284f… (2.5s, no server needed)
+```
+
+### Updates and What's New
+
+The app checks GitHub Releases for a newer version, downloads it in the
+background, and then **asks before installing** — this thing's job is to keep
+running, so restarting it for something nobody requested is the opposite of the
+point. After an update it opens its release notes once. Both the app's notes and
+the browser store's listing are generated from `changelog.json`, so they cannot
+drift apart.
+
+> The installer is **unsigned**. Windows SmartScreen will warn on first run, and
+> on each update, until a code-signing certificate is in place.
+
+### Backups, and moving to a new machine
+
+Tray → **גיבוי היסטוריית המחירים**. Pick a folder — the app offers whatever
+cloud is already installed (OneDrive, Google Drive, Dropbox, iCloud) — and it
+writes one file a day there, keeping the last seven. On a new machine, restore
+from the same file; the restore merges, so nothing already recorded is
+duplicated or overwritten.
+
+Why a file in a synced folder rather than "sign in with Google": Facebook has no
+file storage for applications at all, and Google's app-data scope needs OAuth
+verification before it works for more than a hundred testers. A synced folder
+works with every cloud and with none, and no credential ever reaches this
+application. The full reasoning is in [docs/CLOUD-BACKUP.md](docs/CLOUD-BACKUP.md).
+
+The extension solves the smaller half of the same problem with the browser's own
+account sync: the tracked list and settings travel, price history does not — it
+is far larger than the 100KB sync quota, and squeezing it in would mean throwing
+most of it away and calling the rest a backup.
 
 ## Refreshing the demo snapshot
 

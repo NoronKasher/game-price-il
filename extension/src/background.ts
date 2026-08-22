@@ -1,6 +1,8 @@
 import { setPoliteStore } from '../../server/src/adapters/politeFetch.ts';
 import { chromeStoragePoliteStore, politeSnapshot } from './politeStorage.ts';
 import { makeHandlers, type Handler } from './handlers.ts';
+import { setChangeListener } from './db.browser.ts';
+import { scheduleSyncPush, startSyncMirror } from './syncMirror.ts';
 import type { SourceAdapter } from '../../server/src/adapters/types.ts';
 
 import { cheapshark } from '../../server/src/adapters/cheapshark.ts';
@@ -67,6 +69,12 @@ const sources: SourceAdapter[] = [
 // this worker. Registered at module scope so it is in place on every wake-up,
 // not just the first one.
 setPoliteStore(chromeStoragePoliteStore);
+
+// The tracked list follows the browser account to the user's other machines.
+// At module scope for the same reason as the line above: the worker is killed
+// and restarted constantly, and this has to be in place on every wake-up.
+setChangeListener(scheduleSyncPush);
+startSyncMirror();
 
 /**
  * A fan-out takes far longer than MV3's ~30s idle timeout allows.

@@ -44,7 +44,14 @@ function demoBanner(): Plugin {
       try {
         const snapshot = JSON.parse(fs.readFileSync(file, 'utf8'));
         captured = (snapshot.capturedAt ?? '').slice(0, 10);
-        seeds = snapshot.seeds ?? Object.keys(snapshot.searches ?? {});
+        // Only offer what the snapshot can answer. The capture is incremental —
+        // sixty titles would spend a shop's daily allowance in one sitting — so
+        // most of the wanted list is not in the file yet, and advertising those
+        // as chips handed the visitor a row of buttons that found nothing. The
+        // catalogue is the goal; the chips are the stock actually on the shelf.
+        const searches = snapshot.searches ?? {};
+        const listed: string[] = snapshot.seeds ?? Object.keys(searches);
+        seeds = listed.filter((g) => searches[g.trim().toLowerCase()]);
       } catch {
         /* an absent snapshot is caught by the workflow, not by the banner */
       }

@@ -10,8 +10,12 @@ directories:
 # Only the Electron shell goes inside the app bundle. The server and the UI ride
 # alongside as resources, because main.js starts the server as a child process
 # and Node cannot require a file out of an asar archive when run that way.
+# A glob, not a list of filenames: the list silently dropped every new module the
+# moment one was added, and a missing require only shows up when the packaged app
+# is actually run. make-icon.mjs and the like are .mjs build scripts and stay out.
 files:
-  - desktop/main.js
+  - desktop/*.js
+  - desktop/patch-notes.html
   - desktop/icon.png
   - package.json
 
@@ -20,6 +24,15 @@ extraResources:
     to: server/dist
   - from: web/dist
     to: web/dist
+
+# Where the app looks for a newer version. GitHub Releases on a public repo costs
+# nothing and needs no server of our own, which is the same reason the rest of
+# this project has none. `electron-builder --win --publish never` builds without
+# uploading; publishing is a deliberate act with a GH_TOKEN in the environment.
+publish:
+  provider: github
+  owner: NoronKasher
+  repo: game-price-il
 
 win:
   target: nsis

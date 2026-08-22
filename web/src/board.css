@@ -759,13 +759,17 @@ body {
 .dep-pulse { animation: depPulse 1.1s ease-in-out infinite; }
 @keyframes depPulse { 50% { opacity: 0.45; } }
 
-.dep-head, .dep-row { display: grid; grid-template-columns: 1fr 84px 108px 78px; gap: 10px; align-items: center; }
+.dep-head, .dep-row { display: grid; grid-template-columns: 1fr 84px 108px 78px 44px; gap: 10px; align-items: center; }
 .dep-head {
   font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.16em;
   text-transform: uppercase; color: #5d6875; padding: 0 4px 8px;
 }
 .dep-rows { perspective: 900px; }
-.dep-row { padding: 7px 4px; transform-origin: top center; animation: depFlap 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.dep-row {
+  padding: 7px 4px; transform-origin: top center;
+  animation: depFlap 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  position: relative; border-radius: 6px;
+}
 .dep-row + .dep-row { border-top: 1px solid #12161d; }
 .dep-where { font-weight: 500; font-size: 15px; color: var(--glyph); }
 .dep-flap {
@@ -816,9 +820,10 @@ body {
   .dt-game { flex: 1 1 auto; width: 100%; }
 }
 @media (max-width: 560px) {
-  .dep-head, .dep-row { grid-template-columns: 1fr 58px 82px 58px; gap: 6px; }
+  .dep-head, .dep-row { grid-template-columns: 1fr 58px 82px 58px 34px; gap: 6px; }
   .dep-where { font-size: 13px; }
   .dep-flap { font-size: 13px; padding: 5px 0; }
+  .dep-go { font-size: 13px; padding: 6px 0; }
 }
 
 /* Region / key caveats — informational, never a barrier. */
@@ -858,6 +863,34 @@ body {
   background: none; color: var(--muted); border: 1px dashed #2f3a4d;
 }
 .dep-fold:hover { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 45%, var(--line)); }
+/* The fold button lives inside the row's click target, so it has to sit above
+   the stretched link — otherwise "show this store's other regions" would open
+   the shop instead. */
+.dep-fold { position: relative; z-index: 2; }
+
+/* Going to the offer.
+   The arrow is the visible affordance; its ::after stretches over the whole row
+   so the click target is the row. An <a> wrapping the row would be invalid HTML
+   (the fold button nests inside it) and a 12px arrow would be a cruel target on
+   a phone — this is the one shape that is both. */
+.dep-go {
+  display: flex; align-items: center; justify-content: center;
+  text-decoration: none; font-size: 15px; line-height: 1;
+  color: var(--muted); border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 0; direction: ltr;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.dep-go::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.dep-go.none { color: #3c4655; border-style: dashed; cursor: default; }
+.dep-go.none::after { content: none; }
+.dep-row:hover { background: color-mix(in srgb, var(--amber) 4%, transparent); }
+.dep-row:hover .dep-go { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 55%, var(--line)); }
+.dep-row:hover .dep-go.none { color: #3c4655; border-color: var(--line); }
+/* Keyboard users get the same row highlight the mouse gets. */
+.dep-go:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.dep-row:has(.dep-go:focus-visible) { background: color-mix(in srgb, var(--amber) 7%, transparent); }
+.dep-row.best .dep-go { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 35%, var(--line)); }
+.dep-go-head { text-align: center; }
 .dep-showall {
   display: block; width: 100%; margin-top: 12px; padding: 7px 0;
   font: inherit; font-size: 12.5px; cursor: pointer; border-radius: 8px;
@@ -1023,13 +1056,16 @@ body {
 /* Very narrow phones: the board's four columns stop fitting at all, so the
    savings column goes — it is the one a buyer can most afford to lose. */
 @media (max-width: 400px) {
-  /* The LAST cell is the savings column. `:nth-of-type` would count spans, not
-     .dep-flap elements, and hid the price instead — the one number the row
-     exists for. */
-  .dep-head span:last-child, .dep-row > span:last-child { display: none; }
-  .dep-head, .dep-row { grid-template-columns: 1fr 46px 76px; gap: 5px; }
+  /* The savings column goes — it is the one a buyer can most afford to lose.
+     Targeted by class, not by position: this was `span:last-child`, which broke
+     the moment a fifth cell was added (it stopped matching anything, since the
+     last cell is now the link). A rule that depends on column order is a rule
+     that silently stops working. */
+  .dep-sale { display: none; }
+  .dep-head, .dep-row { grid-template-columns: 1fr 46px 76px 32px; gap: 5px; }
   .dep-risk, .dep-eilat { display: none; }
   .dep-fold { font-size: 10px; padding: 1px 6px; }
+  .dep-go { font-size: 12px; padding: 5px 0; }
 }
 
 /* Add-on opt-in: off by default, and anything it lets through is labelled. */

@@ -35,3 +35,4 @@ desktop/icon.png
 desktop/icon-256.png
 extension/*.zip
 dist_electron/
+desktop/patch-notes.html

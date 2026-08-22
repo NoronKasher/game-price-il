@@ -179,6 +179,10 @@ export const t = {
   depFewerRegions: 'הסתר אזורים',
   depShowRest: (n: number) => `הצג עוד ${n} הצעות`,
   depColSale: 'מבצע',
+  // Every row goes somewhere — a comparison that cannot be acted on is trivia.
+  depColGo: 'לרכישה',
+  depGoAria: (store: string, price: string) => `פתיחת ההצעה ב${store} — ${price} (נפתח בלשונית חדשה)`,
+  depNoLink: 'המקור הזה לא מספק קישור ישיר להצעה',
   // Adapter health canary
   healthTitle: 'מצב מקורות המחירים',
   healthIntro:

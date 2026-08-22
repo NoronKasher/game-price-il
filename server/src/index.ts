@@ -67,7 +67,12 @@ import { searchGames, offersFor, steamAppIdOf, ALL_PLATFORMS } from './fanout.ts
 import { historyCsv } from './csv.ts';
 import { runHealthCheck, lastHealthReport, healthCheckDue } from './health.ts';
 import { currentSearchHash, searchHashSource } from './adapters/psn.ts';
-import { discoverSearchHashShared, probeBrowser } from './adapters/psnHash.ts';
+import {
+  discoverSearchHashShared,
+  hashNeedsRecovery,
+  noteHashSaved,
+  probeBrowser,
+} from './adapters/psnHash.ts';
 import { setSetting } from './db.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -173,6 +178,9 @@ app.get('/api/psn-hash', async (_req, res) => {
     hash: currentSearchHash(),
     source: searchHashSource(),
     browser: await probeBrowser(),
+    // For a host that can drive a browser of its own — the desktop build asks
+    // for this and goes and gets a fresh hash when it turns true.
+    needsRecovery: hashNeedsRecovery(),
   });
 });
 app.patch('/api/psn-hash', (req, res) => {
@@ -186,6 +194,7 @@ app.patch('/api/psn-hash', (req, res) => {
     return res.status(400).json({ error: 'a persisted-query hash is 64 hex characters' });
   }
   setSetting('psn_search_hash', raw);
+  noteHashSaved();
   res.json({ ok: true, hash: currentSearchHash(), source: searchHashSource() });
 });
 app.post('/api/psn-hash/recover', async (_req, res) => {

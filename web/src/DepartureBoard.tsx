@@ -466,7 +466,8 @@ export function DepartureBoard({
                   <span>{t.depColStore}</span>
                   <span>{t.depColRegion}</span>
                   <span>{t.depColPrice}</span>
-                  <span>{t.depColSale}</span>
+                  <span className="dep-sale">{t.depColSale}</span>
+                  <span className="dep-go-head">{t.depColGo}</span>
                 </div>
                 <div className="dep-rows">
                   {rows.map(({ o, risk, cut, best, folded }, i) => {
@@ -510,7 +511,30 @@ export function DepartureBoard({
                               <span className="dep-eilat none">{t.depEilatNone}</span>
                             ))}
                         </span>
-                        <span className={`dep-flap ${cut > 0 ? 'down' : 'flat'}`}>{cut > 0 ? `-${cut}%` : '—'}</span>
+                        <span className={`dep-flap dep-sale ${cut > 0 ? 'down' : 'flat'}`}>
+                          {cut > 0 ? `-${cut}%` : '—'}
+                        </span>
+                        {/* The point of the whole board: the row has to take you
+                            to the listing. The anchor covers the row (see
+                            .dep-go::after) so the target is the row, not a 12px
+                            arrow — the fold button sits above it and still
+                            works. A row whose source gave no link says so
+                            rather than pretending to be clickable. */}
+                        {o.url ? (
+                          <a
+                            className="dep-go"
+                            href={safeUrl(o.url)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={t.depGoAria(cleanStoreName(o.store), nis(o.priceILS))}
+                          >
+                            <span aria-hidden="true">↗</span>
+                          </a>
+                        ) : (
+                          <span className="dep-go none" title={t.depNoLink} aria-label={t.depNoLink}>
+                            —
+                          </span>
+                        )}
                       </div>
                     );
                   })}

@@ -74,6 +74,34 @@ const LAST_TRY_KEY = 'psn_hash_last_attempt';
 const RETRY_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
 /**
+ * Whether the hash in use is currently being refused, so a host that has its
+ * own browser can offer to go and get a fresh one.
+ *
+ * The desktop build is exactly that host: it IS a Chromium, but the server it
+ * runs is a bundled single file that cannot carry playwright-core, so the
+ * recovery above finds no engine and gives up. Rather than teach the server
+ * about Electron, it reports the need and Electron watches for it — which keeps
+ * PlayStation untouched until the hash actually breaks. Polling a store on a
+ * schedule to see whether we still work would be the rude version of this.
+ *
+ * In memory on purpose: a rejection is a fact about the live hash, and the very
+ * next search after a restart re-establishes it.
+ */
+let rejectedAt = 0;
+let savedAt = 0;
+
+export function noteHashRejected(): void {
+  rejectedAt = Date.now();
+}
+/** Called whenever a new hash is stored, by hand or by any discovery route. */
+export function noteHashSaved(): void {
+  savedAt = Date.now();
+}
+export function hashNeedsRecovery(): boolean {
+  return rejectedAt > 0 && rejectedAt > savedAt;
+}
+
+/**
  * Installed browsers to try, in order. These are channels rather than bundled
  * downloads: Playwright resolves each to the real application on disk and fails
  * immediately (a path check) when it isn't there, so listing several costs
@@ -203,7 +231,10 @@ export async function discoverSearchHash(timeoutMs = 45_000): Promise<string | n
     const deadline = Date.now() + Math.min(timeoutMs, 20_000);
     while (!found && Date.now() < deadline) await page.waitForTimeout(250);
 
-    if (found) setSetting(SETTING_KEY, found);
+    if (found) {
+      setSetting(SETTING_KEY, found);
+      noteHashSaved();
+    }
     return found;
   } catch {
     return null;

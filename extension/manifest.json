@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "VGPT.IL — משווה מחירי משחקים",
   "description": "השוואת מחירי משחקים לישראל — דיגיטלי, פיזי ובין אזורים. רץ כולו בדפדפן, בלי שרת.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "background": {
     "service_worker": "background.js",
     "type": "module"

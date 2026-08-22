@@ -133,6 +133,21 @@ let writing: Promise<void> | null = null;
 let dirty = false;
 
 /**
+ * Notified after every change, so the tracked list can be mirrored to the
+ * browser's account sync (syncMirror.ts).
+ *
+ * A hook rather than a direct call because the mirror imports this module: doing
+ * it the other way round would make the two circular, and a cycle between the
+ * storage layer and something built on top of it is the kind of thing that works
+ * until an unrelated import order changes.
+ */
+let onChanged: (() => void) | null = null;
+
+export function setChangeListener(fn: (() => void) | null): void {
+  onChanged = fn;
+}
+
+/**
  * Writes are coalesced but never dropped: recordOffers inserts a whole check's
  * offers one row at a time, and persisting each separately would be dozens of
  * transactions for one logical change. A write that lands while another is in
@@ -141,6 +156,7 @@ let dirty = false;
  */
 function save(): void {
   dirty = true;
+  onChanged?.();
   if (writing) return;
   writing = (async () => {
     while (dirty) {

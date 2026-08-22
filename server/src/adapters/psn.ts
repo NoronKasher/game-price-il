@@ -3,7 +3,7 @@ import type { Platform } from '../search.ts';
 import { toILS, canConvert } from '../rates.ts';
 import { describeProduct, parseLocalizedPrice } from '../normalize.ts';
 import { getSetting } from '../db.ts';
-import { discoverSearchHashShared, hashDiscoveryDue } from './psnHash.ts';
+import { discoverSearchHashShared, hashDiscoveryDue, noteHashRejected } from './psnHash.ts';
 import { REGIONS } from '../regions.ts';
 
 /**
@@ -334,7 +334,12 @@ async function gqlSearchRecovering(
   try {
     return await gqlSearch(term, country, lang, pageSize);
   } catch (err) {
-    if (!(err instanceof PsnHashError) || !hashDiscoveryDue()) throw err;
+    if (!(err instanceof PsnHashError)) throw err;
+    // Record the refusal before deciding what to do about it: a host with its
+    // own browser (the desktop build) watches this flag, and it must be set
+    // even on the calls that the cooldown declines to act on.
+    noteHashRejected();
+    if (!hashDiscoveryDue()) throw err;
     // Start the recovery, but never make a user wait out a cold browser start.
     // If it lands inside the budget the request is saved outright; if not it
     // keeps running and persists the hash, so the next search or the nightly

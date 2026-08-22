@@ -27,3 +27,24 @@ export function hashDiscoveryDue(): boolean {
 export async function probeBrowser(): Promise<null> {
   return null;
 }
+
+/**
+ * The rejection bookkeeping the server keeps, kept here too.
+ *
+ * It costs nothing and it is the half that is NOT specific to Playwright: the
+ * desktop build already uses exactly this signal to trigger a recovery with its
+ * own Chromium (desktop/psnHash.js), and whatever recovery this extension
+ * eventually grows will want the same flag rather than a new one.
+ */
+let rejectedAt = 0;
+let savedAt = 0;
+
+export function noteHashRejected(): void {
+  rejectedAt = Date.now();
+}
+export function noteHashSaved(): void {
+  savedAt = Date.now();
+}
+export function hashNeedsRecovery(): boolean {
+  return rejectedAt > 0 && rejectedAt > savedAt;
+}
