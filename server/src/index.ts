@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { parseQuery, type Platform } from './search.ts';
-import { describeProduct } from './normalize.ts';
+import { describeProduct, groupKey } from './normalize.ts';
 import type { GameHit, Offer, SourceAdapter } from './adapters/types.ts';
 import { cheapshark, CHEAPSHARK_HEADERS } from './adapters/cheapshark.ts';
 import { steamRegional } from './adapters/steam.ts';
@@ -168,7 +168,10 @@ app.get('/api/search', async (req, res) => {
     wanted.map((p) => [p, sources.some((s) => s.enabled && s.platforms.includes(p))])
   );
 
-  res.json({ query: parsed, games: hits, platformStatus, sources: status });
+  // The grouping key for what was actually typed. Published by the server so the
+  // client never has to reimplement the normalisation and drift from it — this
+  // is what lets an exact title match open straight into that game's board.
+  res.json({ query: parsed, queryKey: groupKey(parsed.title), games: hits, platformStatus, sources: status });
 });
 
 /**

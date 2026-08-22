@@ -884,6 +884,11 @@ function SearchView({
    * allowed to write state; older ones land and are discarded.
    */
   const searchSeq = useRef(0);
+  /**
+   * Results we've already considered for auto-opening. Without this the effect
+   * would re-open the board every render, so closing it would be impossible.
+   */
+  const autoOpened = useRef<SearchResponse | null>(null);
 
   const run = async (q: string = query, dlcOverride?: boolean) => {
     const term = q.trim();
@@ -932,6 +937,36 @@ function SearchView({
     }
     return [...map.values()];
   }, [result]);
+
+  /**
+   * Go straight to the game when the search names one exactly.
+   *
+   * Someone who typed "Borderlands 3" in full has already told us which game
+   * they want; making them pick it out of a grid of Borderlands cards is a step
+   * that answers nothing. The other results still render around the opened
+   * board, so this is a shortcut rather than a decision taken away.
+   *
+   * Only ever on a single unambiguous match — two groups sharing a key means we
+   * don't actually know, and guessing there would be worse than the grid.
+   */
+  useEffect(() => {
+    if (!result || autoOpened.current === result) return;
+    autoOpened.current = result;
+    const key = result.queryKey;
+    if (!key) return;
+    const exact = groups.filter((g) => g.key === key);
+    if (exact.length !== 1) return;
+    const g = exact[0]!;
+    // A platform named in the query wins; otherwise take the game's first.
+    const platform =
+      result.query.platforms.find((p) => g.byPlatform.has(p)) ?? [...g.byPlatform.keys()][0];
+    if (!platform) return;
+    // Opened without the card-into-board flight: there is no card on screen to
+    // fly from, and the board carries its own platform switcher for changing.
+    setFlight(null);
+    setAbsorb(null);
+    setExpanded({ key: g.key, platform });
+  }, [result, groups]);
 
   const soonPlatforms = useMemo<Platform[]>(() => {
     if (!result?.platformStatus) return [];

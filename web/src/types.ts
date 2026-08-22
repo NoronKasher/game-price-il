@@ -59,6 +59,8 @@ export interface SourceStatus {
 
 export interface SearchResponse {
   query: { title: string; platforms: Platform[] };
+  /** Grouping key of the typed title, for spotting an exact match. */
+  queryKey?: string;
   games: GameHit[];
   platformStatus?: Record<string, boolean>;
   sources?: SourceStatus[];
