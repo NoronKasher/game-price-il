@@ -29,6 +29,10 @@ test('recognises add-on content', () => {
     'Far Cry 6 Medium Pack',
     'Far Cry 6 Episode 2 Pagan: Control',
     'EA SPORTS FC 25 Spanish - In-Game Commentary',
+    'Forza Motorsport Premium Add-Ons',
+    'Forza Horizon 5: Car Pass',
+    'Mario Kart 8 Deluxe - Booster Course Pass',
+    'Additional mini-game "Halo Jump!"',
   ]) {
     assert.equal(looksLikeDlc(title), true, `should be add-on: ${title}`);
   }
@@ -48,6 +52,8 @@ test('does NOT eat games whose names merely contain those letters', () => {
     'Battlefield 2042',
     'Battletoads',
     'Passpartout',
+    'Mountain Rescue',
+    'Additive',
     'Packing Simulator',
     'Episode Prompto',
     'Far Cry 6',
