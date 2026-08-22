@@ -1,8 +1,6 @@
 import { setPoliteStore } from '../../server/src/adapters/politeFetch.ts';
 import { chromeStoragePoliteStore, politeSnapshot } from './politeStorage.ts';
-import { searchGames, offersFor } from '../../server/src/fanout.ts';
-import type { SourceRef } from '../../server/src/fanout.ts';
-import type { Platform } from '../../server/src/search.ts';
+import { makeHandlers, type Handler } from './handlers.ts';
 import type { SourceAdapter } from '../../server/src/adapters/types.ts';
 
 import { cheapshark } from '../../server/src/adapters/cheapshark.ts';
@@ -18,6 +16,9 @@ import { ivory } from '../../server/src/adapters/ivory.ts';
 import { bug } from '../../server/src/adapters/bug.ts';
 import { xbox } from '../../server/src/adapters/xbox.ts';
 import { nintendo } from '../../server/src/adapters/nintendo.ts';
+import { psn } from '../../server/src/adapters/psn.ts';
+import { ggdeals } from '../../server/src/adapters/ggdeals.ts';
+import { itad } from '../../server/src/adapters/itad.ts';
 
 /**
  * The extension's service worker — the whole "server", inside the browser.
@@ -29,12 +30,14 @@ import { nintendo } from '../../server/src/adapters/nintendo.ts';
  * of behaviour ports for free. What changes is only the shell around it —
  * storage, and how the UI asks for things.
  *
- * Sources deliberately absent from this slice:
- *  - GG.deals and ITAD read a key from the filesystem (keys.ts). They need a
- *    chrome.storage-backed BYOK path first.
- *  - PlayStation pulls in psnHash.ts, which drives Playwright. In an extension
- *    that whole mechanism is replaced by watching a request, which is simpler —
- *    but it is a rewrite, not a move, so it is not in the slice.
+ * All sixteen sources run here. Three needed a browser stand-in rather than a
+ * port, each aliased in extension/vite.config.ts:
+ *  - keys.ts    → chrome.storage, so GG.deals and ITAD keep their BYOK keys
+ *                 without reading a file from disk;
+ *  - db.ts      → IndexedDB, so tracking and price history work;
+ *  - psnHash.ts → a stub, because recovery drives Playwright. PlayStation still
+ *                 searches on the known hash; it just cannot yet re-learn a
+ *                 rotated one by itself.
  */
 const sources: SourceAdapter[] = [
   cheapshark,
@@ -50,6 +53,9 @@ const sources: SourceAdapter[] = [
   bug,
   xbox,
   nintendo,
+  psn,
+  ggdeals,
+  itad,
 ];
 
 // A marker for diagnosing the worker from outside: an MV3 service worker that
@@ -70,26 +76,7 @@ setPoliteStore(chromeStoragePoliteStore);
  * port is opened by the caller and closed when the answer is posted, which
  * means the lifetime is exactly the work — no keep-alive hacks, no polling.
  */
-type Handler = (...args: never[]) => Promise<unknown>;
-
-const handlers: Record<string, Handler> = {
-  async search(q: string, includeDlc = false) {
-    return searchGames(sources, q, includeDlc);
-  },
-
-  async offers(refs: SourceRef[], platform: Platform) {
-    return offersFor(sources, refs, platform);
-  },
-
-  /** What the limiter currently owes each store — proof the state is real. */
-  async politeState() {
-    return politeSnapshot();
-  },
-
-  async sources() {
-    return sources.map((s) => ({ id: s.id, name: s.nameHe, platforms: s.platforms }));
-  },
-} as unknown as Record<string, Handler>;
+const handlers: Record<string, Handler> = makeHandlers(sources);
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'vgpt') return;

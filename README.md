@@ -136,21 +136,33 @@ it returns zero results and looks like a game nobody sells. A daily probe with a
 npm test      # 103 tests, ~2.6s
 ```
 
-## Browser extension (in progress)
+## Browser extension
 
 A local server is the wrong shape for a shopping tool — nobody installs one to
-check a price. The same core therefore runs inside a Chromium extension, where
+check a price. So the whole tool also runs inside a Chromium extension, where
 there is no separate process and nothing listening on a port: the MV3 service
-worker imports **the same store adapters, unchanged**. None of them touch
-`node:` anything, so what had to be rewritten was three files of platform glue,
-not the tool.
+worker imports **the same store adapters, unchanged**.
 
 ```bash
 npm run build:ext     # -> extension/dist, load it unpacked
 ```
 
-Verified end to end in a real browser: 13 sources, **70 results in 3.3s** from
-real stores, matching the Node server source-for-source on the same query.
+Verified end to end in a real browser: **all 16 sources, 100 results in 3.9s**
+from live stores, matching the Node server source-for-source. Tracking a game
+records its prices, and both the tracked game and its history are still there
+after the service worker is killed and restarted.
+
+It ported cheaply because **not one adapter imports a `node:` module**. Only
+three modules needed a browser stand-in, each swapped by one alias:
+
+| server | extension | why |
+|---|---|---|
+| `db.ts` (SQLite) | IndexedDB | tracking, history, alerts, CSV export |
+| `keys.ts` (key file) | `chrome.storage` | GG.deals / ITAD bring-your-own-key |
+| `psnHash.ts` (Playwright) | stub | PlayStation searches on the known hash, but cannot yet re-learn a rotated one |
+
+Everything above storage — capture, verdicts, alerts, notifications, CSV — is
+shared, not reimplemented.
 
 **Politeness had to be rebuilt to survive the worker.** MV3 kills the service
 worker after ~30s idle, and the 2.5s spacing, the daily budget and the
@@ -160,15 +172,19 @@ than promised. The limits now live in `chrome.storage`, and four tests plus a
 live browser run confirm a back-off, a spent budget and the spacing all still
 apply after a restart.
 
-Not yet ported: PlayStation (its hash recovery drives Playwright; in an
-extension that becomes simpler, but it is a rewrite rather than a move),
-GG.deals and ITAD (they read a key from disk), and price history, which needs
-the SQLite layer moved to IndexedDB.
+**The tool still introduces itself.** A browser refuses to let `fetch()` set
+`User-Agent`, so the honest identification `politeFetch` sends on the server is
+applied by a `declarativeNetRequest` rule instead — scoped to exactly the hosts
+we scrape, and verified arriving on the wire rather than assumed.
 
-**An extension does not change what we are allowed to fetch.** Stores that
-state they refuse automated access still refuse it, and running from a user's
-browser would only make that undetected rather than permitted. Coverage is
-decided by the rules above, not by what happens to be technically reachable.
+**An extension does not change what we are allowed to fetch.** Stores that state
+they refuse automated access still refuse it, and running from a user's browser
+would only make that undetected rather than permitted. Coverage is decided by
+the rules above, not by what happens to be technically reachable.
+
+Not yet wired: the search autocomplete (it races store typeaheads on every
+keystroke, which behind a message port means waking the worker per character),
+the deals ticker and the adapter canary — both scheduled server jobs.
 
 ## Refreshing the demo snapshot
 

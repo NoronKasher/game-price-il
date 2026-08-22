@@ -63,7 +63,7 @@ import { captureFromView } from './capture.ts';
 import { priceVerdict } from './verdict.ts';
 import { isAllowedRequestOrigin, resolveListenConfig } from './net.ts';
 import { suggestTitles } from './suggest.ts';
-import { searchGames, offersFor, ALL_PLATFORMS } from './fanout.ts';
+import { searchGames, offersFor, steamAppIdOf, ALL_PLATFORMS } from './fanout.ts';
 import { historyCsv } from './csv.ts';
 import { runHealthCheck, lastHealthReport, healthCheckDue } from './health.ts';
 import { currentSearchHash, searchHashSource } from './adapters/psn.ts';
@@ -305,11 +305,6 @@ app.post('/api/refresh', async (_req, res) => {
   }
   res.json({ updated, total: items.length });
 });
-
-/** Steam appID (for description/genre) from a game's refs, if any. */
-function steamAppIdOf(refs: SourceRef[]): string | null {
-  return refs.find((r) => r.sourceId === 'steam-regional')?.sourceGameId ?? null;
-}
 
 /**
  * Opt-in tracking for one game: add it and record the first full set of offers —

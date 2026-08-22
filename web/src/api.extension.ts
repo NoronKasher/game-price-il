@@ -51,48 +51,69 @@ function call<T>(method: string, ...args: unknown[]): Promise<T> {
   });
 }
 
-/** Not in the slice yet — see extension/src/background.ts for what and why. */
-function notYet(what: string): never {
-  throw new Error(`${what} is not part of the extension slice yet`);
-}
-
 export const api: typeof LiveApi = {
   search: (q, includeDlc = false) => call('search', q, includeDlc),
   offers: (refs: SourceRef[], platform: string) => call('offers', refs, platform),
+  meta: (refs: SourceRef[]) => call('meta', refs),
 
-  // Everything below is server-shaped and still being ported. Each one fails
-  // loudly rather than returning a plausible empty answer, so a gap in the
-  // slice can never be mistaken for "the stores had nothing".
-  meta: async () => ({ meta: null }),
+  wishlist: () => call('wishlist'),
+  removeWish: async (id: number) => {
+    await call('removeWish', id);
+    // The caller only checks that it resolved; there is no HTTP here to report.
+    return new Response(null, { status: 200 });
+  },
+  trackDetail: (id: number) => call('trackDetail', id),
+  trackStatus: (title: string, platform: string) => call('trackStatus', title, platform),
+  track: (item) => call('track', item),
+  trackRefresh: (id: number) => call('trackRefresh', id),
+  refresh: () => call('refresh'),
+  setTrackSetting: (id, patch) => call('setTrackSetting', id, patch),
+
+  getNotifications: () => call('getNotifications'),
+  markNotificationsRead: async () => {
+    await call('markNotificationsRead');
+    return new Response(null, { status: 200 });
+  },
+  clearNotifications: async () => {
+    await call('clearNotifications');
+    return new Response(null, { status: 200 });
+  },
+
+  getSettings: () => call('getSettings'),
+  setSettings: (patch) => call('setSettings', patch),
+  importData: (items: unknown) => call('importData', items),
+
+  /**
+   * Suggestions are not wired to the worker on purpose.
+   *
+   * suggest.ts races several store typeaheads on every keystroke. Behind a
+   * message port that means waking the worker per character, and the budget it
+   * relies on is a server-side assumption. An empty list costs the user an
+   * autocomplete, never a search.
+   */
   suggest: async () => ({ suggestions: [] }),
+
+  /** Deal ticker and the adapter canary are server-side scheduled jobs. */
   ticker: async () => ({ deals: [] }),
-  wishlist: async () => ({ items: [] }),
-  removeWish: async () => new Response(null, { status: 501 }),
-  trackDetail: async () => notYet('trackDetail'),
-  trackStatus: async () => ({ tracked: false, history: [] }),
-  track: async () => notYet('track'),
-  trackRefresh: async () => ({ history: [] }),
-  refresh: async () => ({ updated: 0 }),
-  setTrackSetting: async () => ({ ok: true }),
-  getNotifications: async () => ({ items: [], unread: 0 }),
-  markNotificationsRead: async () => new Response(null, { status: 501 }),
-  clearNotifications: async () => new Response(null, { status: 501 }),
-  getSettings: async () => ({
-    captureDaysGlobal: 7,
-    displayCurrency: 'ILS' as const,
-    ratesFromILS: { ILS: 1, USD: 0.33, EUR: 0.29 },
-    alerts: { pct: 20, price: null, ccy: 'ILS', anyDrop: true, scope: 'auto' as const },
-  }),
-  setSettings: async () => notYet('setSettings'),
+  getHealth: async () => ({ report: null, due: false }),
+  runHealth: async () => ({ report: { checkedAt: new Date().toISOString(), adapters: [] } }),
+
+  /** Keys are held in chrome.storage; the settings screen for them is not built yet. */
   getKeys: async () => ({
     ggdeals: { configured: false, source: 'none' as const },
     itad: { configured: false, source: 'none' as const },
   }),
-  setKeys: async () => notYet('setKeys'),
-  getHealth: async () => ({ report: null, due: false }),
-  runHealth: async () => notYet('runHealth'),
+  setKeys: async () => ({
+    ggdeals: { configured: false, source: 'none' as const },
+    itad: { configured: false, source: 'none' as const },
+  }),
+
+  /**
+   * PlayStation still searches on the known hash, but cannot yet re-learn a
+   * rotated one: recovery drives Playwright on the server. Reported honestly
+   * rather than as a working feature.
+   */
   getPsnHash: async () => ({ hash: '', source: 'builtin' as const, browser: null }),
-  setPsnHash: async () => notYet('setPsnHash'),
+  setPsnHash: async (hash: string) => ({ ok: false, hash, source: 'builtin' as const }),
   recoverPsnHash: async () => ({ found: null, hash: '', source: 'builtin' as const }),
-  importData: async () => notYet('importData'),
 };

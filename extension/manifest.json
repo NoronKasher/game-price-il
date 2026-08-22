@@ -10,7 +10,12 @@
   "action": {
     "default_title": "VGPT.IL"
   },
-  "permissions": ["storage", "alarms", "unlimitedStorage"],
+  "permissions": [
+    "storage",
+    "alarms",
+    "unlimitedStorage",
+    "declarativeNetRequest"
+  ],
   "host_permissions": [
     "https://www.cheapshark.com/*",
     "https://store.steampowered.com/*",
@@ -28,6 +33,19 @@
     "https://*.arcadia.co.il/*",
     "https://*.gamestorm.co.il/*",
     "https://*.ivory.co.il/*",
-    "https://*.bug.co.il/*"
-  ]
+    "https://*.bug.co.il/*",
+    "https://web.np.playstation.com/*",
+    "https://store.playstation.com/*",
+    "https://api.gg.deals/*",
+    "https://api.isthereanydeal.com/*"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "identify",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  }
 }

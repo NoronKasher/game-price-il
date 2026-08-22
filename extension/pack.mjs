@@ -11,9 +11,11 @@ const here = import.meta.dirname;
 const dist = path.join(here, 'dist');
 
 fs.mkdirSync(dist, { recursive: true });
-fs.copyFileSync(path.join(here, 'manifest.json'), path.join(dist, 'manifest.json'));
+for (const f of ['manifest.json', 'rules.json']) {
+  fs.copyFileSync(path.join(here, f), path.join(dist, f));
+}
 
-const need = ['manifest.json', 'background.js', 'index.html'];
+const need = ['manifest.json', 'rules.json', 'background.js', 'index.html'];
 const missing = need.filter((f) => !fs.existsSync(path.join(dist, f)));
 if (missing.length) {
   console.error(`extension build incomplete — missing: ${missing.join(', ')}`);

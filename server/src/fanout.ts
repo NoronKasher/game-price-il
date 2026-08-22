@@ -100,6 +100,11 @@ export async function searchGames(
   return { query: parsed, queryKey: groupKey(parsed.title), games: hits, platformStatus, sources: status };
 }
 
+/** Steam appID (for description/genre) from a game's refs, if any. */
+export function steamAppIdOf(refs: SourceRef[]): string | null {
+  return refs.find((r) => r.sourceId === 'steam-regional')?.sourceGameId ?? null;
+}
+
 export interface OffersResult {
   offers: Offer[];
   partial: boolean;

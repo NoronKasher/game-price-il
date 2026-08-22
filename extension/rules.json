@@ -1,0 +1,28 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "comment": "Identify the tool honestly to the stores it scrapes. politeFetch sets this User-Agent itself on the server, but a browser refuses to let fetch() set it, so the header is applied at the network layer instead. Without this the extension would arrive looking like an ordinary Edge/Chrome visitor, which is exactly the anonymity this project has always declined to take.",
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "User-Agent",
+          "operation": "set",
+          "value": "GamePriceIL/0.1 (personal wishlist price tracker for Israel)"
+        }
+      ]
+    },
+    "condition": {
+      "requestDomains": [
+        "vgs.co.il",
+        "player1.co.il",
+        "arcadia.co.il",
+        "gamestorm.co.il",
+        "ivory.co.il",
+        "bug.co.il"
+      ],
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  }
+]

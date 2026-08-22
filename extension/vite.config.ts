@@ -41,6 +41,19 @@ export default defineConfig({
         find: /^.*\/keys\.ts$/,
         replacement: path.resolve(import.meta.dirname, 'src/keys.browser.ts').split(path.sep).join('/'),
       },
+      {
+        // SQLite for IndexedDB. Everything above the storage layer — capture,
+        // alerts, notifications, CSV export, suggestions — is unchanged.
+        find: /^.*\/db\.ts$/,
+        replacement: path.resolve(import.meta.dirname, 'src/db.browser.ts').split(path.sep).join('/'),
+      },
+      {
+        // Hash recovery drives Playwright, which cannot exist here. The stub
+        // keeps PlayStation searching on the known hash rather than dropping
+        // the source entirely.
+        find: /^.*\/psnHash\.ts$/,
+        replacement: path.resolve(import.meta.dirname, 'src/psnHash.browser.ts').split(path.sep).join('/'),
+      },
     ],
   },
   build: {
