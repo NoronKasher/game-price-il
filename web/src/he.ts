@@ -179,6 +179,26 @@ export const t = {
   depFewerRegions: 'הסתר אזורים',
   depShowRest: (n: number) => `הצג עוד ${n} הצעות`,
   depColSale: 'מבצע',
+  // Summary of the board, under the game — a table of numbers with nothing
+  // summing it up answers "where" but never "is this a lot of money".
+  statsTitle: '📊 סיכום המחירים',
+  statsLow: 'הזול ביותר',
+  statsMedian: 'המחיר האופייני',
+  statsHigh: 'היקר ביותר',
+  statsSpread: 'הפרש',
+  // A multiplier, not a percentage: "×2.3 between cheapest and dearest" lands
+  // instantly, where "+130%" needs a moment's arithmetic to mean anything.
+  statsSpreadPct: (pct: number) => `פי ${(1 + pct / 100).toFixed(1)}`,
+  statsCount: (offers: number, stores: number) => `${offers} הצעות ב־${stores} חנויות`,
+  statsFiltered: 'לפי הסינון הנוכחי',
+  statsIsrael: 'בישראל',
+  statsIsraelOver: (pct: number) => `יקר ב־${pct}% מהזול ביותר`,
+  statsIsraelBest: 'הזול ביותר בלוח',
+  statsRecordedLow: (price: string, when: string) =>
+    when ? `הנמוך ביותר שנרשם: ${price} (${when})` : `הנמוך ביותר שנרשם: ${price}`,
+  statsChecks: (n: number) => `${n} בדיקות מחיר שמורות`,
+  statsOneCheck: 'נרשמה בדיקת מחיר אחת — עוד לא מספיק לגרף.',
+  statsNoHistory: 'אין עדיין היסטוריית מחירים למשחק הזה. הוסיפו אותו למעקב כדי להתחיל לאסוף.',
   // Every row goes somewhere — a comparison that cannot be acted on is trivia.
   depColGo: 'לרכישה',
   depGoAria: (store: string, price: string) => `פתיחת ההצעה ב${store} — ${price} (נפתח בלשונית חדשה)`,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from './api';
 import { nis, platformNames, t } from './he';
 import { DlcPanel } from './DlcPanel';
+import { PriceStats } from './PriceStats';
 import { cleanStoreName, isDirectPurchase, regionLabel, storeFamily } from './source';
 import { offerRisk, boardHasRisk, loadRegionNoticeHidden, saveRegionNoticeHidden, type RowRisk } from './regionRisk';
 import { loadBoardView, type BoardView } from './regions';
@@ -325,6 +326,19 @@ export function DepartureBoard({
               different thing to buy, and mixing them into the board's rows was
               exactly the noise the DLC filter exists to remove. */}
           <DlcPanel title={title} platform={platform} />
+          {/* What the rows on the left add up to. Placed with the game rather
+              than above the table because it is a property of the game, and
+              because a summary that scrolls away with the board is a summary
+              nobody reads. */}
+          {offers !== null && (
+            <PriceStats
+              offers={filtered}
+              title={title}
+              platform={platform}
+              eilat={eilat}
+              filtered={filtered.length !== all.length}
+            />
+          )}
         </aside>
 
         <div className="dt-main">

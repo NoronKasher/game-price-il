@@ -709,6 +709,55 @@ body {
 }
 .dt-full:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 
+/* ── Price summary, under the game in the board's right pane ─────────────── */
+.pstat {
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); direction: rtl;
+}
+.pstat-title {
+  margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--text);
+  letter-spacing: 0.01em;
+}
+.pstat-rows { margin: 0; display: flex; flex-direction: column; gap: 7px; }
+.pstat-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.pstat-row dt { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.pstat-row dd {
+  margin: 0; display: flex; flex-direction: column; align-items: flex-start;
+  text-align: start; min-width: 0;
+}
+.pstat-num {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums;
+  font-size: 14px; font-weight: 600; color: var(--text); direction: ltr;
+}
+/* The cheapest row is the one number people came for. */
+.pstat-row.best .pstat-num { color: var(--amber); font-size: 16px; }
+.pstat-row.spread .pstat-num { color: var(--muted); }
+.pstat-where {
+  font-size: 11px; color: var(--muted); line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis; max-width: 100%; white-space: nowrap;
+}
+.pstat-count { margin: 10px 0 0; font-size: 11.5px; color: var(--muted); }
+.pstat-filtered { color: color-mix(in srgb, var(--amber) 75%, var(--muted)); }
+
+/* Sold here too — the comparison this whole tool exists to make. */
+.pstat-israel {
+  margin: 10px 0 0; padding: 8px 10px; border-radius: 8px;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
+  font-size: 12px;
+}
+.pstat-israel-label { color: var(--muted); }
+.pstat-israel-over { color: var(--up); font-size: 11.5px; }
+.pstat-israel-best { color: var(--down); font-size: 11.5px; }
+
+.pstat-history { margin-top: 12px; }
+.pstat-spark { width: 100%; height: 44px; display: block; overflow: visible; }
+.pstat-spark-line { fill: none; stroke: var(--amber); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.pstat-spark-area { fill: color-mix(in srgb, var(--amber) 12%, transparent); stroke: none; }
+.pstat-spark-low { fill: var(--down); }
+.pstat-recorded { margin: 6px 0 0; font-size: 11.5px; color: var(--text); }
+.pstat-checks { margin: 4px 0 0; font-size: 11px; color: var(--muted); line-height: 1.6; }
+
 /* Filter bar above the board. */
 .dt-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; direction: rtl; }
 .dt-ftoggle {

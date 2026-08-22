@@ -39,6 +39,13 @@ carry a badge explaining what can go wrong — a store may require a payment met
 key may be locked to it. The tool never blocks a purchase and never pretends to be the seller; it says
 what it knows and lets you decide.
 
+**Sums up what it found, under the game.** The cheapest offer and where it is, the typical price (the
+median — one ₪2 Argentinian listing drags an average somewhere no real row sits), the dearest, the
+spread between them, and what the game costs *in Israel* against the cheapest anywhere. It follows the
+filters, so it can never contradict the table beside it, and it costs no extra request. It deliberately
+passes no judgement of its own — that is the verdict engine's job, below, and two of them on one screen
+would eventually disagree.
+
 **Tracks prices over time and tells you whether now is a good moment.** A tracked game records its price
 on a schedule, and the verdict beside it — *cheapest ever recorded*, *cheapest since March*, *12% above
 its low* — is judged against that game's own history, on the same price series shown next to it.
@@ -288,6 +295,7 @@ runs when someone remembers to open it records gaps.
 **Verified end to end**: with a tracked list due for a check, the background
 process recorded 261 new price points on its own, with no window open and no
 browser running. One shop was politely backed off; the rest carried on.
+
 
 ### It repairs PlayStation with its own browser
 
