@@ -49,6 +49,8 @@ interface TrackStatus {
 interface Snapshot {
   capturedAt: string;
   searches: Record<string, SearchResponse>;
+  /** Add-on searches, recorded only for titles that have a catalogue worth showing. */
+  searchesDlc?: Record<string, SearchResponse>;
   offers: Record<string, OffersPayload>;
   meta: Record<string, GameMeta | null>;
   suggest: Record<string, string[]>;
@@ -211,10 +213,13 @@ export const api: typeof LiveApi = {
   async search(q: string, includeDlc = false): Promise<SearchResponse> {
     return live('search', [q, includeDlc], async () => {
       const s = await snap();
-      // Add-ons are absent from the snapshot (games only), so the opt-in box has
-      // nothing extra to reveal — unless the extension is answering, and then it
-      // behaves exactly like the real tool.
-      return s.searches[q.trim().toLowerCase()] ?? searchFallback(s, q);
+      const key = q.trim().toLowerCase();
+      // Add-on searches are recorded separately, and only for titles with a
+      // catalogue worth showing — so the DLC panel has real data to open, and a
+      // title without one falls back to the games-only answer rather than
+      // pretending nothing was found.
+      if (includeDlc && s.searchesDlc?.[key]) return s.searchesDlc[key];
+      return s.searches[key] ?? searchFallback(s, q);
     });
   },
 

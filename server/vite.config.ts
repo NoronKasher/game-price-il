@@ -15,21 +15,33 @@ import { builtinModules } from 'node:module';
  */
 export default defineConfig({
   root: import.meta.dirname,
+  // Vite's SSR mode externalises every dependency by default, whatever
+  // rollupOptions.external says. Naming them here is what actually inlines them.
+  // Inline the whole dependency tree. Naming packages individually left their
+  // own dependencies (body-parser, qs, send…) as bare imports, which is the
+  // worst of both worlds: a bundle that still needs a node_modules beside it.
+  ssr: { noExternal: true, external: ['playwright-core'] },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
     target: 'node22',
     ssr: true,
-    lib: { entry: 'src/index.ts', formats: ['es'], fileName: () => 'server.js' },
+    // .mjs, not .js: the bundle is ESM and the workspace root is not a module
+    // package, so Node would reparse it and warn on every start.
+    lib: { entry: 'src/index.ts', formats: ['es'], fileName: () => 'server.mjs' },
     rollupOptions: {
       external: [
         ...builtinModules,
         ...builtinModules.map((m) => `node:${m}`),
-        'express',
-        'cheerio',
+        // Only playwright-core stays out: it resolves paths to a browser on
+        // disk at runtime, which a bundler cannot follow. express and cheerio
+        // are inlined so a packaged app needs no node_modules beside it —
+        // shipping a partial dependency tree is how installers break.
         'playwright-core',
       ],
-      output: { inlineDynamicImports: true },
+      // SSR lib builds ignore lib.fileName and name the file after the entry,
+      // so the extension has to be set here.
+      output: { inlineDynamicImports: true, entryFileNames: 'index.mjs' },
     },
   },
 });

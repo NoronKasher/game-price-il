@@ -2,16 +2,22 @@
  * Freeze a real run of the tool into a snapshot the static demo can serve.
  *
  * The public demo lives on GitHub Pages, which serves files and nothing else —
- * no Node process, so no SQLite, no scraping, no fifteen-source fan-out. Rather
+ * no Node process, so no SQLite, no scraping, no sixteen-source fan-out. Rather
  * than fake the data (a demo that invents prices is a lie about what the tool
  * found), this drives the REAL server exactly the way the browser does and
  * records every answer.
  *
- * The keys below mirror the shapes the UI actually asks for, so a lookup in the
- * demo always hits: searches by trimmed query, offers/meta by the same
- * `sourceId:sourceGameId|...` refs key DepartureBoard builds, plus platform.
+ * It is INCREMENTAL by necessity, not for convenience. One title costs each
+ * Israeli shop roughly three requests, and the tool holds itself to 200 per shop
+ * per day; capturing sixty in one sitting would spend Player1's entire daily
+ * allowance and then quietly record the rest of the catalogue without it. So
+ * each run tops up the existing snapshot with whatever is missing or stale, and
+ * the library grows over a few days instead of being taken all at once.
  *
- *   node web/demo/capture.mjs            # needs the server on :5174
+ *   node web/demo/capture.mjs                 # top up: stale and missing titles
+ *   node web/demo/capture.mjs --limit 12      # a bounded batch
+ *   node web/demo/capture.mjs --fresh         # start over, ignoring what exists
+ *   node web/demo/capture.mjs --only "Elden Ring,Hades"
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,18 +27,51 @@ const OUT_DIR = path.join(import.meta.dirname, 'public');
 const OUT = path.join(OUT_DIR, 'snapshot.json');
 
 /**
- * Games worth putting in a shop window: each one exercises a different corner
- * of the tool — Israeli discs, key shops, regional console stores, a game with
- * several editions, and one tracked long enough to have a real price graph.
+ * The shop window: sixty titles chosen for VARIETY, not popularity.
+ *
+ * A demo full of the same kind of game proves only that one kind works. This
+ * spreads across PC-only and console-only, physical stock the Israeli shops
+ * actually carry, games with heavy add-on catalogues, deep sales, and small
+ * indies whose prices behave nothing like a AAA release.
  */
 const SEEDS = [
-  'Elden Ring',
-  'God of War Ragnarok',
-  'Borderlands 4',
-  'Hogwarts Legacy',
-  'Cyberpunk 2077',
-  'Far Cry 6',
+  // Multi-platform AAA — the case everything must handle.
+  'Elden Ring', 'God of War Ragnarok', 'Cyberpunk 2077', 'Hogwarts Legacy',
+  'Far Cry 6', 'Borderlands 4', "Baldur's Gate 3", 'Red Dead Redemption 2',
+  'The Witcher 3 Wild Hunt', 'Grand Theft Auto V', 'Assassins Creed Mirage',
+  'Star Wars Jedi Survivor', 'Resident Evil 4', 'Diablo IV', 'Alan Wake 2',
+  "Dragon's Dogma 2", 'Final Fantasy VII Rebirth', 'Ghost of Tsushima',
+  'Horizon Forbidden West', 'The Last of Us Part I', 'Death Stranding',
+  // Big catalogues of add-ons — what the DLC panel is for.
+  'The Sims 4', 'Cities Skylines II', 'Total War Warhammer III',
+  'Sid Meier’s Civilization VI', 'Farming Simulator 22', 'Euro Truck Simulator 2',
+  'Train Simulator', 'Crusader Kings III', 'Stellaris',
+  // Fighting, sport and racing — annual releases, steep discounts.
+  'Street Fighter 6', 'Tekken 8', 'Mortal Kombat 1', 'EA SPORTS FC 25',
+  'NBA 2K25', 'F1 24', 'Forza Horizon 5', 'Gran Turismo 7',
+  // Console-first, where the Israeli shops stock discs.
+  'The Legend of Zelda Tears of the Kingdom', 'Mario Kart 8 Deluxe',
+  'Super Mario Odyssey', 'Metroid Dread', 'Splatoon 3', 'Pokemon Scarlet',
+  'Super Smash Bros Ultimate', 'Animal Crossing New Horizons',
+  "Marvel's Spider-Man 2", 'Astro Bot',
+  // Indies and long-tail — prices that behave nothing like a AAA release.
+  'Hollow Knight Silksong', 'Stardew Valley', 'Hades II', 'Celeste',
+  'Disco Elysium', 'Divinity Original Sin 2', 'No Man’s Sky', 'Subnautica',
+  'Valheim', 'It Takes Two', 'Cuphead', 'Terraria',
 ];
+
+/**
+ * Titles worth recording an add-on search for.
+ *
+ * Every seed would double the cost for nothing: most games have no add-ons, and
+ * the panel only needs enough real examples to show what it does.
+ */
+const DLC_SEEDS = new Set([
+  'Far Cry 6', 'Cyberpunk 2077', 'The Sims 4', 'Cities Skylines II',
+  'Total War Warhammer III', 'Sid Meier’s Civilization VI', 'Crusader Kings III',
+  'Stellaris', 'Elden Ring', 'Hogwarts Legacy', 'Euro Truck Simulator 2',
+  'Borderlands 4',
+]);
 
 /** Prefixes of the seeds, so the autocomplete has something to answer with. */
 function prefixesOf(title) {
@@ -42,26 +81,63 @@ function prefixesOf(title) {
   return [...out].filter((p) => p.length >= 3);
 }
 
-/** Cap the work: a search fans out to fifteen stores, and so does every board. */
-const MAX_GROUPS = 4;
+/** Cap the work per title: a search fans out to sixteen stores, and so does every board. */
+const MAX_GROUPS = 3;
+/** Add-on boards are a sample, not a catalogue. */
+const MAX_DLC_BOARDS = 2;
+/** A title recorded more recently than this is left alone. */
+const MAX_AGE_DAYS = 10;
+/** Stop rather than keep pushing once the shops start refusing. */
+const RATE_LIMIT_GIVE_UP = 8;
+
+const args = process.argv.slice(2);
+const flag = (name) => args.includes(name);
+const value = (name) => {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : undefined;
+};
+
+const fresh = flag('--fresh');
+const limit = Number(value('--limit') ?? Infinity);
+const only = value('--only')
+  ?.split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+fs.mkdirSync(OUT_DIR, { recursive: true });
+
+/** What we already have; a top-up adds to it rather than replacing it. */
+const previous = !fresh && fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, 'utf8')) : null;
 
 const snapshot = {
   capturedAt: new Date().toISOString(),
-  // Recorded so the demo can NAME what it covers. Searches are keyed by
-  // lowercased query; these keep the titles as a person would write them.
   seeds: SEEDS,
-  searches: {},
-  offers: {},
-  meta: {},
-  suggest: {},
-  trackStatus: {},
-  trackDetail: {},
+  searches: previous?.searches ?? {},
+  searchesDlc: previous?.searchesDlc ?? {},
+  offers: previous?.offers ?? {},
+  meta: previous?.meta ?? {},
+  suggest: previous?.suggest ?? {},
+  trackStatus: previous?.trackStatus ?? {},
+  trackDetail: previous?.trackDetail ?? {},
+  /** When each title was last recorded, so a top-up knows what is stale. */
+  capturedTitles: previous?.capturedTitles ?? {},
 };
 
+// Snapshots taken before this bookkeeping existed still hold real searches;
+// treat what they recorded as captured when the file was written, so the first
+// top-up does not re-scrape titles it already has.
+if (previous && Object.keys(snapshot.capturedTitles).length === 0) {
+  for (const key of Object.keys(snapshot.searches)) {
+    snapshot.capturedTitles[key] = previous.capturedAt ?? new Date(0).toISOString();
+  }
+}
+
 let calls = 0;
+let rateLimited = 0;
+
 async function get(url, init) {
   calls++;
-  const res = await fetch(API + url, { ...init, signal: AbortSignal.timeout(120_000) });
+  const res = await fetch(API + url, { ...init, signal: AbortSignal.timeout(180_000) });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return res.json();
 }
@@ -84,29 +160,24 @@ function groupHits(games) {
   return [...map.values()];
 }
 
-async function captureSearch(q) {
-  process.stdout.write(`search "${q}" ... `);
-  const response = await get(`/api/search?q=${encodeURIComponent(q)}`);
-  snapshot.searches[q.trim().toLowerCase()] = response;
-  const groups = groupHits(response.games);
-  // The exactly-matching game first: it is the one the UI auto-opens, so its
-  // board must never be the one we ran out of budget for.
-  groups.sort((a, b) => (b.key === response.queryKey ? 1 : 0) - (a.key === response.queryKey ? 1 : 0));
-  console.log(`${response.games.length} hits, ${groups.length} groups`);
+/** Count how many sources declined because we rate-limited ourselves. */
+function noteRefusals(sources) {
+  for (const s of sources ?? []) if (!s.ok && s.reason === 'rate_limited') rateLimited++;
+}
 
-  for (const g of groups.slice(0, MAX_GROUPS)) {
+async function captureBoards(groups, label) {
+  for (const g of groups) {
     for (const [platform, refs] of g.byPlatform) {
       const key = `${platform}|${refsKey(refs)}`;
       if (snapshot.offers[key]) continue;
       try {
         const [o, m] = await Promise.all([post('/api/offers', { refs, platform }), post('/api/meta', { refs })]);
-        // Stored whole — `sources` carries the honest "this store didn't
-        // answer" notice, which the demo should show exactly as it happened.
         snapshot.offers[key] = o;
         snapshot.meta[refsKey(refs)] = m.meta ?? null;
-        console.log(`  ${g.title} [${platform}] -> ${(o.offers ?? []).length} offers`);
+        noteRefusals(o.sources);
+        console.log(`    ${label} ${g.title} [${platform}] → ${(o.offers ?? []).length} offers`);
       } catch (err) {
-        console.log(`  ${g.title} [${platform}] -> FAILED ${err.message}`);
+        console.log(`    ${label} ${g.title} [${platform}] → FAILED ${err.message}`);
       }
       const status = await get(
         `/api/track/status?title=${encodeURIComponent(g.title)}&platform=${encodeURIComponent(platform)}`
@@ -116,20 +187,91 @@ async function captureSearch(q) {
   }
 }
 
-async function main() {
-  fs.mkdirSync(OUT_DIR, { recursive: true });
-  for (const q of SEEDS) await captureSearch(q);
+/** How many sources actually answered — the measure of a search's quality. */
+const okCount = (r) => (r?.sources ?? []).filter((s) => s.ok && s.count > 0).length;
 
-  process.stdout.write('suggestions ... ');
+async function captureTitle(title) {
+  const key = title.trim().toLowerCase();
+  process.stdout.write(`  "${title}" … `);
+  const response = await get(`/api/search?q=${encodeURIComponent(title)}`);
+  noteRefusals(response.sources);
+  // Never trade a good recording for a worse one. Re-capturing a title while
+  // the shops are standing us down would otherwise replace a full result with
+  // one missing half its stores — the snapshot would get emptier the more
+  // diligently it was refreshed.
+  const existing = snapshot.searches[key];
+  if (existing && okCount(existing) > okCount(response)) {
+    console.log(`kept the earlier recording (${okCount(existing)} sources vs ${okCount(response)} now)`);
+  } else {
+    snapshot.searches[key] = response;
+  }
+  const groups = groupHits(response.games);
+  // The exactly-matching game first: it is the one the UI auto-opens, so its
+  // board must never be the one we ran out of budget for.
+  groups.sort((a, b) => (b.key === response.queryKey ? 1 : 0) - (a.key === response.queryKey ? 1 : 0));
+  console.log(`${response.games.length} hits, ${groups.length} groups`);
+  await captureBoards(groups.slice(0, MAX_GROUPS), '');
+
+  if (DLC_SEEDS.has(title)) {
+    const withDlc = await get(`/api/search?q=${encodeURIComponent(title)}&dlc=1`);
+    snapshot.searchesDlc[key] = withDlc;
+    noteRefusals(withDlc.sources);
+    const addons = groupHits(withDlc.games.filter((h) => h.dlc));
+    console.log(`    add-ons: ${addons.length} found`);
+    await captureBoards(addons.slice(0, MAX_DLC_BOARDS), 'dlc');
+  }
+
+  snapshot.capturedTitles[key] = new Date().toISOString();
+}
+
+/** Titles that need doing this run: missing first, then the most stale. */
+function pending() {
+  const now = Date.now();
+  const wanted = only ? SEEDS.filter((s) => only.includes(s.toLowerCase())) : SEEDS;
+  const scored = wanted
+    .map((title) => {
+      const at = snapshot.capturedTitles[title.trim().toLowerCase()];
+      const ageDays = at ? (now - Date.parse(at)) / 86_400_000 : Infinity;
+      return { title, ageDays };
+    })
+    .filter((s) => only || s.ageDays > MAX_AGE_DAYS)
+    .sort((a, b) => b.ageDays - a.ageDays);
+  return scored.slice(0, limit).map((s) => s.title);
+}
+
+async function main() {
+  const todo = pending();
+  const done = Object.keys(snapshot.capturedTitles).length;
+  console.log(`${done}/${SEEDS.length} titles already recorded; ${todo.length} to do this run\n`);
+  if (todo.length === 0) {
+    console.log('nothing stale enough to re-capture — snapshot left as it is');
+    return;
+  }
+
+  for (const title of todo) {
+    try {
+      await captureTitle(title);
+    } catch (err) {
+      console.log(`  "${title}" → FAILED ${err.message}`);
+    }
+    if (rateLimited >= RATE_LIMIT_GIVE_UP) {
+      console.log(`\nstopping early: the shops are refusing (${rateLimited} self-limited sources).`);
+      console.log('this is the daily budget working. run again tomorrow to continue.');
+      break;
+    }
+  }
+
+  process.stdout.write('\nsuggestions … ');
   const prefixes = new Set();
-  for (const s of SEEDS) for (const p of prefixesOf(s)) prefixes.add(p);
+  for (const s of Object.keys(snapshot.capturedTitles)) for (const p of prefixesOf(s)) prefixes.add(p);
   for (const p of prefixes) {
+    if (snapshot.suggest[p]) continue;
     const r = await get(`/api/suggest?q=${encodeURIComponent(p)}`).catch(() => ({ suggestions: [] }));
     if (r.suggestions?.length) snapshot.suggest[p] = r.suggestions;
   }
   console.log(`${Object.keys(snapshot.suggest).length} prefixes`);
 
-  process.stdout.write('wishlist ... ');
+  process.stdout.write('wishlist … ');
   const wl = await get('/api/wishlist');
   snapshot.wishlist = wl.items ?? [];
   for (const item of snapshot.wishlist) {
@@ -139,43 +281,27 @@ async function main() {
 
   // A machine with no tracking database of its own — a fresh CI checkout, say —
   // would otherwise replace a month of real price history with nothing, turning
-  // the demo's graphs and verdicts back into a search box. Prices are refreshed;
-  // the tracking record is carried forward from the snapshot being replaced.
-  if (snapshot.wishlist.length === 0 && fs.existsSync(OUT)) {
-    const previous = JSON.parse(fs.readFileSync(OUT, 'utf8'));
-    if ((previous.wishlist ?? []).length > 0) {
-      snapshot.wishlist = previous.wishlist;
-      snapshot.trackDetail = previous.trackDetail ?? {};
-      snapshot.carriedTracking = true;
-      console.log(`  (no local tracking data — kept ${snapshot.wishlist.length} games from the previous snapshot)`);
-    }
+  // the demo's graphs and verdicts back into a search box.
+  if (snapshot.wishlist.length === 0 && previous?.wishlist?.length) {
+    snapshot.wishlist = previous.wishlist;
+    snapshot.trackDetail = previous.trackDetail ?? {};
+    snapshot.carriedTracking = true;
+    console.log(`  (no local tracking data — kept ${snapshot.wishlist.length} games from the previous snapshot)`);
   }
 
   snapshot.settings = await get('/api/settings');
 
-  // Deliberately NOT captured.
-  //
-  // Sale alerts are the operator's own inbox — "God of War Ragnarok dropped to
-  // ₪124.76" is a message written to one person about one person's tracking
-  // list, and publishing it puts someone's notifications on a shop window. The
-  // bell and the alert settings still demonstrate the feature; the personal
-  // items do not travel.
+  // Deliberately NOT captured: sale alerts are the operator's own inbox, and a
+  // public demo is the wrong place for someone's notifications.
   snapshot.notifications = [];
-
-  // Key status is reported as unconfigured because in the demo it IS: there is
-  // no server to hold a key and none is shipped. Echoing the capturing
-  // machine's "configured" state would claim otherwise.
+  // Reported unconfigured because in the demo it is true: there is no server to
+  // hold a key and none ships.
   snapshot.keys = { ggdeals: { configured: false, source: 'none' }, itad: { configured: false, source: 'none' } };
+
   snapshot.health = await get('/api/health').catch(() => ({ report: null, due: false }));
   snapshot.psnHash = await get('/api/psn-hash').catch(() => null);
   snapshot.ticker = (await get('/api/ticker').catch(() => ({ deals: [] }))).deals ?? [];
 
-  // The two export buttons are plain links to server routes, which do not
-  // exist on a static host — so the real files are captured and shipped
-  // alongside, and the demo page points the buttons at them.
-  // Skipped when the tracking data was carried forward: the exports describe
-  // that tracking list, and regenerating them from an empty database would
-  // hand the visitor two files containing nothing.
   if (!snapshot.carriedTracking) {
     for (const [route, file] of [
       ['/api/export', 'demo-export.json'],
@@ -188,7 +314,9 @@ async function main() {
 
   fs.writeFileSync(OUT, JSON.stringify(snapshot));
   const kb = Math.round(fs.statSync(OUT).size / 1024);
-  console.log(`\nwrote ${OUT} — ${kb} KB from ${calls} live calls`);
+  const recorded = Object.keys(snapshot.capturedTitles).length;
+  console.log(`\nwrote ${OUT} — ${kb} KB, ${recorded}/${SEEDS.length} titles, ${calls} live calls this run`);
+  if (recorded < SEEDS.length) console.log(`run again to add the remaining ${SEEDS.length - recorded}.`);
 }
 
 main().catch((err) => {

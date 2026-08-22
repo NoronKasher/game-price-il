@@ -47,7 +47,7 @@ function freePort() {
 function paths() {
   const base = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..');
   return {
-    server: path.join(base, 'server', 'dist', 'index.js'),
+    server: path.join(base, 'server', 'dist', 'index.mjs'),
     web: path.join(base, 'web', 'dist'),
   };
 }

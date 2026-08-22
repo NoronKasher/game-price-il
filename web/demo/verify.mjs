@@ -18,6 +18,15 @@ const file = process.argv[2] ?? path.join(import.meta.dirname, 'public', 'snapsh
 /** The Israeli retailers are the reason this tool exists; a snapshot without them is not it. */
 const ISRAELI = ['vgs', 'player1', 'arcadia', 'gamestorm', 'ivory', 'bug'];
 const MIN_ISRAELI = 3;
+/**
+ * Titles the demo needs to be worth showing.
+ *
+ * NOT "all of them": the capture is incremental on purpose — sixty titles would
+ * spend a shop's entire daily allowance in one sitting — so the library fills up
+ * over several days and a partial snapshot is the normal, healthy state. What
+ * must never ship is one so thin that a visitor's first guess finds nothing.
+ */
+const MIN_TITLES = 10;
 const MIN_OFFER_SETS = 30;
 const MIN_TOTAL_OFFERS = 200;
 
@@ -40,8 +49,17 @@ console.log(`checking ${path.basename(file)} (captured ${snapshot.capturedAt ?? 
 const seeds = snapshot.seeds ?? [];
 note(seeds.length >= 4, `${seeds.length} seed games recorded`);
 
-const missingSeeds = seeds.filter((g) => !(snapshot.searches ?? {})[g.trim().toLowerCase()]);
-note(missingSeeds.length === 0, `every seed has a recorded search${missingSeeds.length ? ` (missing: ${missingSeeds.join(', ')})` : ''}`);
+const recorded = seeds.filter((g) => (snapshot.searches ?? {})[g.trim().toLowerCase()]);
+note(
+  recorded.length >= MIN_TITLES,
+  `${recorded.length}/${seeds.length} titles recorded (need ${MIN_TITLES})`
+);
+if (recorded.length < seeds.length) {
+  console.log(`       ${seeds.length - recorded.length} still to capture — run "npm run demo:capture" again`);
+}
+
+const withDlc = Object.keys(snapshot.searchesDlc ?? {}).length;
+console.log(`       ${withDlc} title(s) have a recorded add-on search`);
 
 const offerSets = Object.keys(snapshot.offers ?? {}).length;
 note(offerSets >= MIN_OFFER_SETS, `${offerSets} offer sets (need ${MIN_OFFER_SETS})`);

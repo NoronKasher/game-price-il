@@ -2,7 +2,7 @@
   "name": "game-price-il",
   "private": true,
   "version": "0.1.0",
-  "description": "VGPT.IL (Video Games Price Tracker) — Israeli video game price comparison and wishlist tracker",
+  "description": "VGPT.IL — Israeli video game price comparison and wishlist tracker",
   "workspaces": [
     "server",
     "web"
@@ -19,7 +19,9 @@
     "build:server": "vite build -c server/vite.config.ts",
     "build:desktop": "npm run build && npm run build:server && node desktop/make-icon.mjs",
     "desktop": "npm run build:desktop && electron desktop/main.js",
-    "desktop:smoke": "npm run build:desktop && electron desktop/main.js --smoke"
+    "desktop:smoke": "npm run build:desktop && electron desktop/main.js --smoke",
+    "package:ext": "npm run build:ext && node extension/zip.mjs",
+    "package:desktop": "npm run build:desktop && electron-builder --win"
   },
   "engines": {
     "node": ">=24"
@@ -27,6 +29,9 @@
   "devDependencies": {
     "@types/chrome": "^0.2.7",
     "concurrently": "^9.1.0",
-    "electron": "^43.4.1"
-  }
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3"
+  },
+  "author": "Noron Kasher",
+  "main": "desktop/main.js"
 }

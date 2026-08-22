@@ -11,6 +11,11 @@ const here = import.meta.dirname;
 const dist = path.join(here, 'dist');
 
 fs.mkdirSync(dist, { recursive: true });
+
+// Chrome writes _metadata/ into an unpacked extension's folder when it loads
+// it. It is Chrome's bookkeeping, not ours, and shipping it in a store upload
+// is a rejection waiting to happen.
+fs.rmSync(path.join(dist, '_metadata'), { recursive: true, force: true });
 for (const f of ['manifest.json', 'rules.json']) {
   fs.copyFileSync(path.join(here, f), path.join(dist, f));
 }

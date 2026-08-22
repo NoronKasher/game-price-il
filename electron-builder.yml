@@ -1,0 +1,36 @@
+# Windows installer for the desktop build. See desktop/main.js for what it is.
+appId: il.co.vgpt.desktop
+productName: VGPT.IL
+copyright: Copyright © 2026 Noron Kasher
+
+directories:
+  output: dist_electron
+  buildResources: desktop
+
+# Only the Electron shell goes inside the app bundle. The server and the UI ride
+# alongside as resources, because main.js starts the server as a child process
+# and Node cannot require a file out of an asar archive when run that way.
+files:
+  - desktop/main.js
+  - desktop/icon.png
+  - package.json
+
+extraResources:
+  - from: server/dist
+    to: server/dist
+  - from: web/dist
+    to: web/dist
+
+win:
+  target: nsis
+  icon: desktop/icon-256.png
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  # A price tracker is only useful if it is running, and the app itself offers
+  # the same choice in its tray menu.
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: VGPT.IL

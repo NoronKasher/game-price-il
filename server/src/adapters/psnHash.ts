@@ -1,4 +1,26 @@
-import { chromium, firefox, webkit, type Browser } from 'playwright-core';
+import type { Browser, BrowserType } from 'playwright-core';
+
+/**
+ * Playwright is loaded on demand, never at import time.
+ *
+ * A packaged desktop build bundles the server into one file and cannot carry
+ * Playwright with it — it resolves paths to a browser on disk at runtime, which
+ * no bundler can follow. A static import would therefore stop the whole server
+ * from starting on a machine without it, to protect a feature that only matters
+ * when Sony rotates a hash. Absent, PlayStation simply keeps using the hash it
+ * already has.
+ */
+async function playwright(): Promise<{
+  chromium: BrowserType;
+  firefox: BrowserType;
+  webkit: BrowserType;
+} | null> {
+  try {
+    return await import('playwright-core');
+  } catch {
+    return null;
+  }
+}
 import { getSetting, setSetting } from '../db.ts';
 
 /**
@@ -87,6 +109,9 @@ function hashFromUrl(raw: string): string | null {
 export type BrowserEngine = 'chrome' | 'msedge' | 'chromium' | 'firefox' | 'webkit';
 
 async function launchInstalledBrowser(): Promise<{ browser: Browser; engine: BrowserEngine } | null> {
+  const pw = await playwright();
+  if (!pw) return null;
+  const { chromium, firefox, webkit } = pw;
   for (const channel of CHANNELS) {
     try {
       return { browser: await chromium.launch({ headless: true, channel }), engine: channel };

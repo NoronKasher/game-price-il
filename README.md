@@ -195,6 +195,7 @@ worker imports **the same store adapters, unchanged**.
 
 ```bash
 npm run build:ext     # -> extension/dist, load it unpacked
+npm run package:ext   # -> extension/vgpt-il-extension-<version>.zip
 ```
 
 Verified end to end in a real browser: **all 16 sources, 100 results in 3.9s**
@@ -246,8 +247,9 @@ so a weekly price check depends on the browser being open when it comes due. A
 desktop process does not have that problem.
 
 ```bash
-npm run desktop        # builds the UI, bundles the server, opens the app
-npm run desktop:smoke  # headless check that it starts and answers
+npm run desktop          # builds the UI, bundles the server, opens the app
+npm run desktop:smoke    # headless check that it starts and answers
+npm run package:desktop  # -> dist_electron/VGPT.IL Setup <version>.exe
 ```
 
 It is a background service with a window attached, not the reverse: closing the
@@ -265,14 +267,31 @@ beside the program, so updating or moving the app cannot take it with it. Store
 links open in the real browser, where the user's sessions and payment details
 already are — never inside this window.
 
-Not built yet: an installer. Today it runs from a checkout.
+Closing the window says so the first time rather than vanishing into the tray
+silently, and the tray offers to start with the machine — a tracker that only
+runs when someone remembers to open it records gaps.
+
+**Verified end to end**: with a tracked list due for a check, the background
+process recorded 261 new price points on its own, with no window open and no
+browser running. One shop was politely backed off; the rest carried on.
 
 ## Refreshing the demo snapshot
 
 ```bash
-npm run demo:capture   # drives the real local server, writes web/demo/public/snapshot.json
-npm run build:demo     # builds the static demo into web/dist-demo
+npm run demo:capture              # top up: whatever is missing or stale
+npm run demo:capture -- --limit 12  # a bounded batch
+npm run demo:verify               # refuse to publish a degraded snapshot
+npm run build:demo                # builds the static demo into web/dist-demo
 ```
+
+**The capture is incremental because it has to be.** One title costs each Israeli
+shop about three requests, and the tool holds itself to 200 per shop per day —
+so the sixty-title library fills up over several days rather than being taken in
+one sitting. A run that starts getting refused stops itself and says so.
+
+Two guards keep a refresh from making things worse: a re-capture never replaces
+a recording with one that has fewer stores answering, and `demo:verify` refuses
+to publish a snapshot that lost the Israeli retailers or its tracking history.
 
 Committing the snapshot redeploys the demo via GitHub Actions.
 

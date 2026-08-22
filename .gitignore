@@ -32,3 +32,6 @@ extension/dist/
 # Bundled server output (built by npm run build:server)
 server/dist/
 desktop/icon.png
+desktop/icon-256.png
+extension/*.zip
+dist_electron/
