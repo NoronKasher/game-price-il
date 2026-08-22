@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "concurrently -k -n server,web \"npm run dev -w server\" \"npm run dev -w web\"",
     "build": "npm run build -w web",
+    "build:demo": "npm run build:demo -w web",
+    "demo:capture": "node web/demo/capture.mjs",
     "start": "npm run start -w server",
     "test": "npm run test -w server"
   },

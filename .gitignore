@@ -22,3 +22,6 @@ build/
 Thumbs.db
 .vscode/
 .idea/
+
+# Demo build output (the snapshot itself IS committed, the build is not)
+dist-demo/

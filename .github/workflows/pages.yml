@@ -1,0 +1,68 @@
+# Publish the public demo to GitHub Pages.
+#
+# Pages serves static files, so what ships is the web app built against a
+# recorded snapshot (web/demo/public/snapshot.json) instead of the live server —
+# see web/vite.config.ts. Refreshing the prices means re-running the capture
+# locally and committing the snapshot; this workflow never scrapes anything.
+name: Deploy demo
+
+on:
+  push:
+    branches: [main]
+    # A commit that touches neither the app nor the snapshot cannot change the
+    # demo, so it should not spend a deploy.
+    paths:
+      - 'web/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; the newest push is the one worth publishing.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build the demo
+        # The site lives under /<repo>/, so asset URLs must carry that prefix.
+        env:
+          PAGES_BASE: /${{ github.event.repository.name }}/
+        run: npm run build:demo
+
+      - name: Fail if the snapshot is missing
+        # Without it every request 404s and the page renders an empty tool —
+        # better to break the deploy than to publish a hollow demo.
+        run: test -s web/dist-demo/snapshot.json
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist-demo
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
