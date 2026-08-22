@@ -18,6 +18,8 @@ export interface ProductDescription {
   platforms: Platform[];
   groupKey: string;
   accessory: boolean;
+  /** Add-on content (season pass, credits, soundtrack…) rather than a game. */
+  dlc: boolean;
 }
 
 /** Edition qualifier words that can precede "Edition"/"Bundle" or stand alone at the end. */
@@ -43,6 +45,66 @@ const ACCESSORY_EN =
   /\b(controller|gamepad|joystick|headset|headphones?|thrustmaster|eswap|cockpit|pedals?|shifter|steering|racing wheel|driving wheel|funko|pop!|amiibo|figure|figurine|statue|carrying case|charging|charger|keyboard|mousepad|webcam|dualsense|dualshock|console|oled)\b/i;
 const ACCESSORY_HE =
   /(אוזניות|בקר\b|ג'ויסטיק|הגה|חבילת נהיגה|דוושות|כיסא גיימינג|מטען|פאנקו|בובת|דמות אספנים|תיק נשיאה|מעמד טעינה|קונסולה|עם שלט|שלט אלחוטי|שלט למשחק|שלט)/;
+
+/**
+ * Add-on content sold beside a game: season passes, expansion packs, currency,
+ * soundtracks, upgrades. These are not games, but stores return them from a
+ * search for the game, so without this a search for Far Cry 6 answers with
+ * cards for its Starter Pack, Base Pack and Season Pass.
+ *
+ * Keyword-based and deliberately conservative. Some DLC is named with no tell at
+ * all — Far Cry 6's episodes are called "Collapse" and "Insanity" — and the only
+ * way to catch those would be to assume any title extending another title is an
+ * add-on, which would swallow every sequel ("Far Cry" vs "Far Cry 2"). Missing a
+ * few add-ons is a much smaller harm than hiding a game, so those stay.
+ */
+const DLC_EN = new RegExp(
+  '\\b(' +
+    [
+      'season\\s*pass',
+      'expansion\\s*pass',
+      'expansion',
+      'dlc',
+      'add[\\s-]?on',
+      'soundtrack',
+      'starter\\s*pack',
+      'base\\s*pack',
+      'upgrade\\s*(?:pass|pack|edition)',
+      'map\\s*pack',
+      'character\\s*pack',
+      'skin\\s*pack',
+      'weapon\\s*pack',
+      'booster\\s*pack',
+      '(?:small|medium|large|x-?large|mega|huge|jumbo)\\s*pack',
+      'episode\\s*\\d',
+      'in-?game\\s*commentary',
+      'battle\\s*pass',
+      'free\\s*trial',
+      'demo',
+      '(?:closed|open)\\s*beta',
+    ].join('|') +
+    ')\\b',
+  'i'
+);
+
+/**
+ * In-game currency, which is only an add-on when it is QUANTIFIED or PACKAGED.
+ *
+ * A bare word will not do: "Coin Crypt" is a real game, and matching "coins?"
+ * on its own hid it from search. Real currency listings always carry an amount
+ * ("2400 Credits", "1,000,000 Coins") or say pack ("2200 FUT Points Pack"), so
+ * that is what we require.
+ */
+const DLC_CURRENCY = new RegExp(
+  '\\b(?:\\d[\\d,.]*\\s*(?:fut\\s*)?(?:coins?|credits?|points?|v-?bucks)|(?:coins?|credits?|points?|v-?bucks|currency)\\s*pack)\\b',
+  'i'
+);
+const DLC_HE = /(חבילת\s*הרחבה|הרחבה|פס\s*קול|חבילת\s*מטבעות)/;
+
+/** True when a listing is add-on content rather than the game itself. */
+export function looksLikeDlc(title: string): boolean {
+  return DLC_EN.test(title) || DLC_CURRENCY.test(title) || DLC_HE.test(title);
+}
 
 /** True when a store listing looks like an accessory/collectible rather than a game. */
 export function looksLikeAccessory(title: string): boolean {
@@ -85,6 +147,7 @@ export function describeProduct(rawTitle: string): ProductDescription {
   // Normalize curly/back apostrophes so "Collector’s Edition" matches.
   const raw = rawTitle.replace(/[’`´]/g, "'");
   const accessory = looksLikeAccessory(raw);
+  const dlc = looksLikeDlc(raw);
 
   // 1. platform tokens out (also handles pipe/slash separators)
   const { title: noPlatform, platforms } = stripPlatformTokens(cleanLeading(raw));
@@ -122,6 +185,7 @@ export function describeProduct(rawTitle: string): ProductDescription {
     platforms,
     groupKey: normalizeKey(base),
     accessory,
+    dlc,
   };
 }
 

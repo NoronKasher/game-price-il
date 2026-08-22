@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { parseQuery, type Platform } from './search.ts';
+import { describeProduct } from './normalize.ts';
 import type { GameHit, Offer, SourceAdapter } from './adapters/types.ts';
 import { cheapshark, CHEAPSHARK_HEADERS } from './adapters/cheapshark.ts';
 import { steamRegional } from './adapters/steam.ts';
@@ -145,7 +146,11 @@ app.get('/api/search', async (req, res) => {
   await Promise.all(
     active.map(async (s) => {
       try {
-        const found = await s.search(parsed.title, wanted);
+        // Stores answer a search for a game with its add-ons too, so a search
+        // for Far Cry 6 came back with cards for its Season Pass and credit
+        // packs. Filtered centrally: every source has the same problem, and a
+        // card for something you can't play is never the right answer.
+        const found = (await s.search(parsed.title, wanted)).filter((h) => !describeProduct(h.title).dlc);
         hits.push(...found);
         status.push({ id: s.id, name: s.nameHe, ok: true, count: found.length });
       } catch (err) {
