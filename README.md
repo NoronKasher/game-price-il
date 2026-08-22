@@ -85,6 +85,30 @@ The [live demo](https://noronkasher.github.io/game-price-il/) is honest about be
 
 Run it locally to get all of it.
 
+## Why there is no free hosted live demo
+
+Free hosting that runs this properly does exist — there is a `render.yaml`
+blueprint in the repo for exactly that. The blocker is not the bill.
+
+**One capture costs ~176 requests across the stores, and the tool's own limit is
+200 per host per day.** That budget is sized for one person's wishlist. Shared
+between strangers on a public URL, the first visitor or two would use up the
+day's allowance and everyone after them would be told the stores are rate
+limited — a demo that works until someone shares the link. Raising the ceiling
+would mean one server scraping small Israeli shops on behalf of every passer-by,
+which is the opposite of the deal this project makes with them.
+
+The extension is the answer that scales: each person's own browser, their own
+address, their own small budget. Nothing to host, nothing to pay for, and no
+shop ever sees a crowd arriving through one door.
+
+What free infrastructure IS good for is keeping the recording fresh:
+`.github/workflows/refresh-demo.yml` re-captures weekly (Actions minutes are
+unmetered on public repos), and `npm run demo:verify` refuses to publish a
+snapshot that lost the Israeli retailers or its tracking history — a runner that
+gets treated differently from a person's browser must fail loudly, not ship a
+demo with the local shops quietly missing.
+
 ## Why the demo cannot be live on its own
 
 A page served from GitHub Pages may only fetch a server that opts in with CORS

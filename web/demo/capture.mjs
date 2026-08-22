@@ -137,6 +137,20 @@ async function main() {
   }
   console.log(`${snapshot.wishlist.length} tracked games`);
 
+  // A machine with no tracking database of its own — a fresh CI checkout, say —
+  // would otherwise replace a month of real price history with nothing, turning
+  // the demo's graphs and verdicts back into a search box. Prices are refreshed;
+  // the tracking record is carried forward from the snapshot being replaced.
+  if (snapshot.wishlist.length === 0 && fs.existsSync(OUT)) {
+    const previous = JSON.parse(fs.readFileSync(OUT, 'utf8'));
+    if ((previous.wishlist ?? []).length > 0) {
+      snapshot.wishlist = previous.wishlist;
+      snapshot.trackDetail = previous.trackDetail ?? {};
+      snapshot.carriedTracking = true;
+      console.log(`  (no local tracking data — kept ${snapshot.wishlist.length} games from the previous snapshot)`);
+    }
+  }
+
   snapshot.settings = await get('/api/settings');
 
   // Deliberately NOT captured.
@@ -159,12 +173,17 @@ async function main() {
   // The two export buttons are plain links to server routes, which do not
   // exist on a static host — so the real files are captured and shipped
   // alongside, and the demo page points the buttons at them.
-  for (const [route, file] of [
-    ['/api/export', 'demo-export.json'],
-    ['/api/export.csv', 'demo-export.csv'],
-  ]) {
-    const res = await fetch(API + route, { signal: AbortSignal.timeout(60_000) });
-    fs.writeFileSync(path.join(OUT_DIR, file), Buffer.from(await res.arrayBuffer()));
+  // Skipped when the tracking data was carried forward: the exports describe
+  // that tracking list, and regenerating them from an empty database would
+  // hand the visitor two files containing nothing.
+  if (!snapshot.carriedTracking) {
+    for (const [route, file] of [
+      ['/api/export', 'demo-export.json'],
+      ['/api/export.csv', 'demo-export.csv'],
+    ]) {
+      const res = await fetch(API + route, { signal: AbortSignal.timeout(60_000) });
+      fs.writeFileSync(path.join(OUT_DIR, file), Buffer.from(await res.arrayBuffer()));
+    }
   }
 
   fs.writeFileSync(OUT, JSON.stringify(snapshot));

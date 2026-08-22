@@ -1,0 +1,71 @@
+# Re-capture the demo's prices so the public demo is stale by days, not months.
+#
+# Free: Actions minutes are unmetered for public repositories, and nothing is
+# hosted — the job runs the real server for a few minutes, records what it finds,
+# commits the snapshot and stops. The Pages workflow then redeploys.
+#
+# It runs WEEKLY on purpose. One capture costs ~176 requests spread across the
+# stores, against a self-imposed budget of 200 per host per day; daily would sit
+# on that ceiling for no real benefit, and these are small shops.
+name: Refresh demo snapshot
+
+on:
+  schedule:
+    # Sunday 03:00 UTC — quiet hours for Israeli retailers.
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-demo
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Start the real server
+        run: |
+          npm start > /tmp/server.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:5174/api/settings > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:5174/api/settings > /dev/null || { cat /tmp/server.log; exit 1; }
+
+      - name: Capture live prices
+        run: npm run demo:capture
+
+      # The snapshot is only worth publishing if it still represents the tool.
+      # A runner refused by the Israeli retailers (a datacenter IP is treated
+      # differently from a person's browser) would otherwise quietly ship a
+      # demo with the local shops missing — the very thing this tool is for.
+      - name: Refuse a degraded snapshot
+        run: node web/demo/verify.mjs
+
+      - name: Commit if anything changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/demo/public
+          if git diff --cached --quiet; then
+            echo "prices unchanged — nothing to commit"
+          else
+            git commit -m "Refresh demo prices ($(date -u +%Y-%m-%d))"
+            git push
+          fi
+
+      - name: Server log on failure
+        if: failure()
+        run: cat /tmp/server.log || true

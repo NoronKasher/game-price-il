@@ -14,7 +14,8 @@
     "demo:capture": "node web/demo/capture.mjs",
     "start": "npm run start -w server",
     "test": "npm run test -w server",
-    "build:ext": "npm run build:ext -w web && vite build -c extension/vite.config.ts && vite build -c extension/vite.bridge.config.ts && node extension/pack.mjs"
+    "build:ext": "npm run build:ext -w web && vite build -c extension/vite.config.ts && vite build -c extension/vite.bridge.config.ts && node extension/pack.mjs",
+    "demo:verify": "node web/demo/verify.mjs"
   },
   "engines": {
     "node": ">=24"
