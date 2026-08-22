@@ -135,8 +135,20 @@ async function main() {
   console.log(`${snapshot.wishlist.length} tracked games`);
 
   snapshot.settings = await get('/api/settings');
-  snapshot.keys = await get('/api/keys');
-  snapshot.notifications = (await get('/api/notifications')).items ?? [];
+
+  // Deliberately NOT captured.
+  //
+  // Sale alerts are the operator's own inbox — "God of War Ragnarok dropped to
+  // ₪124.76" is a message written to one person about one person's tracking
+  // list, and publishing it puts someone's notifications on a shop window. The
+  // bell and the alert settings still demonstrate the feature; the personal
+  // items do not travel.
+  snapshot.notifications = [];
+
+  // Key status is reported as unconfigured because in the demo it IS: there is
+  // no server to hold a key and none is shipped. Echoing the capturing
+  // machine's "configured" state would claim otherwise.
+  snapshot.keys = { ggdeals: { configured: false, source: 'none' }, itad: { configured: false, source: 'none' } };
   snapshot.health = await get('/api/health').catch(() => ({ report: null, due: false }));
   snapshot.psnHash = await get('/api/psn-hash').catch(() => null);
   snapshot.ticker = (await get('/api/ticker').catch(() => ({ deals: [] }))).deals ?? [];

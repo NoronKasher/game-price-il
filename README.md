@@ -79,6 +79,7 @@ The [live demo](https://noronkasher.github.io/game-price-il/) is honest about be
 | Changes you make | Kept for your visit, gone on reload — there is no database. |
 | Price history & graphs | Real: ~470 recorded price points across four games over a month. |
 | Add-on (DLC) search | Not captured; the opt-in box has nothing extra to reveal. |
+| Sale alerts | The bell is empty on purpose — alert messages are one person's inbox, so they aren't published. |
 | Live scraping, alerts, auto-capture | Server features — they need a running Node process. |
 
 Run it locally to get all of it.
@@ -146,6 +147,17 @@ Committing the snapshot redeploys the demo via GitHub Actions.
 Working and in daily use, with real gaps: PlayStation needs a periodically-refreshed query hash
 (the app recovers it automatically when a Chromium browser is present), search results still carry
 noise from store catalogs, and the UI is Hebrew-only for now.
+
+## License
+
+Copyright © 2026 Noron Kasher
+
+Licensed under the **GNU Affero General Public License v3.0** — see [LICENSE](LICENSE).
+
+You may use, study, modify and redistribute this software. The AGPL's condition is
+reciprocity: **if you run a modified version as a network service, you must offer its source
+to that service's users.** Regular use, self-hosting an unmodified copy, and contributing back
+are all unaffected.
 
 ---
 
