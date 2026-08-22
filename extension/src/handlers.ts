@@ -9,6 +9,12 @@ import { steamMeta } from '../../server/src/adapters/steam.ts';
 import { steamAppIdOf } from '../../server/src/fanout.ts';
 import { ilsTo } from '../../server/src/rates.ts';
 import { refreshBadge } from './badge.ts';
+import { tickerDeals } from '../../server/src/ticker.ts';
+import { runHealthCheck, lastHealthReport, healthCheckDue } from '../../server/src/health.ts';
+import { hasApiKey, setApiKey, apiKeySource, type ApiKeyName } from './keys.browser.ts';
+import { currentSearchHash, searchHashSource } from '../../server/src/adapters/psn.ts';
+import { noteHashSaved } from './psnHash.browser.ts';
+import { setSetting } from './db.browser.ts';
 import {
   ready,
   flush,
@@ -105,6 +111,11 @@ async function settingsPayload() {
     alerts: getAlertDefaults(),
   };
 }
+
+/** The two bring-your-own-key sources, and how each is currently supplied. */
+const KEY_NAMES: ApiKeyName[] = ['ggdeals', 'itad'];
+const keyStatus = () =>
+  Object.fromEntries(KEY_NAMES.map((n) => [n, { configured: hasApiKey(n), source: apiKeySource(n) }]));
 
 export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> {
   /** Every call loads storage first; the worker may have been killed since the last one. */
@@ -293,6 +304,63 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
       const result = importAll(items);
       await flush();
       return result;
+    }),
+
+    /**
+     * Today's deals. The one call in this whole tool that scrapes nothing:
+     * CheapShark publishes a JSON API and opts into cross-origin use, so the
+     * extension can make it exactly as the server does.
+     */
+    ticker: async () => ({ deals: await tickerDeals() }),
+
+    /**
+     * The adapter canary. GET reads the stored report and makes no requests;
+     * running one is sixteen real probe searches, so — unlike the server, which
+     * schedules it — here it happens only when a person presses the button.
+     * Every user's browser probing every store on a timer would multiply one
+     * server's daily canary by the size of the userbase.
+     */
+    getHealth: withDb(() => ({ report: lastHealthReport(), due: healthCheckDue() })),
+    runHealth: withDb(async () => {
+      const report = await runHealthCheck(sources);
+      await flush();
+      return { report };
+    }),
+
+    /** Bring-your-own-key for GG.deals and ITAD, held in chrome.storage. */
+    getKeys: withDb(() => keyStatus()),
+    setKeys: withDb(async (patch: Partial<Record<ApiKeyName, string>>) => {
+      for (const name of KEY_NAMES) {
+        if (name in patch) setApiKey(name, typeof patch[name] === 'string' ? patch[name]! : null);
+      }
+      return keyStatus();
+    }),
+
+    /**
+     * PlayStation's persisted-query hash.
+     *
+     * Reading and pasting one work here exactly as on the server — which
+     * matters, because until now an extension user whose hash had rotated had
+     * no way at all to fix it, while a server user could paste a fresh one in
+     * half a minute. What is still missing is the automatic recovery: that means
+     * running the store's own page and watching the request it makes, which the
+     * desktop build does with its own Chromium (desktop/psnHash.js) and an
+     * extension cannot do without observing requests it has no permission for.
+     */
+    getPsnHash: withDb(() => ({
+      hash: currentSearchHash(),
+      source: searchHashSource(),
+      browser: null,
+    })),
+    setPsnHash: withDb(async (hash: string) => {
+      const raw = String(hash ?? '').trim().toLowerCase();
+      if (raw && !/^[a-f0-9]{64}$/.test(raw)) {
+        throw new Error('a persisted-query hash is 64 hex characters');
+      }
+      setSetting('psn_search_hash', raw);
+      if (raw) noteHashSaved();
+      await flush();
+      return { ok: true, hash: currentSearchHash(), source: searchHashSource() };
     }),
 
     /** What the limiter currently owes each store — proof the state is real. */

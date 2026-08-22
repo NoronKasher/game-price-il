@@ -93,27 +93,30 @@ export const api: typeof LiveApi = {
    */
   suggest: async () => ({ suggestions: [] }),
 
-  /** Deal ticker and the adapter canary are server-side scheduled jobs. */
-  ticker: async () => ({ deals: [] }),
-  getHealth: async () => ({ report: null, due: false }),
-  runHealth: async () => ({ report: { checkedAt: new Date().toISOString(), adapters: [] } }),
-
-  /** Keys are held in chrome.storage; the settings screen for them is not built yet. */
-  getKeys: async () => ({
-    ggdeals: { configured: false, source: 'none' as const },
-    itad: { configured: false, source: 'none' as const },
-  }),
-  setKeys: async () => ({
-    ggdeals: { configured: false, source: 'none' as const },
-    itad: { configured: false, source: 'none' as const },
-  }),
+  ticker: () => call('ticker'),
 
   /**
-   * PlayStation still searches on the known hash, but cannot yet re-learn a
-   * rotated one: recovery drives Playwright on the server. Reported honestly
-   * rather than as a working feature.
+   * The canary reads its stored report for free; RUNNING one is sixteen real
+   * probe searches, so it stays a button here rather than the scheduled job it
+   * is on the server. One server running a daily canary is one server's worth of
+   * requests; every user's browser doing the same would multiply it by the
+   * userbase, which is not a bargain the stores agreed to.
    */
-  getPsnHash: async () => ({ hash: '', source: 'builtin' as const, browser: null }),
-  setPsnHash: async (hash: string) => ({ ok: false, hash, source: 'builtin' as const }),
+  getHealth: () => call('getHealth'),
+  runHealth: () => call('runHealth'),
+
+  /** Bring-your-own-key for GG.deals and ITAD, held in chrome.storage. */
+  getKeys: () => call('getKeys'),
+  setKeys: (patch: { ggdeals?: string; itad?: string }) => call('setKeys', patch),
+
+  /**
+   * PlayStation's hash can be read and pasted here exactly as on the server.
+   * What is still missing is the automatic recovery: it means running the
+   * store's own page and reading the request it makes — the desktop build does
+   * that with its own Chromium, and an extension cannot without permission to
+   * observe requests it has no other reason to see.
+   */
+  getPsnHash: () => call('getPsnHash'),
+  setPsnHash: (hash: string) => call('setPsnHash', hash),
   recoverPsnHash: async () => ({ found: null, hash: '', source: 'builtin' as const }),
 };

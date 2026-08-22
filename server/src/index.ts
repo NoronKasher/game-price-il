@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { parseQuery, type Platform } from './search.ts';
 import { describeProduct, groupKey } from './normalize.ts';
 import type { GameHit, Offer, SourceAdapter } from './adapters/types.ts';
-import { cheapshark, CHEAPSHARK_HEADERS } from './adapters/cheapshark.ts';
+import { cheapshark } from './adapters/cheapshark.ts';
 import { steamRegional } from './adapters/steam.ts';
 import { epic } from './adapters/epic.ts';
 import { ubisoft } from './adapters/ubisoft.ts';
@@ -65,6 +65,7 @@ import { isAllowedRequestOrigin, resolveListenConfig } from './net.ts';
 import { suggestTitles } from './suggest.ts';
 import { searchGames, offersFor, steamAppIdOf, ALL_PLATFORMS } from './fanout.ts';
 import { historyCsv } from './csv.ts';
+import { tickerDeals } from './ticker.ts';
 import { runHealthCheck, lastHealthReport, healthCheckDue } from './health.ts';
 import { currentSearchHash, searchHashSource } from './adapters/psn.ts';
 import {
@@ -514,55 +515,9 @@ app.post('/api/import', (req, res) => {
   res.json(importAll(req.body));
 });
 
-/**
- * Ticker of today's deals worth caring about. Sorting purely by discount %
- * surfaced obscure $1 shovelware nobody recognizes; instead we sort by
- * CheapShark's "Deal Rating" and require a real Metacritic (≥75) AND strong
- * Steam rating (≥80), so only well-known, well-reviewed games appear. Prices are
- * converted USD → ₪ so they mean something to an Israeli audience.
- */
+/** Ticker of today's deals worth caring about — see ticker.ts for what it picks. */
 app.get('/api/ticker', async (_req, res) => {
-  try {
-    const r = await fetch(
-      'https://www.cheapshark.com/api/1.0/deals?sortBy=Deal%20Rating&metacritic=75&steamRating=80&onSale=1&pageSize=40',
-      { headers: CHEAPSHARK_HEADERS }
-    );
-    const raw = (await r.json()) as Array<{
-      title: string;
-      salePrice: string;
-      normalPrice: string;
-      savings: string;
-      steamRatingPercent?: string;
-    }>;
-    const seen = new Set<string>();
-    const deals = [];
-    for (const d of raw) {
-      if (seen.has(d.title)) continue; // same game repeats once per store
-      seen.add(d.title);
-      const saleUsd = Number(d.salePrice);
-      const normalUsd = Number(d.normalPrice);
-      // Both prices must be real numbers: an unparseable normalPrice would reach
-      // the client as JSON `null` (Math.round(NaN)) and render a blank "original
-      // price" next to a valid sale price.
-      if (!Number.isFinite(saleUsd) || saleUsd <= 0) continue;
-      if (!Number.isFinite(normalUsd) || normalUsd <= 0) continue;
-      deals.push({
-        title: d.title,
-        // Keep agorot. Rounding to whole shekels here distorted the price the
-        // user actually sees: $0.99 → ₪3 → back to $0.98 once the client
-        // formats it in dollars. The client rounds for display; the API keeps
-        // the real converted amount.
-        salePrice: await toILS(saleUsd, 'USD'),
-        normalPrice: await toILS(normalUsd, 'USD'),
-        savings: Math.round(Number(d.savings)),
-        rating: d.steamRatingPercent ? Number(d.steamRatingPercent) : undefined,
-      });
-      if (deals.length >= 15) break;
-    }
-    res.json({ deals });
-  } catch {
-    res.json({ deals: [] });
-  }
+  res.json({ deals: await tickerDeals() });
 });
 
 /**

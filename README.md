@@ -275,9 +275,24 @@ Alarms only fire while the browser is running, and a missed one fires shortly
 after it next starts. At a weekly interval that costs little — and it is the
 honest reason the desktop build exists.
 
-Not yet wired: the search autocomplete (it races store typeaheads on every
-keystroke, which behind a message port means waking the worker per character),
-the deals ticker and the adapter canary — both scheduled server jobs.
+**The rest of the surface is wired now too.** The deals ticker (one CheapShark
+call — a JSON API that opts into cross-origin use, so it scrapes nothing), the
+adapter canary, bring-your-own-key for GG.deals and ITAD, and reading or pasting
+PlayStation's query hash. That last one mattered more than it looks: an extension
+user whose hash had rotated previously had no way at all to fix it, while a
+server user could paste a fresh one in half a minute.
+
+The canary stays a **button** here rather than the scheduled job it is on the
+server. Running it is sixteen real probe searches; one server doing that daily is
+one server's worth of requests, and every user's browser doing the same would
+multiply it by the userbase — not a bargain the stores agreed to.
+
+Still deliberately absent: the search autocomplete, which races store typeaheads
+on every keystroke and behind a message port would mean waking the worker per
+character. And automatic PSN hash recovery, which means running the store's own
+page and reading the request it makes — the desktop build does that with its own
+Chromium; an extension cannot without permission to observe requests it has no
+other reason to see.
 
 ## Desktop app
 
