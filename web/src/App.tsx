@@ -2213,6 +2213,13 @@ function WishlistView({
             ⤓ {t.exportButton}
           </a>
         )}
+        {/* The JSON file above is for re-importing here; this one is for
+            actually reading the numbers somewhere else. */}
+        {items.length > 0 && (
+          <a className="toolbtn" href="/api/export.csv" title={t.exportCsvHint}>
+            {t.exportCsv}
+          </a>
+        )}
         <label className="toolbtn">
           ⤒ {t.importButton}
           <input type="file" accept="application/json" onChange={onImport} hidden />

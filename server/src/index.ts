@@ -63,6 +63,7 @@ import { captureFromView } from './capture.ts';
 import { priceVerdict } from './verdict.ts';
 import { isAllowedRequestOrigin, resolveListenConfig } from './net.ts';
 import { suggestTitles } from './suggest.ts';
+import { historyCsv } from './csv.ts';
 import { runHealthCheck, lastHealthReport, healthCheckDue } from './health.ts';
 import { currentSearchHash, searchHashSource } from './adapters/psn.ts';
 import { discoverSearchHashShared, probeBrowser } from './adapters/psnHash.ts';
@@ -545,6 +546,16 @@ app.get('/api/track/:id/detail', async (req, res) => {
 app.get('/api/export', (_req, res) => {
   res.setHeader('Content-Disposition', 'attachment; filename="game-price-tracking.json"');
   res.json({ version: 1, exportedAt: new Date().toISOString(), items: exportAll() });
+});
+
+/**
+ * The same tracked history as a spreadsheet. The JSON export is for re-importing
+ * into the tool; this is for opening in Sheets or Excel.
+ */
+app.get('/api/export.csv', (_req, res) => {
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="game-price-history.csv"');
+  res.send(historyCsv());
 });
 
 /** Merge a shared tracking file into the local database (input is sanitised in importAll). */
