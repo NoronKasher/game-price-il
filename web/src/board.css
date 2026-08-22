@@ -973,3 +973,58 @@ body {
   border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
 }
 .psn-manual-row input:focus { border-color: var(--amber); outline: none; }
+
+/* ═══════════ Phone layout ═══════════
+   Everything above is designed wide first; this is the pass that makes a 375px
+   screen work. The rule that matters most: nothing may push the page sideways.
+   A horizontally scrolling page makes every tap feel broken, and the header's
+   nav was doing exactly that (440px of buttons in a 375px viewport). */
+@media (max-width: 640px) {
+  .header { padding: 12px 14px; align-items: stretch; }
+  .brand-row { justify-content: center; }
+  .brand h1 { font-size: 24px; }
+  .brand p { font-size: 12px; text-align: center; }
+  /* Wrap instead of overflowing, and let the row centre itself. */
+  .tabs { flex-wrap: wrap; justify-content: center; gap: 6px; }
+  .tabs button { padding: 7px 12px; font-size: 14px; }
+
+  /* The ticker's label eats half a phone screen; the deals are the point. */
+  .ticker { font-size: 13px; }
+  .ticker .label { padding: 2px 9px; font-size: 11px; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
+
+  .main { padding: 18px 14px 44px; }
+  .searchbar { flex-direction: column; }
+  .searchbar input { font-size: 16px; padding: 12px 14px; } /* 16px: iOS won't zoom */
+  .searchbar button { padding: 12px 0; font-size: 16px; }
+  .results { grid-template-columns: 1fr; gap: 12px; }
+
+  /* Filter rows: let them wrap tightly rather than stretch the panel. */
+  .dt-filters, .dt-stores { gap: 6px; }
+  .dt-ftoggle { font-size: 12px; padding: 5px 10px; }
+  .dt-fselect { font-size: 12px; padding: 5px 8px; max-width: 46vw; }
+  .dt-store { font-size: 11px; padding: 3px 7px; }
+  .dt-panel { padding: 14px 12px; }
+
+  /* Settings: stacked rows read better than squeezed two-column ones. */
+  .setting-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .psn-manual-row { flex-direction: column; }
+  .psn-hash { font-size: 10px; }
+  .health-row { grid-template-columns: 10px 1fr auto; }
+  .health-count { display: none; }
+
+  /* The autocomplete list must never be wider than the screen. */
+  .suggest { max-height: 50vh; }
+  .suggest-item { font-size: 14px; }
+}
+
+/* Very narrow phones: the board's four columns stop fitting at all, so the
+   savings column goes — it is the one a buyer can most afford to lose. */
+@media (max-width: 400px) {
+  /* The LAST cell is the savings column. `:nth-of-type` would count spans, not
+     .dep-flap elements, and hid the price instead — the one number the row
+     exists for. */
+  .dep-head span:last-child, .dep-row > span:last-child { display: none; }
+  .dep-head, .dep-row { grid-template-columns: 1fr 46px 76px; gap: 5px; }
+  .dep-risk, .dep-eilat { display: none; }
+  .dep-fold { font-size: 10px; padding: 1px 6px; }
+}
