@@ -70,6 +70,11 @@ a discount that exists only in our arithmetic would be worse than none.
 - No CAPTCHA solving, no Cloudflare circumvention, no rotating proxies or forged fingerprints.
 - Every store gets a minimum 2.5s gap between requests, a daily budget, and exponential back-off on
   429/503/403.
+- **Those limits are written down, not just remembered.** They used to live in process memory on the
+  server side, which meant a daily budget lasted until the next restart — and the desktop build starts
+  at every login. Nothing would have errored; we would simply have been asking harder than we said, and
+  a shop that answered 429 would have been obeyed only until the app was next opened. Both shells now
+  persist the counters, the back-off and the last-request time.
 - `robots.txt` is respected. Several Israeli retailers are **absent from the list above for exactly this
   reason** — they disallow it, or sit behind a challenge we won't work around. They stay unsupported.
 
@@ -252,11 +257,27 @@ elsewhere. Six tests cover the chunking, the quota overflow and the merge; the
 desktop app's file backup is the answer for keeping history
 ([docs/CLOUD-BACKUP.md](docs/CLOUD-BACKUP.md)).
 
-Not yet wired: background price capture (the `alarms` permission is declared but
-no alarm is registered, so the extension only re-prices when the app is open),
-the search autocomplete (it races store typeaheads on every keystroke, which
-behind a message port means waking the worker per character), the deals ticker
-and the adapter canary — both scheduled server jobs.
+**It re-prices the tracked list on its own.** A `chrome.alarms` alarm looks every
+six hours and acts only on games past their own interval — the same rule the
+server's scheduler uses, shared rather than copied. Anything the alerts raise
+while nobody is looking lands on the toolbar badge, since a bell inside a tab
+that isn't open is not a notification.
+
+Two traps this had to avoid, both silent: `chrome.alarms.create` **replaces** an
+alarm of the same name and restarts its period, so creating one at module scope —
+which runs on every service-worker restart — would push the next firing six hours
+out each time and it would never fire at all. And a chain of `fetch` calls does
+not reset MV3's idle timer, so a capture across sixteen stores would be killed a
+few requests in and leave the history half-written. Ten tests cover the due rule,
+the run, and the alarm registration.
+
+Alarms only fire while the browser is running, and a missed one fires shortly
+after it next starts. At a weekly interval that costs little — and it is the
+honest reason the desktop build exists.
+
+Not yet wired: the search autocomplete (it races store typeaheads on every
+keystroke, which behind a message port means waking the worker per character),
+the deals ticker and the adapter canary — both scheduled server jobs.
 
 ## Desktop app
 

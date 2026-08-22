@@ -20,7 +20,7 @@ import { bug } from './adapters/bug.ts';
 import { xbox } from './adapters/xbox.ts';
 import { nintendo } from './adapters/nintendo.ts';
 import { psn } from './adapters/psn.ts';
-import { RateLimitedError } from './adapters/politeFetch.ts';
+import { RateLimitedError, setPoliteStore } from './adapters/politeFetch.ts';
 import {
   addToWishlist,
   listWishlist,
@@ -59,7 +59,7 @@ import { toILS, ilsTo } from './rates.ts';
 import { hasApiKey, setApiKey, apiKeySource, type ApiKeyName } from './keys.ts';
 import { isAlertMode, isAlertScope } from './alerts.ts';
 import { evaluateAlerts } from './notify.ts';
-import { captureFromView } from './capture.ts';
+import { captureFromView, isCaptureDue } from './capture.ts';
 import { priceVerdict } from './verdict.ts';
 import { isAllowedRequestOrigin, resolveListenConfig } from './net.ts';
 import { suggestTitles } from './suggest.ts';
@@ -74,6 +74,7 @@ import {
   probeBrowser,
 } from './adapters/psnHash.ts';
 import { setSetting } from './db.ts';
+import { sqlitePoliteStore } from './politeStore.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Gentle spacing between games in a batch capture, so many tracked games don't
@@ -115,6 +116,11 @@ const sources: SourceAdapter[] = [
   xbox,
   nintendo,
 ];
+
+// Before any adapter can fetch: point the rate limiter at storage that outlives
+// this process. The desktop build starts at every login, and without this each
+// boot handed itself a fresh daily budget for shops it had already spent one on.
+setPoliteStore(sqlitePoliteStore);
 
 const app = express();
 app.use(express.json({ limit: '25mb' })); // imported tracking files can be large
@@ -566,17 +572,10 @@ app.get('/api/ticker', async (_req, res) => {
  * that are actually due, so a game set to "every 7 days" is scraped weekly, not
  * every few hours. Runs only for games the user chose to track.
  */
-const DAY_MS = 24 * 60 * 60 * 1000;
 const CAPTURE_CHECK_MS = 6 * 60 * 60 * 1000; // how often we look for due games
 
-function isDue(item: WishlistRow, globalDays: number): boolean {
-  const last = lastCheckedAt(item.id);
-  if (!last) return true; // never captured yet
-  const intervalDays = item.capture_days ?? globalDays;
-  const lastMs = Date.parse(last.replace(' ', 'T') + 'Z'); // checked_at is UTC
-  if (!Number.isFinite(lastMs)) return true;
-  return Date.now() - lastMs >= intervalDays * DAY_MS;
-}
+const isDue = (item: WishlistRow, globalDays: number): boolean =>
+  isCaptureDue(lastCheckedAt(item.id), item.capture_days, globalDays);
 
 async function autoCapture(): Promise<void> {
   const items = listWishlist();

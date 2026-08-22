@@ -21,6 +21,28 @@ import { evaluateAlerts } from './notify.ts';
 
 /** Re-anchor the series this often even when nothing moved. */
 const ANCHOR_MS = 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Is this game due for a scheduled re-check?
+ *
+ * Lives here so the server's scheduler and the extension's alarm ask the same
+ * question. They had drifted into being two schedulers with one of them missing
+ * entirely; the rule that decides how often a shop is asked about a game is not
+ * something to keep two copies of.
+ *
+ * `lastChecked` is the UTC "YYYY-MM-DD HH:MM:SS" the database stores.
+ */
+export function isCaptureDue(
+  lastChecked: string | null,
+  captureDays: number | null,
+  globalDays: number
+): boolean {
+  if (!lastChecked) return true; // never captured
+  const lastMs = Date.parse(lastChecked.replace(' ', 'T') + 'Z');
+  if (!Number.isFinite(lastMs)) return true;
+  return Date.now() - lastMs >= (captureDays ?? globalDays) * DAY_MS;
+}
 
 /** One offer's identity for change detection: source + bucket + price (2dp). */
 const offerKey = (store: string, region: string | null, kind: string | null, priceILS: number) =>

@@ -8,6 +8,7 @@ import { historyCsv } from '../../server/src/csv.ts';
 import { steamMeta } from '../../server/src/adapters/steam.ts';
 import { steamAppIdOf } from '../../server/src/fanout.ts';
 import { ilsTo } from '../../server/src/rates.ts';
+import { refreshBadge } from './badge.ts';
 import {
   ready,
   flush,
@@ -263,11 +264,15 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
     markNotificationsRead: withDb(async () => {
       markNotificationsRead();
       await flush();
+      // The toolbar badge is the only sign a background capture leaves; reading
+      // the bell is what makes it stale.
+      refreshBadge();
       return { ok: true };
     }),
     clearNotifications: withDb(async () => {
       clearNotifications();
       await flush();
+      refreshBadge();
       return { ok: true };
     }),
 

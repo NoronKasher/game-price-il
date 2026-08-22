@@ -54,13 +54,17 @@ export interface HostState {
 /**
  * Where the per-host limits live.
  *
- * On the server this is process memory, which is fine because the process
- * outlives the work. In an MV3 extension the service worker is killed after
- * ~30s idle and restarted on the next event — so an in-memory counter would
- * reset to zero mid-fan-out and the daily budget, the back-off and the 2.5s
- * spacing would all quietly stop being enforced. Silently scraping harder than
- * promised is the one failure this module exists to prevent, so the state is
- * pluggable and the extension supplies a persisted implementation.
+ * The default below is process memory, which enforces nothing across a restart —
+ * so every shell that matters supplies something that remembers:
+ *   - the extension, because MV3 kills its service worker after ~30s idle and an
+ *     in-memory counter would reset mid-fan-out (extension/src/politeStorage.ts);
+ *   - the server, because the desktop build starts at every login and would
+ *     otherwise hand itself a fresh daily budget each boot (../politeStore.ts).
+ *
+ * Silently scraping harder than promised is the one failure this module exists
+ * to prevent, and a counter that forgets is exactly that failure with none of
+ * the symptoms: nothing errors, and a shop that asked us to wait an hour is
+ * obeyed only until the process next stops.
  */
 export interface PoliteStore {
   get(host: string): Promise<HostState | null>;
@@ -79,7 +83,7 @@ const memoryStore: PoliteStore = {
 
 let store: PoliteStore = memoryStore;
 
-/** Swap the limit storage (the extension persists it; the server does not need to). */
+/** Swap the limit storage. Both real shells do; only tests run on the memory one. */
 export function setPoliteStore(next: PoliteStore): void {
   store = next;
 }

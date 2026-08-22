@@ -3,6 +3,7 @@ import { chromeStoragePoliteStore, politeSnapshot } from './politeStorage.ts';
 import { makeHandlers, type Handler } from './handlers.ts';
 import { setChangeListener } from './db.browser.ts';
 import { scheduleSyncPush, startSyncMirror } from './syncMirror.ts';
+import { startAutoCapture } from './autoCapture.ts';
 import type { SourceAdapter } from '../../server/src/adapters/types.ts';
 
 import { cheapshark } from '../../server/src/adapters/cheapshark.ts';
@@ -75,6 +76,11 @@ setPoliteStore(chromeStoragePoliteStore);
 // and restarted constantly, and this has to be in place on every wake-up.
 setChangeListener(scheduleSyncPush);
 startSyncMirror();
+
+// Re-price the tracked list on a schedule. Without this the extension only ever
+// checked a price when somebody opened the game — which is the one moment they
+// did not need to be told.
+startAutoCapture(sources);
 
 /**
  * A fan-out takes far longer than MV3's ~30s idle timeout allows.
