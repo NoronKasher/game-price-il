@@ -3,7 +3,7 @@ import type { Platform } from '../search.ts';
 import { toILS, canConvert } from '../rates.ts';
 import { describeProduct, parseLocalizedPrice } from '../normalize.ts';
 import { getSetting } from '../db.ts';
-import { discoverSearchHash, hashDiscoveryDue } from './psnHash.ts';
+import { discoverSearchHashShared, hashDiscoveryDue } from './psnHash.ts';
 import { REGIONS } from '../regions.ts';
 
 /**
@@ -308,6 +308,9 @@ async function priceOf(locale: string, productId: string): Promise<RegionPrice |
   return { currency: cc[1]!, value, base: base ?? value };
 }
 
+/** How long a request will wait on hash recovery before giving up on it. */
+const RECOVERY_BUDGET_MS = 12_000;
+
 /**
  * gqlSearch, plus one automatic attempt to recover a rotated hash.
  *
@@ -327,7 +330,15 @@ async function gqlSearchRecovering(
     return await gqlSearch(term, country, lang, pageSize);
   } catch (err) {
     if (!(err instanceof PsnHashError) || !hashDiscoveryDue()) throw err;
-    const fresh = await discoverSearchHash();
+    // Start the recovery, but never make a user wait out a cold browser start.
+    // If it lands inside the budget the request is saved outright; if not it
+    // keeps running and persists the hash, so the next search or the nightly
+    // capture succeeds. Either way this request fails fast and honestly rather
+    // than hanging for minutes.
+    const fresh = await Promise.race([
+      discoverSearchHashShared(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), RECOVERY_BUDGET_MS)),
+    ]);
     if (!fresh) throw err;
     console.log('psn: recovered a fresh search hash automatically');
     return gqlSearch(term, country, lang, pageSize);
