@@ -837,6 +837,8 @@ function SearchView({
   const [expanded, setExpanded] = useState<{ key: string; platform: Platform } | null>(null);
   const [flight, setFlight] = useState<FlightState | null>(null);
   const [absorb, setAbsorb] = useState<'active' | 'done' | null>(null);
+  /** The results grid, so opening a board can scroll its top into view. */
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   const prefersReducedMotion = () =>
     typeof window !== 'undefined' &&
@@ -852,7 +854,21 @@ function SearchView({
     }
     const animate = openAnim && !prefersReducedMotion() && !!cardEl;
     // Capture the card's on-screen box BEFORE React removes it from the grid.
-    const fromRect = animate && cardEl ? cardEl.getBoundingClientRect() : null;
+    let fromRect = animate && cardEl ? cardEl.getBoundingClientRect() : null;
+
+    // The board always opens at the TOP of the results, so bring that into view
+    // in the same beat. Without it, clicking a card far down the grid opens a
+    // board above the fold and the page appears to have done nothing.
+    const scrolledFrom = window.scrollY;
+    const resultsTop = resultsRef.current?.getBoundingClientRect().top ?? 0;
+    window.scrollTo({ top: Math.max(0, scrolledFrom + resultsTop - 12), behavior: 'auto' });
+    // Jumping moves the card's box out from under the clone, which is positioned
+    // in viewport coordinates — shift the captured box by however far we went.
+    const delta = window.scrollY - scrolledFrom;
+    if (fromRect && delta !== 0) {
+      fromRect = new DOMRect(fromRect.left, fromRect.top - delta, fromRect.width, fromRect.height);
+    }
+
     setExpanded({ key: g.key, platform });
     if (fromRect) {
       setAbsorb('active');
@@ -938,6 +954,9 @@ function SearchView({
     return [...map.values()];
   }, [result]);
 
+  /** The group whose board is open, if it is still in the current results. */
+  const openGroup = expanded ? groups.find((g) => g.key === expanded.key) : undefined;
+
   /**
    * Go straight to the game when the search names one exactly.
    *
@@ -1008,32 +1027,38 @@ function SearchView({
         </div>
       )}
 
-      <div className="results">
+      {/* The open board sits ABOVE the grid, never inside it.
+          Opened in place, it left whichever cards happened to be earlier in the
+          row sitting above the game the user had just chosen — so a search for
+          Cyberpunk 2077 showed its board with "Ultimate Edition" hanging over
+          it. Which cards those were depended only on grid position, which is
+          not a reason for anything to be above the thing you asked for. */}
+      {openGroup && expanded && (
+        <div className="board-slot">
+          <DepartureBoard
+            key={openGroup.key}
+            title={openGroup.title}
+            platform={expanded.platform}
+            image={openGroup.image}
+            preferred={preferred}
+            absorb={absorb}
+            platforms={[...openGroup.byPlatform.keys()]}
+            onSwitchPlatform={(p) => switchPlatform(openGroup.key, p)}
+            refs={(openGroup.byPlatform.get(expanded.platform) ?? []).map((h) => ({
+              sourceId: h.sourceId,
+              sourceGameId: h.sourceGameId,
+            }))}
+            onOpenFull={() => onOpen(openGroup, expanded.platform)}
+            onClose={closeBoard}
+          />
+        </div>
+      )}
+
+      <div className="results" ref={resultsRef}>
         {groups.map((g) => {
-          const isOpen = expanded != null && expanded.key === g.key;
-          // The opened card has gone INTO the board, so it isn't drawn in the
-          // grid anymore — the board (which carries the same art + title) takes
-          // its place. Every other card renders as usual.
-          if (isOpen && expanded) {
-            return (
-              <DepartureBoard
-                key={g.key}
-                title={g.title}
-                platform={expanded.platform}
-                image={g.image}
-                preferred={preferred}
-                absorb={absorb}
-                platforms={[...g.byPlatform.keys()]}
-                onSwitchPlatform={(p) => switchPlatform(g.key, p)}
-                refs={(g.byPlatform.get(expanded.platform) ?? []).map((h) => ({
-                  sourceId: h.sourceId,
-                  sourceGameId: h.sourceGameId,
-                }))}
-                onOpenFull={() => onOpen(g, expanded.platform)}
-                onClose={closeBoard}
-              />
-            );
-          }
+          // The opened card has gone INTO the board above, so it isn't drawn in
+          // the grid; the remaining results keep their order below it.
+          if (expanded != null && expanded.key === g.key) return null;
           return (
             <article className="card" key={g.key}>
               {g.image ? <img src={safeUrl(g.image)} alt={g.title} loading="lazy" /> : <div className="noart">{g.title}</div>}

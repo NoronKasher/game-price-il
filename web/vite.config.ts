@@ -79,6 +79,7 @@ function demoBanner(): Plugin {
   #demo-note strong { color: #ffcc55; }
   #demo-note a { color: #7fc4ff; }
   #demo-note .demo-fine { color: #9fb3c8; font-size: .8rem; }
+  #demo-note.live { background: #12301f; border-bottom-color: #2f6b45; }
   #demo-note .demo-games { display: flex; flex-wrap: wrap; gap: .35rem; margin: .35rem 0; }
   #demo-note .demo-game {
     font: inherit; font-size: .8rem; cursor: pointer;
@@ -91,8 +92,10 @@ function demoBanner(): Plugin {
     color: inherit; cursor: pointer; font-size: 1rem; padding: 0 .3rem;
   }
   /* The app's empty state blames the query ("try an English name"), which is
-     wrong here — in the demo an unknown game is expected, not a mistake. */
-  .empty::after {
+     wrong here — in the demo an unknown game is expected, not a mistake. Scoped
+     so it disappears once the extension is answering: then an unknown game
+     really did find nothing, and blaming the snapshot would be the lie. */
+  html:not(.vgpt-live) .empty::after {
     content: "בהדגמה מוצגים רק המשחקים שברשימה למעלה. הכלי המלא מחפש בכל החנויות בזמן אמת.";
     display: block; margin-top: .6rem; color: #9fb3c8; font-size: .85rem;
   }
@@ -108,6 +111,22 @@ function demoBanner(): Plugin {
     var csv = a.getAttribute('href') === '/api/export.csv';
     window.location.href = (csv ? 'demo-export.csv' : 'demo-export.json');
   }, true);
+
+  // With the extension installed the page is not a recording any more: it can
+  // ask the extension for today's prices, so the notice must stop claiming
+  // otherwise. The content script sets this before the page scripts run.
+  if (document.documentElement.dataset.vgptExtension) {
+    document.documentElement.classList.add('vgpt-live');
+    var note = document.getElementById('demo-note');
+    if (note) {
+      note.classList.add('live');
+      note.innerHTML =
+        '<button type="button" class="demo-x" aria-label="סגירה" onclick="this.parentElement.remove()">✕</button>' +
+        '<p><strong>מחירים חיים</strong> — ' +
+        'התוסף מותקן, אז החיפוש רץ מול החנויות בזמן אמת ' +
+        'ולא מול הצילום. רשימת המעקב עדיין של ההדגמה.</p>';
+    }
+  }
 
   // Naming the captured games is only useful if trying one is a click. React
   // owns the input, so its value has to be set through the native setter for

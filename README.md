@@ -81,8 +81,34 @@ The [live demo](https://noronkasher.github.io/game-price-il/) is honest about be
 | Add-on (DLC) search | Not captured; the opt-in box has nothing extra to reveal. |
 | Sale alerts | The bell is empty on purpose — alert messages are one person's inbox, so they aren't published. |
 | Live scraping, alerts, auto-capture | Server features — they need a running Node process. |
+| **With the extension installed** | **The demo goes live**: searches run against the real stores instead of the snapshot. See below. |
 
 Run it locally to get all of it.
+
+## Why the demo cannot be live on its own
+
+A page served from GitHub Pages may only fetch a server that opts in with CORS
+headers, and the stores that matter here do not. Measured from the demo itself:
+
+| source | a web page may fetch it |
+|---|---|
+| CheapShark | yes |
+| Steam | **no** |
+| VGS, Ivory (Israeli retailers) | **no** |
+
+That is the browser's same-origin policy, not something the code can work
+around. The only ways past it are a proxy server — which would mean hosting, and
+routing strangers' scraping through it — or an extension, which has host
+permissions.
+
+So the demo does the third thing: **if the VGPT extension is installed, the demo
+detects it and searches live.** The banner turns green and says so; without the
+extension nothing changes and it stays the recording.
+
+The bridge is deliberately narrow. It relays `search`, `offers`, `meta` and
+`sources` — nothing else. The extension can also read and modify tracked games,
+and a web page has no business reaching that, so the content script refuses
+anything outside that list even though the page is our own.
 
 ## Run it locally
 

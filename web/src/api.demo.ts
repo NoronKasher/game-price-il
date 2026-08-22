@@ -144,24 +144,93 @@ function searchFallback(s: Snapshot, q: string): SearchResponse {
   };
 }
 
+
+/**
+ * If the VGPT extension is installed, the demo stops being a recording.
+ *
+ * A page on GitHub Pages cannot fetch the stores itself — CheapShark opts in
+ * with CORS headers, but Steam, VGS and Ivory do not, so the browser refuses.
+ * An extension has host permissions and no such limit, so when its content
+ * script announces itself we route price lookups through it and show today's
+ * prices instead of the captured ones. Everything else — the tracked list, the
+ * settings — stays on the snapshot, because a web page has no business reaching
+ * into someone's extension storage.
+ */
+export function extensionVersion(): string | null {
+  return document.documentElement.dataset.vgptExtension ?? null;
+}
+
+let bridgeId = 0;
+const bridgeWaiting = new Map<number, (msg: { result?: unknown; error?: string }) => void>();
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('message', (event) => {
+    if (event.source !== window || event.origin !== window.location.origin) return;
+    const d = event.data as { __vgpt?: string; id?: number; result?: unknown; error?: string } | null;
+    if (!d || d.__vgpt !== 'res' || typeof d.id !== 'number') return;
+    const waiting = bridgeWaiting.get(d.id);
+    if (!waiting) return;
+    bridgeWaiting.delete(d.id);
+    waiting(d);
+  });
+}
+
+/** Ask the extension. Rejects on timeout so a live call can fall back cleanly. */
+function viaExtension<T>(method: string, args: unknown[], timeoutMs = 90_000): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const id = ++bridgeId;
+    const timer = setTimeout(() => {
+      bridgeWaiting.delete(id);
+      reject(new Error('extension timed out'));
+    }, timeoutMs);
+    bridgeWaiting.set(id, (msg) => {
+      clearTimeout(timer);
+      if (msg.error) reject(new Error(msg.error));
+      else resolve(msg.result as T);
+    });
+    window.postMessage({ __vgpt: 'req', id, method, args }, window.location.origin);
+  });
+}
+
+/**
+ * Live when the extension is there, recorded when it is not.
+ *
+ * The fallback is deliberate: an extension that is installed but wedged should
+ * cost the visitor a slower answer, never a blank page.
+ */
+async function live<T>(method: string, args: unknown[], recorded: () => T | Promise<T>): Promise<T> {
+  if (!extensionVersion()) return recorded();
+  try {
+    return await viaExtension<T>(method, args);
+  } catch {
+    return recorded();
+  }
+}
+
 export const api: typeof LiveApi = {
-  async search(q: string, _includeDlc = false): Promise<SearchResponse> {
-    const s = await snap();
-    // Add-ons are deliberately absent from the snapshot (games only), so the
-    // opt-in box has nothing extra to reveal here. See README → demo limits.
-    void _includeDlc;
-    return s.searches[q.trim().toLowerCase()] ?? searchFallback(s, q);
+  async search(q: string, includeDlc = false): Promise<SearchResponse> {
+    return live('search', [q, includeDlc], async () => {
+      const s = await snap();
+      // Add-ons are absent from the snapshot (games only), so the opt-in box has
+      // nothing extra to reveal — unless the extension is answering, and then it
+      // behaves exactly like the real tool.
+      return s.searches[q.trim().toLowerCase()] ?? searchFallback(s, q);
+    });
   },
 
   async offers(refs: SourceRef[], platform: string) {
-    const s = await snap();
-    const payload = s.offers[`${platform}|${refsKey(refs)}`];
-    return { offers: payload?.offers ?? [], partial: payload?.partial, sources: payload?.sources ?? [] };
+    return live('offers', [refs, platform], async () => {
+      const s = await snap();
+      const payload = s.offers[`${platform}|${refsKey(refs)}`];
+      return { offers: payload?.offers ?? [], partial: payload?.partial, sources: payload?.sources ?? [] };
+    });
   },
 
   async meta(refs: SourceRef[]) {
-    const s = await snap();
-    return { meta: s.meta[refsKey(refs)] ?? null };
+    return live('meta', [refs], async () => {
+      const s = await snap();
+      return { meta: s.meta[refsKey(refs)] ?? null };
+    });
   },
 
   async suggest(q: string) {
