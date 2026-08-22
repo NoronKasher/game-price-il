@@ -47,6 +47,9 @@ const MAX_GROUPS = 4;
 
 const snapshot = {
   capturedAt: new Date().toISOString(),
+  // Recorded so the demo can NAME what it covers. Searches are keyed by
+  // lowercased query; these keep the titles as a person would write them.
+  seeds: SEEDS,
   searches: {},
   offers: {},
   meta: {},
