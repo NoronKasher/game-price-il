@@ -41,14 +41,48 @@ function pruneCache(): void {
   }
 }
 
-interface HostState {
+export interface HostState {
   /** UTC day (YYYY-MM-DD) the counter belongs to. */
   day: string;
   count: number;
   /** Epoch ms until which this host is backed off; 0 = clear. */
   pausedUntil: number;
+  /** Epoch ms of the last request actually sent to this host. */
+  lastAt: number;
 }
-const hostState = new Map<string, HostState>();
+
+/**
+ * Where the per-host limits live.
+ *
+ * On the server this is process memory, which is fine because the process
+ * outlives the work. In an MV3 extension the service worker is killed after
+ * ~30s idle and restarted on the next event — so an in-memory counter would
+ * reset to zero mid-fan-out and the daily budget, the back-off and the 2.5s
+ * spacing would all quietly stop being enforced. Silently scraping harder than
+ * promised is the one failure this module exists to prevent, so the state is
+ * pluggable and the extension supplies a persisted implementation.
+ */
+export interface PoliteStore {
+  get(host: string): Promise<HostState | null>;
+  set(host: string, state: HostState): Promise<void>;
+}
+
+const memory = new Map<string, HostState>();
+const memoryStore: PoliteStore = {
+  async get(host) {
+    return memory.get(host) ?? null;
+  },
+  async set(host, state) {
+    memory.set(host, state);
+  },
+};
+
+let store: PoliteStore = memoryStore;
+
+/** Swap the limit storage (the extension persists it; the server does not need to). */
+export function setPoliteStore(next: PoliteStore): void {
+  store = next;
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const today = () => new Date().toISOString().slice(0, 10);
@@ -71,14 +105,14 @@ export class RateLimitedError extends Error {
   }
 }
 
-function getState(host: string): HostState {
+async function getState(host: string): Promise<HostState> {
   const now = today();
-  let st = hostState.get(host);
-  if (!st || st.day !== now) {
-    st = { day: now, count: 0, pausedUntil: st?.pausedUntil ?? 0 };
-    hostState.set(host, st);
-  }
-  return st;
+  const saved = await store.get(host);
+  if (saved && saved.day === now) return saved;
+  // A new day resets the request count, but NOT the back-off or the last-request
+  // time: a store that asked us to stand down at 23:59 is still standing us down
+  // at 00:01, and midnight is not permission to skip the spacing.
+  return { day: now, count: 0, pausedUntil: saved?.pausedUntil ?? 0, lastAt: saved?.lastAt ?? 0 };
 }
 
 /**
@@ -119,6 +153,10 @@ export async function politeFetch(url: string): Promise<string> {
   lastRequest.set(host, new Promise<void>((r) => (release = r)));
   await previous;
 
+  // Hoisted so `finally` can record the request time and any back-off, whether
+  // this call succeeded, failed, or threw before sending anything.
+  let st: HostState | null = null;
+  let sent = false;
   try {
     // Budget and back-off are checked HERE, inside the per-host critical section,
     // not before queueing. Requests wait their turn for minutes, so a check made
@@ -126,18 +164,30 @@ export async function politeFetch(url: string): Promise<string> {
     // the gate together, then keep hammering a store that has since answered 429
     // — exactly the standing-down this module exists to guarantee. Re-reading the
     // state (and incrementing the counter) under the lock makes both limits real.
-    const st = getState(host);
+    st = await getState(host);
     if (st.pausedUntil > Date.now()) {
       throw new RateLimitedError(host, 'backoff', st.pausedUntil - Date.now());
     }
     if (st.count >= DAILY_BUDGET) {
       throw new RateLimitedError(host, 'budget', msUntilTomorrow());
     }
+    // Spacing is enforced from the RECORDED time of the last request, not from
+    // the in-memory queue alone. The queue is gone after a service-worker
+    // restart, and without this a fresh worker would fire at a host it spoke to
+    // 200ms ago.
+    const since = Date.now() - st.lastAt;
+    if (st.lastAt && since < MIN_INTERVAL_MS) await sleep(MIN_INTERVAL_MS - since);
+
     // Another queued call may have populated the cache while we waited.
     const fresh = cache.get(url);
     if (fresh && Date.now() - fresh.at < CACHE_TTL_MS) return fresh.body;
 
     st.count++;
+    st.lastAt = Date.now();
+    // Written BEFORE the request, not after: a worker killed mid-flight must
+    // still remember that the request happened.
+    await store.set(host, st);
+    sent = true;
     const res = await fetch(url, {
       headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'he-IL,he;q=0.9,en;q=0.8' },
       redirect: 'follow',
@@ -162,7 +212,17 @@ export async function politeFetch(url: string): Promise<string> {
     pruneCache();
     return body;
   } finally {
-    sleep(MIN_INTERVAL_MS).then(release);
+    // Record the request time from when this call FINISHED, so the next one is
+    // spaced from the end of the last conversation rather than its start — a
+    // 20s request must not be followed instantly. Persisting here also captures
+    // a `pausedUntil` set by the 429/503/403 branch above.
+    // Only when something was actually sent: a cache hit or a self-imposed
+    // refusal is not a conversation with the store, and must not push the clock.
+    if (st && sent) {
+      st.lastAt = Date.now();
+      await store.set(host, st).catch(() => undefined);
+    }
+    release();
   }
 }
 

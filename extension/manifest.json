@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "VGPT.IL — משווה מחירי משחקים",
+  "description": "השוואת מחירי משחקים לישראל — דיגיטלי, פיזי ובין אזורים. רץ כולו בדפדפן, בלי שרת.",
+  "version": "0.1.0",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "VGPT.IL"
+  },
+  "permissions": ["storage", "alarms", "unlimitedStorage"],
+  "host_permissions": [
+    "https://www.cheapshark.com/*",
+    "https://store.steampowered.com/*",
+    "https://api.egdata.app/*",
+    "https://store.epicgames.com/*",
+    "https://www.ea.com/*",
+    "https://store.ubisoft.com/*",
+    "https://displaycatalog.mp.microsoft.com/*",
+    "https://www.xbox.com/*",
+    "https://search.nintendo-europe.com/*",
+    "https://api.ec.nintendo.com/*",
+    "https://www.nintendo.com/*",
+    "https://*.vgs.co.il/*",
+    "https://*.player1.co.il/*",
+    "https://*.arcadia.co.il/*",
+    "https://*.gamestorm.co.il/*",
+    "https://*.ivory.co.il/*",
+    "https://*.bug.co.il/*"
+  ]
+}

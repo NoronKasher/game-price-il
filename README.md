@@ -113,14 +113,17 @@ them the other 14 sources work normally.
 ```
 server/src/
   adapters/     one module per store, all behind a common SourceAdapter interface
+  fanout.ts     the cross-store search — no host in sight, shared with the extension
   politeFetch   per-host rate limiting, daily budgets, back-off
-  search.ts     fan-out across sources, title normalization, grouping
+  search.ts     query parsing, title normalization, grouping
   capture.ts    scheduled price recording
   verdict.ts    "is this a good price?" judged against a game's own history
   health.ts     daily canary — catches a store that silently returns nothing
 web/src/
   DepartureBoard.tsx   the split-flap price board
-  api.ts / api.demo.ts live client, and the snapshot-backed one the demo uses
+  api.ts               three interchangeable clients: server, demo snapshot, extension
+extension/src/
+  background.ts        the service worker — the same adapters, no server
 ```
 
 Adding a store means writing one adapter with `search` and `getOffers`. Nothing else changes.
@@ -130,8 +133,42 @@ it returns zero results and looks like a game nobody sells. A daily probe with a
 *empty* as a failure state, which is the only way to notice.
 
 ```bash
-npm test      # 99 tests, ~0.5s
+npm test      # 103 tests, ~2.6s
 ```
+
+## Browser extension (in progress)
+
+A local server is the wrong shape for a shopping tool — nobody installs one to
+check a price. The same core therefore runs inside a Chromium extension, where
+there is no separate process and nothing listening on a port: the MV3 service
+worker imports **the same store adapters, unchanged**. None of them touch
+`node:` anything, so what had to be rewritten was three files of platform glue,
+not the tool.
+
+```bash
+npm run build:ext     # -> extension/dist, load it unpacked
+```
+
+Verified end to end in a real browser: 13 sources, **70 results in 3.3s** from
+real stores, matching the Node server source-for-source on the same query.
+
+**Politeness had to be rebuilt to survive the worker.** MV3 kills the service
+worker after ~30s idle, and the 2.5s spacing, the daily budget and the
+stand-down after a 429 all lived in process memory. Nothing would have errored —
+the counters would simply have reset and we would have started scraping harder
+than promised. The limits now live in `chrome.storage`, and four tests plus a
+live browser run confirm a back-off, a spent budget and the spacing all still
+apply after a restart.
+
+Not yet ported: PlayStation (its hash recovery drives Playwright; in an
+extension that becomes simpler, but it is a rewrite rather than a move),
+GG.deals and ITAD (they read a key from disk), and price history, which needs
+the SQLite layer moved to IndexedDB.
+
+**An extension does not change what we are allowed to fetch.** Stores that
+state they refuse automated access still refuse it, and running from a user's
+browser would only make that undetected rather than permitted. Coverage is
+decided by the rules above, not by what happens to be technically reachable.
 
 ## Refreshing the demo snapshot
 

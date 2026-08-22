@@ -13,12 +13,14 @@
     "build:demo": "npm run build:demo -w web",
     "demo:capture": "node web/demo/capture.mjs",
     "start": "npm run start -w server",
-    "test": "npm run test -w server"
+    "test": "npm run test -w server",
+    "build:ext": "npm run build:ext -w web && vite build -c extension/vite.config.ts && node extension/pack.mjs"
   },
   "engines": {
     "node": ">=24"
   },
   "devDependencies": {
+    "@types/chrome": "^0.2.7",
     "concurrently": "^9.1.0"
   }
 }

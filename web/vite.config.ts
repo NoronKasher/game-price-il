@@ -128,20 +128,35 @@ function demoBanner(): Plugin {
   };
 }
 
+/**
+ * Which implementation of `./api` this build gets.
+ *
+ * Three shells, one UI: a Node server, a recorded snapshot, and an extension
+ * service worker. The choice is a module alias, so no component ever learns
+ * which one it is running against.
+ */
+const API_FOR_MODE: Record<string, string> = {
+  demo: 'src/api.demo.ts',
+  extension: 'src/api.extension.ts',
+};
+
 export default defineConfig(({ mode }) => {
   const demo = mode === 'demo';
+  const swap = API_FOR_MODE[mode];
   return {
-    base: demo ? PAGES_BASE : '/',
+    // An extension page is loaded from chrome-extension://<id>/, so its assets
+    // must be referenced relatively.
+    base: mode === 'extension' ? './' : demo ? PAGES_BASE : '/',
     // Only in demo mode: ship the recorded snapshot and exports as static assets.
     publicDir: demo ? 'demo/public' : 'public',
     plugins: [react(), ...(demo ? [demoBanner()] : [])],
     resolve: {
-      alias: demo
+      alias: swap
         ? // Forward slashes: rollup matches ids as posix paths even on Windows.
           [
             {
               find: './api',
-              replacement: path.resolve(import.meta.dirname, 'src/api.demo.ts').split(path.sep).join('/'),
+              replacement: path.resolve(import.meta.dirname, swap).split(path.sep).join('/'),
             },
           ]
         : [],

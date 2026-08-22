@@ -63,13 +63,12 @@ import { captureFromView } from './capture.ts';
 import { priceVerdict } from './verdict.ts';
 import { isAllowedRequestOrigin, resolveListenConfig } from './net.ts';
 import { suggestTitles } from './suggest.ts';
+import { searchGames, offersFor, ALL_PLATFORMS } from './fanout.ts';
 import { historyCsv } from './csv.ts';
 import { runHealthCheck, lastHealthReport, healthCheckDue } from './health.ts';
 import { currentSearchHash, searchHashSource } from './adapters/psn.ts';
 import { discoverSearchHashShared, probeBrowser } from './adapters/psnHash.ts';
 import { setSetting } from './db.ts';
-
-const ALL_PLATFORMS: Platform[] = ['pc', 'ps5', 'ps4', 'xbox', 'switch'];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Gentle spacing between games in a batch capture, so many tracked games don't
@@ -141,38 +140,7 @@ app.get('/api/search', async (req, res) => {
   // game; someone hunting a season pass says so, and then gets it labelled.
   const includeDlc = req.query.dlc === '1';
   if (!raw) return res.json({ query: { title: '', platforms: [] }, games: [], sources: [] });
-  const parsed = parseQuery(raw);
-  const wanted = parsed.platforms.length ? parsed.platforms : ALL_PLATFORMS;
-
-  const hits: GameHit[] = [];
-  const status: SourceStatus[] = [];
-  const active = sources.filter((s) => s.enabled && s.platforms.some((p) => wanted.includes(p)));
-  await Promise.all(
-    active.map(async (s) => {
-      try {
-        // Stores answer a search for a game with its add-ons too, so a search
-        // for Far Cry 6 came back with cards for its Season Pass and credit
-        // packs. Filtered centrally: every source has the same problem.
-        const found = (await s.search(parsed.title, wanted))
-          .map((h) => ({ ...h, dlc: describeProduct(h.title).dlc }))
-          .filter((h) => includeDlc || !h.dlc);
-        hits.push(...found);
-        status.push({ id: s.id, name: s.nameHe, ok: true, count: found.length });
-      } catch (err) {
-        status.push(statusFor(s, err));
-      }
-    })
-  );
-
-  // Which of the wanted platforms have any active source (for "coming soon" chips).
-  const platformStatus = Object.fromEntries(
-    wanted.map((p) => [p, sources.some((s) => s.enabled && s.platforms.includes(p))])
-  );
-
-  // The grouping key for what was actually typed. Published by the server so the
-  // client never has to reimplement the normalisation and drift from it — this
-  // is what lets an exact title match open straight into that game's board.
-  res.json({ query: parsed, queryKey: groupKey(parsed.title), games: hits, platformStatus, sources: status });
+  res.json(await searchGames(sources, raw, includeDlc));
 });
 
 /**
@@ -234,34 +202,7 @@ app.post('/api/offers', async (req, res) => {
   if (!Array.isArray(refs) || refs.length === 0 || !platform) {
     return res.status(400).json({ error: 'refs and platform required' });
   }
-  const offers: Offer[] = [];
-  const status: SourceStatus[] = [];
-  await Promise.all(
-    refs.map(async (ref) => {
-      const source = sources.find((s) => s.id === ref.sourceId);
-      if (!source?.enabled) return;
-      try {
-        const got = await source.getOffers(ref.sourceGameId, platform);
-        offers.push(...got);
-        status.push({ id: source.id, name: source.nameHe, ok: true, count: got.length });
-      } catch (err) {
-        status.push(statusFor(source, err));
-      }
-    })
-  );
-  // A game's several editions (and the odd source that returns it twice) each
-  // price across every region, so the same store+region can arrive many times.
-  // Collapse to the cheapest per store+region+kind — each region shows once per
-  // store, the actual cheapest way to buy the game there. (The full game page's
-  // edition selector still narrows to one edition when the user wants that.)
-  const bestByKey = new Map<string, Offer>();
-  for (const o of offers) {
-    const key = `${o.store}|${o.region ?? ''}|${o.kind}`;
-    const prev = bestByKey.get(key);
-    if (!prev || o.priceILS < prev.priceILS) bestByKey.set(key, o);
-  }
-  const deduped = [...bestByKey.values()].sort((a, b) => a.priceILS - b.priceILS);
-  res.json({ offers: deduped, partial: status.some((s) => !s.ok), sources: status });
+  res.json(await offersFor(sources, refs, platform));
 });
 
 /**
