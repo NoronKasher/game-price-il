@@ -68,6 +68,11 @@ a discount that exists only in our arithmetic would be worse than none.
 **No bot-protection bypassing, ever.** This is a hard rule in the project, not a preference:
 
 - No CAPTCHA solving, no Cloudflare circumvention, no rotating proxies or forged fingerprints.
+- **All sixteen sources introduce themselves by name.** Fifteen always did; the PlayStation adapter
+  sent a forged Chrome string until it was measured and found to be pointless — the store answers the
+  honest identifier with the same results and the same HTML. It was a costume that bought nothing and
+  spent the one thing this project says it will not. If a store ever does start demanding a browser
+  string, the honest answer is that the store stops being supported.
 - Every store gets a minimum 2.5s gap between requests, a daily budget, and exponential back-off on
   429/503/403.
 - **Those limits are written down, not just remembered.** They used to live in process memory on the

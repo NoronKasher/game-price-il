@@ -32,7 +32,23 @@ import { REGIONS } from '../regions.ts';
  * sourceGameId = "<productCode>~<url-encoded search name>".
  */
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36';
+/**
+ * The same honest identifier every other adapter sends.
+ *
+ * This used to be a forged Chrome 124 string — the only one of sixteen sources
+ * that pretended to be a browser, in a project whose first stated rule is that it
+ * never forges a fingerprint. It was presumably added on the assumption that the
+ * store would refuse anything else.
+ *
+ * It does not. Measured against the live store on 2026-08-23, with the adapter's
+ * own headers: the GraphQL search answers HTTP 200 with the same five result
+ * groups under either string, and the product page returns byte-identical HTML.
+ * The disguise bought nothing and cost the one thing the project says it will
+ * not spend. If PlayStation ever does start requiring a browser string, the
+ * honest answer is that PlayStation stops being supported — not that we put the
+ * costume back on.
+ */
+const UA = 'GamePriceIL/0.1 (personal wishlist price tracker for Israel)';
 const GQL = 'https://web.np.playstation.com/api/graphql/v1//op';
 const STORE = 'https://store.playstation.com';
 const CACHE_TTL = 10 * 60 * 1000;
