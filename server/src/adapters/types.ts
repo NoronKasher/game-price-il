@@ -21,6 +21,13 @@ export interface GameHit {
   /** Cover / header image URL, if the source provides one. */
   image?: string;
   platform: Platform;
+  /**
+   * Add-on content rather than a game. Only ever reaches the client when the
+   * user has explicitly asked to see add-ons, and is badged when it does — a
+   * season pass sitting unlabelled among games is how the search got noisy in
+   * the first place.
+   */
+  dlc?: boolean;
 }
 
 /** A single seller offer for a specific game+platform. */

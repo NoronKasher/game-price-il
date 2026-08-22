@@ -252,6 +252,10 @@ export const t = {
   searchButton: 'חפש',
   searching: 'מחפש…',
   noResults: 'לא נמצאו תוצאות. נסו שם באנגלית — כך המשחקים רשומים בחנויות.',
+  includeDlcLabel: 'כולל תוספות ו‑DLC',
+  includeDlcHint:
+    'כברירת מחדל מוצגים משחקים בלבד. סמנו כדי לחפש גם הרחבות, פס עונה, חבילות מטבעות ותוספות אחרות — הן יסומנו בתווית.',
+  dlcBadge: 'תוספת',
   searchSuggestLabel: 'הצעות חיפוש',
   searchRecent: 'חיפושים אחרונים',
   searchFailed: 'החיפוש נכשל — ייתכן שהשרת לא זמין. נסו שוב.',

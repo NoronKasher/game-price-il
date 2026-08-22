@@ -27,7 +27,7 @@ import {
 } from './regions';
 import { PriceGraph, TrackGraph } from './PriceGraph';
 import { DepartureBoard } from './DepartureBoard';
-import { SearchBox, rememberSearch } from './SearchBox';
+import { SearchBox, rememberSearch, loadIncludeDlc, saveIncludeDlc } from './SearchBox';
 import type { HealthReport, PsnHashStatus } from './types';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
@@ -767,6 +767,9 @@ interface GameGroup {
   image?: string;
   /** hits per platform, so one chip can carry several sources. */
   byPlatform: Map<Platform, GameHit[]>;
+  /** Add-on content. Only ever true when the user opted into seeing add-ons,
+   *  and badged on the card so it is never mistaken for the game itself. */
+  dlc?: boolean;
 }
 
 /** Return whichever title reads better for display — prefer proper case over ALL CAPS. */
@@ -822,6 +825,7 @@ function SearchView({
 }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [includeDlc, setIncludeDlc] = useState<boolean>(() => loadIncludeDlc());
   const [example] = useState(
     () => searchExamples[Math.floor(Math.random() * searchExamples.length)]
   );
@@ -881,14 +885,14 @@ function SearchView({
    */
   const searchSeq = useRef(0);
 
-  const run = async (q: string = query) => {
+  const run = async (q: string = query, dlcOverride?: boolean) => {
     const term = q.trim();
     if (!term) return;
     const seq = ++searchSeq.current;
     setBusy(true);
     setFailed(false);
     try {
-      const r = await api.search(term);
+      const r = await api.search(term, dlcOverride ?? includeDlc);
       if (seq === searchSeq.current) setResult(r);
     } catch {
       // A failed search used to reject silently, leaving the previous results on
@@ -917,7 +921,7 @@ function SearchView({
     for (const hit of result.games) {
       const g =
         map.get(hit.groupKey) ??
-        ({ key: hit.groupKey, title: hit.title, image: hit.image, byPlatform: new Map() } as GameGroup);
+        ({ key: hit.groupKey, title: hit.title, image: hit.image, byPlatform: new Map(), dlc: hit.dlc } as GameGroup);
       g.image ??= hit.image;
       // Prefer a nicely-cased title over an ALL-CAPS store title for display.
       if (prettierTitle(hit.title, g.title) === hit.title) g.title = hit.title;
@@ -944,6 +948,13 @@ function SearchView({
         busy={busy}
         placeholder={t.searchPlaceholder(example)}
         onSubmit={(term) => run(term)}
+        includeDlc={includeDlc}
+        onChangeIncludeDlc={(v) => {
+          setIncludeDlc(v);
+          saveIncludeDlc(v);
+          // Re-run immediately: flipping the switch is itself the request.
+          if (query.trim()) run(query, v);
+        }}
       />
       <p className="hint">{t.searchHint}</p>
 
@@ -992,7 +1003,10 @@ function SearchView({
             <article className="card" key={g.key}>
               {g.image ? <img src={safeUrl(g.image)} alt={g.title} loading="lazy" /> : <div className="noart">{g.title}</div>}
               <div className="body">
-                <h3>{g.title}</h3>
+                <h3>
+                  {g.title}
+                  {g.dlc && <span className="dlc-badge">{t.dlcBadge}</span>}
+                </h3>
                 <div className="chips">
                   {[...g.byPlatform.keys()].map((platform) => (
                     <button

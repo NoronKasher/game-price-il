@@ -12,6 +12,8 @@ export interface GameHit {
   edition: string | null;
   image?: string;
   platform: Platform;
+  /** Add-on content, only present when the user opted into seeing add-ons. */
+  dlc?: boolean;
 }
 
 export interface SourceRef {

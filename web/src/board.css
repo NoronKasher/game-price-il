@@ -1028,3 +1028,17 @@ body {
   .dep-risk, .dep-eilat { display: none; }
   .dep-fold { font-size: 10px; padding: 1px 6px; }
 }
+
+/* Add-on opt-in: off by default, and anything it lets through is labelled. */
+.dlc-toggle {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  margin: 10px 4px 0; color: var(--muted); font-size: 13px; direction: rtl;
+}
+.dlc-toggle input { accent-color: var(--amber); cursor: pointer; }
+.dlc-toggle:hover { color: var(--text); }
+.dlc-badge {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px;
+  letter-spacing: 0.04em; padding: 2px 7px; border-radius: 999px;
+  margin-inline-start: 8px; vertical-align: middle; white-space: nowrap;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent);
+}

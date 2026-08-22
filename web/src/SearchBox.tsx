@@ -22,6 +22,7 @@ import { t } from './he';
  */
 
 const RECENT_KEY = 'gp_recent_searches';
+const DLC_KEY = 'gp_include_dlc';
 const MAX_RECENT = 6;
 const DEBOUNCE_MS = 180;
 
@@ -31,6 +32,22 @@ function loadRecent(): string[] {
     return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string').slice(0, MAX_RECENT) : [];
   } catch {
     return [];
+  }
+}
+
+/** Whether the user has asked to see add-ons. Off unless they said otherwise. */
+export function loadIncludeDlc(): boolean {
+  try {
+    return localStorage.getItem(DLC_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+export function saveIncludeDlc(v: boolean): void {
+  try {
+    localStorage.setItem(DLC_KEY, v ? '1' : '0');
+  } catch {
+    /* ignore */
   }
 }
 
@@ -51,6 +68,8 @@ export function SearchBox({
   busy,
   placeholder,
   onSubmit,
+  includeDlc,
+  onChangeIncludeDlc,
 }: {
   query: string;
   setQuery: (q: string) => void;
@@ -58,6 +77,8 @@ export function SearchBox({
   placeholder: string;
   /** Runs the real search. Called with the exact term to search. */
   onSubmit: (term: string) => void;
+  includeDlc: boolean;
+  onChangeIncludeDlc: (v: boolean) => void;
 }) {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [recent, setRecent] = useState<string[]>(() => loadRecent());
@@ -179,6 +200,16 @@ export function SearchBox({
           {busy ? t.searching : t.searchButton}
         </button>
       </form>
+
+      {/* Add-ons are opt-in: a search for a game should answer with games. */}
+      <label className="dlc-toggle" title={t.includeDlcHint}>
+        <input
+          type="checkbox"
+          checked={includeDlc}
+          onChange={(e) => onChangeIncludeDlc(e.target.checked)}
+        />
+        <span>{t.includeDlcLabel}</span>
+      </label>
 
       {open && items.length > 0 && (
         <ul className="suggest" id={listId} role="listbox" aria-label={showingRecent ? t.searchRecent : t.searchSuggestLabel}>

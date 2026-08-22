@@ -25,8 +25,11 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  search: (q: string) =>
-    fetch(`/api/search?q=${encodeURIComponent(q)}`).then((r) => json<SearchResponse>(r)),
+  /** `includeDlc` opts into add-on results; without it the search is games only. */
+  search: (q: string, includeDlc = false) =>
+    fetch(`/api/search?q=${encodeURIComponent(q)}${includeDlc ? '&dlc=1' : ''}`).then((r) =>
+      json<SearchResponse>(r)
+    ),
 
   /** PlayStation hash status / manual override / re-discovery. */
   getPsnHash: () => fetch('/api/psn-hash').then((r) => json<PsnHashStatus>(r)),

@@ -136,6 +136,9 @@ app.use((req, res, next) => {
  */
 app.get('/api/search', async (req, res) => {
   const raw = String(req.query.q ?? '').trim();
+  // Add-ons are hidden unless asked for. Someone searching a game wants the
+  // game; someone hunting a season pass says so, and then gets it labelled.
+  const includeDlc = req.query.dlc === '1';
   if (!raw) return res.json({ query: { title: '', platforms: [] }, games: [], sources: [] });
   const parsed = parseQuery(raw);
   const wanted = parsed.platforms.length ? parsed.platforms : ALL_PLATFORMS;
@@ -148,9 +151,10 @@ app.get('/api/search', async (req, res) => {
       try {
         // Stores answer a search for a game with its add-ons too, so a search
         // for Far Cry 6 came back with cards for its Season Pass and credit
-        // packs. Filtered centrally: every source has the same problem, and a
-        // card for something you can't play is never the right answer.
-        const found = (await s.search(parsed.title, wanted)).filter((h) => !describeProduct(h.title).dlc);
+        // packs. Filtered centrally: every source has the same problem.
+        const found = (await s.search(parsed.title, wanted))
+          .map((h) => ({ ...h, dlc: describeProduct(h.title).dlc }))
+          .filter((h) => includeDlc || !h.dlc);
         hits.push(...found);
         status.push({ id: s.id, name: s.nameHe, ok: true, count: found.length });
       } catch (err) {
