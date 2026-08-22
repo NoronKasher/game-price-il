@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, shell, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, shell, nativeImage, dialog, Notification } = require('electron');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -56,6 +56,7 @@ let serverProcess = null;
 let tray = null;
 let win = null;
 let quitting = false;
+let toldAboutTray = false;
 
 function startServer(port) {
   const { server, web } = paths();
@@ -118,6 +119,17 @@ function createWindow(port) {
     if (quitting) return;
     e.preventDefault();
     win.hide();
+    // Say so the first time. An app that keeps running after you closed its
+    // window is a reasonable design and an unpleasant surprise; it should only
+    // ever be the first one.
+    if (!toldAboutTray && Notification.isSupported()) {
+      toldAboutTray = true;
+      new Notification({
+        title: 'VGPT.IL',
+        body: 'המעקב אחרי המחירים ממשיך לרוץ ברקע. ליציאה מלאה — לחצו ימני על הסמל שליד השעון.',
+        icon: path.join(__dirname, 'icon.png'),
+      }).show();
+    }
   });
 
   // Store links belong in the user's real browser, with their sessions and
@@ -136,6 +148,15 @@ function createTray(port) {
     Menu.buildFromTemplate([
       { label: 'פתיחת החלון', click: () => (win ? win.show() : createWindow(port)) },
       { label: 'פתיחה בדפדפן', click: () => shell.openExternal(`http://127.0.0.1:${port}`) },
+      { type: 'separator' },
+      {
+        // Price history is only as good as how often it is taken; a tracker that
+        // only runs when someone remembers to open it records gaps.
+        label: 'הפעלה אוטומטית עם הדלקת המחשב',
+        type: 'checkbox',
+        checked: app.getLoginItemSettings().openAtLogin,
+        click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked, args: ['--hidden'] }),
+      },
       { type: 'separator' },
       {
         label: 'יציאה (מפסיק גם את מעקב המחירים)',
@@ -191,8 +212,10 @@ if (!app.requestSingleInstanceLock()) {
       app.exit(1);
       return;
     }
-    createWindow(port);
     createTray(port);
+    // Started by the OS at login: come up in the tray only. Nobody logging in
+    // asked to be shown a price board.
+    if (!process.argv.includes('--hidden')) createWindow(port);
   });
 
   // Hiding the window is not quitting; the tray is the only way out.

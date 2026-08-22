@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from './api';
 import { nis, platformNames, t } from './he';
+import { DlcPanel } from './DlcPanel';
 import { cleanStoreName, isDirectPurchase, regionLabel, storeFamily } from './source';
 import { offerRisk, boardHasRisk, loadRegionNoticeHidden, saveRegionNoticeHidden, type RowRisk } from './regionRisk';
 import { loadBoardView, type BoardView } from './regions';
@@ -320,6 +321,10 @@ export function DepartureBoard({
             </>
           ) : null}
           <button className="dt-full" onClick={onOpenFull}>{t.depFull} ↗</button>
+          {/* Add-ons live with the game, not in the price table: they are a
+              different thing to buy, and mixing them into the board's rows was
+              exactly the noise the DLC filter exists to remove. */}
+          <DlcPanel title={title} platform={platform} />
         </aside>
 
         <div className="dt-main">

@@ -1023,7 +1023,13 @@ function SearchView({
             ? `${t.noSourcesForPlatform} (${result.query.platforms
                 .map((p) => platformNames[p])
                 .join(', ')})`
-            : t.noResults}
+            : // "Try it in English" is good advice for a Hebrew query and an
+              // insult to someone who already typed English — it tells them the
+              // thing they just did. Only offer it when there is Hebrew to
+              // translate.
+              /[\u0590-\u05FF]/.test(result.query.title)
+              ? t.noResultsTryEnglish
+              : t.noResults}
         </div>
       )}
 

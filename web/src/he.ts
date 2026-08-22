@@ -251,7 +251,20 @@ export const t = {
   searchHint: 'כתבו שם פלטפורמה בחיפוש (PS5, אקסבוקס, סוויץ׳, מחשב) כדי לסנן אליה בלבד',
   searchButton: 'חפש',
   searching: 'מחפש…',
-  noResults: 'לא נמצאו תוצאות. נסו שם באנגלית — כך המשחקים רשומים בחנויות.',
+  /** Nothing found, and the query was already in English — nothing to suggest. */
+  noResults: 'לא נמצאו תוצאות. בדקו את האיות, או נסו שם קצר יותר של המשחק.',
+  /** Nothing found and the query was in Hebrew — the stores list games in English. */
+  noResultsTryEnglish: 'לא נמצאו תוצאות. נסו את שם המשחק באנגלית — כך הוא רשום בחנויות.',
+  /* ── Add-ons on a game's own page (DlcPanel) ───────────────────────────── */
+  dlcSectionTitle: 'תוספות ו‑DLC למשחק',
+  dlcLoading: 'מחפש תוספות בחנויות…',
+  dlcNone: 'לא נמצאו תוספות למשחק הזה.',
+  dlcFailed: 'לא הצלחנו לבדוק תוספות כרגע. נסו שוב בעוד רגע.',
+  dlcNoOffers: 'לא נמצאו מחירים לתוספת הזו.',
+  dlcOffersFailed: 'לא הצלחנו לטעון מחירים לתוספת הזו.',
+  dlcExpand: 'הרחבה ⤢',
+  dlcCollapse: 'הקטנה ⤡',
+  dlcMore: (n: number) => `ועוד ${n} הצעות — לחצו על "הרחבה"`,
   exportCsv: '⤓ ייצוא לגיליון (CSV)',
   exportCsvHint:
     'קובץ CSV עם כל המחירים שנרשמו — שורה לכל בדיקה — שנפתח ישירות ב‑Excel או ב‑Google Sheets. הקובץ מיועד לניתוח, בעוד קובץ הייצוא הרגיל מיועד לייבוא חזרה לכלי.',
