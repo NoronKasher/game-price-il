@@ -41,16 +41,15 @@ const CACHE_TTL = 10 * 60 * 1000;
 const MAX_CONCURRENT = 8;
 
 /**
- * Persisted-query hash for the store's `getSearchResults` operation. PSN uses
- * Apollo persisted-query-ONLY mode (a raw query is rejected as "not whitelisted"),
- * and the hash is computed on their client from the query text — it is NOT shipped
- * in the bundle, so it can't be rediscovered server-side. It's stable for long
- * stretches and only rotates when PSN changes the query. When it does, the search
- * calls start failing (see gqlSearch), the source reports as unavailable, and this
- * one line is refreshed:
- *   open store.playstation.com search in a browser, and in DevTools read the
- *   `extensions.persistedQuery.sha256Hash` off the request to /api/graphql whose
- *   operationName is getSearchResults.
+ * Persisted-query hash for the store's `getSearchResults` operation. PSN runs a
+ * server-side allowlist of hashes (a raw query is refused as "not whitelisted"),
+ * and the hash is computed on their client from the query text, so it is not a
+ * constant we can look up. It's stable for long stretches and rotates only when
+ * PSN changes the query.
+ *
+ * This value is just the starting point. When it rotates, psnHash.ts recovers a
+ * fresh one automatically by loading the public store page in a browser, and
+ * Settings offers both a re-check button and a field to paste one by hand.
  * Captured 2026-08-20 from @sie-ppr-web-store/app 0.113.0.
  */
 const SEARCH_OP = 'getSearchResults';
@@ -81,6 +80,12 @@ export function currentSearchHash(): string {
   if (fromEnv) return fromEnv;
   const fromSettings = getSetting('psn_search_hash')?.trim();
   return fromSettings || DEFAULT_SEARCH_HASH;
+}
+
+/** Where the hash in use came from, so Settings can say so plainly. */
+export function searchHashSource(): 'env' | 'saved' | 'builtin' {
+  if (process.env.PSN_SEARCH_HASH?.trim()) return 'env';
+  return getSetting('psn_search_hash')?.trim() ? 'saved' : 'builtin';
 }
 
 /**

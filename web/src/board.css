@@ -942,3 +942,34 @@ body {
 
 /* A row with no published Eilat price says so rather than showing a guess. */
 .dep-eilat.none { color: var(--muted); background: none; border: 1px dashed #2f3a4d; }
+
+/* PlayStation hash panel. */
+.psn-browser { font-size: 12.5px; line-height: 1.6; margin: 8px 0 12px; direction: rtl; }
+.psn-browser.ok { color: var(--down); }
+.psn-browser.warn {
+  color: var(--text); background: color-mix(in srgb, var(--amber) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber) 28%, var(--line));
+  border-radius: 8px; padding: 9px 12px;
+}
+.psn-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; direction: rtl; margin-bottom: 10px; }
+.psn-label { color: var(--muted); font-size: 12px; }
+.psn-hash {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; direction: ltr;
+  background: #10151d; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px;
+  color: var(--text); word-break: break-all; max-width: 100%;
+}
+.psn-src { color: var(--muted); font-size: 11.5px; }
+.psn-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; direction: rtl; }
+.psn-clear {
+  font: inherit; font-size: 12px; padding: 5px 12px; border-radius: 8px; cursor: pointer;
+  background: none; color: var(--muted); border: 1px solid var(--line);
+}
+.psn-note { color: var(--down); font-size: 12px; }
+.psn-manual { display: block; direction: rtl; }
+.psn-manual-row { display: flex; gap: 8px; margin-top: 8px; }
+.psn-manual-row input {
+  flex: 1; min-width: 0; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12px;
+  direction: ltr; color: var(--text); background: #10151d;
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
+}
+.psn-manual-row input:focus { border-color: var(--amber); outline: none; }

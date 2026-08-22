@@ -1,4 +1,4 @@
-import { chromium, type Browser } from 'playwright-core';
+import { chromium, firefox, webkit, type Browser } from 'playwright-core';
 import { getSetting, setSetting } from '../db.ts';
 
 /**
@@ -29,9 +29,21 @@ import { getSetting, setSetting } from '../db.ts';
  * The cost is kept small on purpose. `playwright-core` is a few megabytes and
  * downloads NO browser of its own; it drives a Chromium-family browser the
  * machine already has (Edge ships with Windows, and Chrome is near-universal
- * elsewhere). If none is found the discovery simply fails and the manual
- * PSN_SEARCH_HASH override still applies — a missing browser degrades the
- * recovery, never the app.
+ * elsewhere).
+ *
+ * WHICH BROWSER THE USER PREFERS IS IRRELEVANT — this is a background tool, not
+ * their browsing. Someone who lives in Firefox on Windows still has Edge for us
+ * to drive. What matters is only whether SOME driveable engine exists on the
+ * machine, and there are three tiers:
+ *   1. A system Chromium-family browser (chrome / msedge / chromium channels).
+ *      Always true on Windows; near-always elsewhere.
+ *   2. A Playwright-managed engine, for anyone who has run `playwright install`
+ *      — including firefox and webkit. NOTE these are Playwright's own patched
+ *      builds; an installed Firefox or Safari cannot be driven, so this tier is
+ *      opt-in rather than something we can assume.
+ *   3. Nobody. Then discovery returns null and the hash is set by hand in
+ *      Settings, which works on any machine and takes half a minute.
+ * A missing browser degrades the recovery, never the app.
  */
 
 const SETTING_KEY = 'psn_search_hash';
@@ -71,20 +83,51 @@ function hashFromUrl(raw: string): string | null {
   }
 }
 
-async function launchInstalledBrowser(): Promise<Browser | null> {
+/** Which engine we managed to start, for reporting in Settings. */
+export type BrowserEngine = 'chrome' | 'msedge' | 'chromium' | 'firefox' | 'webkit';
+
+async function launchInstalledBrowser(): Promise<{ browser: Browser; engine: BrowserEngine } | null> {
   for (const channel of CHANNELS) {
     try {
-      return await chromium.launch({ headless: true, channel });
+      return { browser: await chromium.launch({ headless: true, channel }), engine: channel };
     } catch {
       // Not installed under this channel — try the next.
     }
   }
-  try {
-    // Last resort: whatever Playwright considers the default.
-    return await chromium.launch({ headless: true });
-  } catch {
-    return null;
+  // Playwright-managed engines, present only if `playwright install` was run.
+  for (const [engine, type] of [
+    ['chromium', chromium],
+    ['firefox', firefox],
+    ['webkit', webkit],
+  ] as const) {
+    try {
+      return { browser: await type.launch({ headless: true }), engine };
+    } catch {
+      // Not downloaded — try the next.
+    }
   }
+  return null;
+}
+
+/**
+ * Can this machine recover the hash on its own? Answered by actually starting a
+ * browser and closing it, because "is Chrome installed" is not a question with a
+ * reliable answer from a path check alone. Used by Settings so the user learns
+ * their status before something breaks, not after.
+ */
+let probeCache: { engine: BrowserEngine | null; at: number } | null = null;
+const PROBE_TTL_MS = 60 * 60 * 1000;
+
+export async function probeBrowser(): Promise<BrowserEngine | null> {
+  // Cached: the Settings page asks on every open, and the answer only changes
+  // when someone installs or removes a browser. Starting one each time would
+  // make opening Settings pay for a browser launch.
+  if (probeCache && Date.now() - probeCache.at < PROBE_TTL_MS) return probeCache.engine;
+  const launched = await launchInstalledBrowser();
+  const engine = launched?.engine ?? null;
+  if (launched) void launched.browser.close().catch(() => undefined);
+  probeCache = { engine, at: Date.now() };
+  return engine;
 }
 
 /**
@@ -120,8 +163,9 @@ export async function discoverSearchHash(timeoutMs = 45_000): Promise<string | n
   // that all fail at once trigger at most one browser between them.
   setSetting(LAST_TRY_KEY, String(Date.now()));
 
-  const browser = await launchInstalledBrowser();
-  if (!browser) return null;
+  const launched = await launchInstalledBrowser();
+  if (!launched) return null;
+  const { browser } = launched;
   try {
     const page = await browser.newPage();
     let found: string | null = null;

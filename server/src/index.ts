@@ -63,6 +63,9 @@ import { priceVerdict } from './verdict.ts';
 import { isAllowedRequestOrigin, resolveListenConfig } from './net.ts';
 import { suggestTitles } from './suggest.ts';
 import { runHealthCheck, lastHealthReport, healthCheckDue } from './health.ts';
+import { currentSearchHash, searchHashSource } from './adapters/psn.ts';
+import { discoverSearchHashShared, probeBrowser } from './adapters/psnHash.ts';
+import { setSetting } from './db.ts';
 
 const ALL_PLATFORMS: Platform[] = ['pc', 'ps5', 'ps4', 'xbox', 'switch'];
 
@@ -177,6 +180,36 @@ app.get('/api/health', (_req, res) => {
 });
 app.post('/api/health/run', async (_req, res) => {
   res.json({ report: await runHealthCheck(sources) });
+});
+
+/**
+ * PlayStation's persisted-query hash: status, manual override, and a button to
+ * re-discover it. The hash is a public value out of Sony's own JavaScript, not a
+ * secret, so it is shown in full — seeing it is how a user confirms a fix.
+ */
+app.get('/api/psn-hash', async (_req, res) => {
+  res.json({
+    hash: currentSearchHash(),
+    source: searchHashSource(),
+    browser: await probeBrowser(),
+  });
+});
+app.patch('/api/psn-hash', (req, res) => {
+  const raw = String((req.body ?? {}).hash ?? '').trim().toLowerCase();
+  // Empty clears the override and falls back to env/built-in.
+  if (!raw) {
+    setSetting('psn_search_hash', '');
+    return res.json({ ok: true, hash: currentSearchHash(), source: searchHashSource() });
+  }
+  if (!/^[a-f0-9]{64}$/.test(raw)) {
+    return res.status(400).json({ error: 'a persisted-query hash is 64 hex characters' });
+  }
+  setSetting('psn_search_hash', raw);
+  res.json({ ok: true, hash: currentSearchHash(), source: searchHashSource() });
+});
+app.post('/api/psn-hash/recover', async (_req, res) => {
+  const found = await discoverSearchHashShared();
+  res.json({ found, hash: currentSearchHash(), source: searchHashSource() });
 });
 
 /**

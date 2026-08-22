@@ -2,6 +2,7 @@ import type {
   AlertMode,
   HealthReport,
   HealthResponse,
+  PsnHashStatus,
   AlertRule,
   AlertScope,
   AppNotification,
@@ -26,6 +27,19 @@ async function json<T>(res: Response): Promise<T> {
 export const api = {
   search: (q: string) =>
     fetch(`/api/search?q=${encodeURIComponent(q)}`).then((r) => json<SearchResponse>(r)),
+
+  /** PlayStation hash status / manual override / re-discovery. */
+  getPsnHash: () => fetch('/api/psn-hash').then((r) => json<PsnHashStatus>(r)),
+  setPsnHash: (hash: string) =>
+    fetch('/api/psn-hash', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash }),
+    }).then((r) => json<{ ok: boolean; hash: string; source: PsnHashStatus['source'] }>(r)),
+  recoverPsnHash: () =>
+    fetch('/api/psn-hash/recover', { method: 'POST' }).then((r) =>
+      json<{ found: string | null; hash: string; source: PsnHashStatus['source'] }>(r)
+    ),
 
   /** Adapter health: which sources actually returned data on the last probe. */
   getHealth: () => fetch('/api/health').then((r) => json<HealthResponse>(r)),

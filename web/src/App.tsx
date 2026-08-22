@@ -28,7 +28,7 @@ import {
 import { PriceGraph, TrackGraph } from './PriceGraph';
 import { DepartureBoard } from './DepartureBoard';
 import { SearchBox, rememberSearch } from './SearchBox';
-import type { HealthReport } from './types';
+import type { HealthReport, PsnHashStatus } from './types';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
 import {
@@ -1732,6 +1732,98 @@ function HealthPanel() {
   );
 }
 
+/**
+ * PlayStation connection status.
+ *
+ * Sony rotates the search hash occasionally; the tool re-reads it by driving a
+ * browser already on the machine. This panel says whether that will work HERE —
+ * because "no driveable browser" is worth knowing before something breaks, not
+ * after — and gives a paste field that works on any machine either way.
+ *
+ * The hash is a public value from Sony's own JavaScript, not a secret, so it is
+ * shown in full: seeing it change is how a user confirms a fix worked.
+ */
+function PsnPanel() {
+  const [status, setStatus] = useState<PsnHashStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [manual, setManual] = useState('');
+
+  useEffect(() => {
+    api.getPsnHash().then(setStatus).catch(() => undefined);
+  }, []);
+
+  const recover = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = await api.recoverPsnHash();
+      setStatus((prev) => (prev ? { ...prev, hash: r.hash, source: r.source } : prev));
+      setNote(r.found ? t.psnRecovered : t.psnRecoverFailed);
+    } catch {
+      setNote(t.psnRecoverFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const save = async (value: string) => {
+    setNote(null);
+    try {
+      const r = await api.setPsnHash(value);
+      setStatus((prev) => (prev ? { ...prev, hash: r.hash, source: r.source } : prev));
+      setManual('');
+      setNote(t.psnSaved);
+    } catch {
+      setNote(t.psnBadHash);
+    }
+  };
+
+  return (
+    <>
+      <h2 className="settings-section">{t.psnTitle}</h2>
+      <p className="settings-intro">{t.psnIntro}</p>
+      {status && (
+        <>
+          <p className={`psn-browser ${status.browser ? 'ok' : 'warn'}`}>
+            {status.browser ? t.psnBrowserOk(status.browser) : t.psnBrowserNone}
+          </p>
+          <div className="psn-row">
+            <span className="psn-label">{t.psnSourceLabel}</span>
+            <code className="psn-hash">{status.hash}</code>
+            <span className="psn-src">{t.psnSources[status.source] ?? status.source}</span>
+          </div>
+          <div className="psn-actions">
+            <button className="health-run" onClick={recover} disabled={busy}>
+              {busy ? t.psnRecovering : t.psnRecover}
+            </button>
+            {status.source === 'saved' && (
+              <button className="psn-clear" onClick={() => save('')}>{t.psnClear}</button>
+            )}
+            {note && <span className="psn-note">{note}</span>}
+          </div>
+          <label className="psn-manual">
+            <span className="setting-label">{t.psnManualLabel}</span>
+            <p className="setting-note">{t.psnManualHelp}</p>
+            <span className="psn-manual-row">
+              <input
+                type="text"
+                value={manual}
+                onChange={(e) => setManual(e.target.value)}
+                placeholder="64 hex"
+                spellCheck={false}
+              />
+              <button className="health-run" disabled={!manual.trim()} onClick={() => save(manual)}>
+                {t.psnSave}
+              </button>
+            </span>
+          </label>
+        </>
+      )}
+    </>
+  );
+}
+
 function SettingsView({
   preferred,
   onChangePreferred,
@@ -1854,6 +1946,8 @@ function SettingsView({
       )}
 
       <HealthPanel />
+
+      <PsnPanel />
 
       <h2 className="settings-section">{t.currencyTitle}</h2>
       <p className="settings-intro">{t.currencySettingsNote}</p>

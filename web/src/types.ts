@@ -202,3 +202,11 @@ export interface HealthResponse {
   report: HealthReport | null;
   due: boolean;
 }
+
+/** PlayStation persisted-query hash status (server/src/adapters/psnHash.ts). */
+export interface PsnHashStatus {
+  hash: string;
+  source: 'env' | 'saved' | 'builtin';
+  /** Engine we could drive for automatic recovery, or null if none was found. */
+  browser: 'chrome' | 'msedge' | 'chromium' | 'firefox' | 'webkit' | null;
+}
