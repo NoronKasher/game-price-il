@@ -28,3 +28,7 @@ dist-demo/
 
 # Extension build output (loaded unpacked from here)
 extension/dist/
+
+# Bundled server output (built by npm run build:server)
+server/dist/
+desktop/icon.png

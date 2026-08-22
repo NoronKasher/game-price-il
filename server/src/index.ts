@@ -617,7 +617,11 @@ setTimeout(autoHealth, 5 * 60 * 1000);
  * free host (Render and friends). API routes stay untouched; anything else gets
  * the SPA's index.html. In dev there is no dist/ and Vite serves the app.
  */
-const webDist = path.join(import.meta.dirname, '..', '..', 'web', 'dist');
+// VGPT_WEB_DIR lets a packaged desktop build point at wherever it put the UI;
+// unset, this is the repo layout the server has always assumed.
+const webDist = process.env.VGPT_WEB_DIR
+  ? path.resolve(process.env.VGPT_WEB_DIR)
+  : path.join(import.meta.dirname, '..', '..', 'web', 'dist');
 if (fs.existsSync(path.join(webDist, 'index.html'))) {
   app.use(express.static(webDist));
   app.use((req, res, next) => {

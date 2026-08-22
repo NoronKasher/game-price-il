@@ -236,6 +236,37 @@ Not yet wired: the search autocomplete (it races store typeaheads on every
 keystroke, which behind a message port means waking the worker per character),
 the deals ticker and the adapter canary — both scheduled server jobs.
 
+## Desktop app
+
+The extension is the main way to use this, and for most people the better one.
+The desktop build exists for the one thing an extension genuinely cannot do:
+**keep recording prices while the browser is closed.** MV3 stops its worker
+seconds after it goes idle and `chrome.alarms` only fire while the browser runs,
+so a weekly price check depends on the browser being open when it comes due. A
+desktop process does not have that problem.
+
+```bash
+npm run desktop        # builds the UI, bundles the server, opens the app
+npm run desktop:smoke  # headless check that it starts and answers
+```
+
+It is a background service with a window attached, not the reverse: closing the
+window hides it and price capture carries on, and quitting is a deliberate
+choice from the tray.
+
+Two things had to change to make packaging possible. The server normally runs
+straight from TypeScript on Node 24's type stripping, which a packaged app
+cannot rely on — so `npm run build:server` bundles it to ordinary JavaScript.
+And the app runs that bundle with **Electron's own Node**, so nothing needs Node
+installed on the machine.
+
+Price history lives in the operating system's per-user application data, not
+beside the program, so updating or moving the app cannot take it with it. Store
+links open in the real browser, where the user's sessions and payment details
+already are — never inside this window.
+
+Not built yet: an installer. Today it runs from a checkout.
+
 ## Refreshing the demo snapshot
 
 ```bash
