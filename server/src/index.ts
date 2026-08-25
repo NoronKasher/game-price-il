@@ -73,6 +73,8 @@ import {
   hashNeedsRecovery,
   noteHashSaved,
   probeBrowser,
+  waitForHashSaved,
+  HOST_RECOVER_MARKER,
 } from './adapters/psnHash.ts';
 import { setSetting } from './db.ts';
 import { sqlitePoliteStore } from './politeStore.ts';
@@ -211,6 +213,18 @@ app.patch('/api/psn-hash', (req, res) => {
   res.json({ ok: true, hash: currentSearchHash(), source: searchHashSource() });
 });
 app.post('/api/psn-hash/recover', async (_req, res) => {
+  // In the desktop shell this server cannot do it — the bundle carries no
+  // playwright — but the shell around it is a Chromium and can. Without this the
+  // button reported failure on the one build where recovery genuinely works.
+  if (process.env.VGPT_HOST === 'desktop') {
+    console.log(HOST_RECOVER_MARKER);
+    const saved = await waitForHashSaved(45_000);
+    return res.json({
+      found: saved ? currentSearchHash() : null,
+      hash: currentSearchHash(),
+      source: searchHashSource(),
+    });
+  }
   const found = await discoverSearchHashShared();
   res.json({ found, hash: currentSearchHash(), source: searchHashSource() });
 });

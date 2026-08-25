@@ -96,7 +96,14 @@ function startServer(port) {
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  serverProcess.stdout.on('data', (d) => process.stdout.write(`[server] ${d}`));
+  serverProcess.stdout.on('data', (d) => {
+    const text = String(d);
+    process.stdout.write(`[server] ${text}`);
+    // The server asking us to fetch a hash for it. Its stdout is already piped
+    // here, so it is a channel that exists rather than one to build — see
+    // HOST_RECOVER_MARKER in server/src/adapters/psnHash.ts.
+    if (text.includes(PSN_RECOVER_MARKER)) void recoverPsnHashNow(port);
+  });
   serverProcess.stderr.on('data', (d) => process.stderr.write(`[server] ${d}`));
   serverProcess.on('exit', (code) => {
     serverProcess = null;
@@ -181,6 +188,8 @@ function createWindow(port) {
  * playwright dependency the source build uses for the same job.
  */
 const PSN_WATCH_MS = 5 * 60 * 1000;
+/** Must match HOST_RECOVER_MARKER in server/src/adapters/psnHash.ts. */
+const PSN_RECOVER_MARKER = '__VGPT_PSN_RECOVER__';
 
 async function recoverPsnHashIfNeeded(port) {
   let status;
@@ -192,8 +201,12 @@ async function recoverPsnHashIfNeeded(port) {
     return; // server restarting, or gone; the next tick asks again
   }
   if (!status?.needsRecovery) return;
+  await recoverPsnHashNow(port);
+}
 
-  console.log('psn: the store refused our search hash — recovering it with the app browser');
+/** Fetch a fresh hash with our own Chromium and hand it back to the server. */
+async function recoverPsnHashNow(port) {
+  console.log('psn: recovering the search hash with the app browser');
   const hash = await discoverPsnHash();
   if (!hash) {
     console.log('psn: could not read a fresh hash from the store page');

@@ -1880,9 +1880,15 @@ function PsnPanel() {
             <span className="psn-src">{t.psnSources[status.source] ?? status.source}</span>
           </div>
           <div className="psn-actions">
-            <button className="health-run" onClick={recover} disabled={busy}>
-              {busy ? t.psnRecovering : t.psnRecover}
-            </button>
+            {/* Only where pressing it can actually do something. In the
+                extension there is no way to drive a browser at all, and the
+                button sat there reporting failure every time — an action
+                offered that could never succeed. */}
+            {status.recovery !== 'manual' && (
+              <button className="health-run" onClick={recover} disabled={busy}>
+                {busy ? t.psnRecovering : t.psnRecover}
+              </button>
+            )}
             {status.source === 'saved' && (
               <button className="psn-clear" onClick={() => save('')}>{t.psnClear}</button>
             )}

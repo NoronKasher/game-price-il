@@ -104,6 +104,39 @@ export function hashNeedsRecovery(): boolean {
 }
 
 /**
+ * Wait for a hash to be stored by somebody else, or give up.
+ *
+ * Used when the request cannot do the recovery itself and has handed the job to
+ * the shell around it (see the desktop branch of /api/psn-hash/recover). The
+ * shell saves the hash through the normal PATCH route, which is what wakes this.
+ */
+export function waitForHashSaved(timeoutMs: number): Promise<boolean> {
+  const before = savedAt;
+  const started = Date.now();
+  return new Promise((resolve) => {
+    const timer = setInterval(() => {
+      if (savedAt > before) {
+        clearInterval(timer);
+        resolve(true);
+      } else if (Date.now() - started >= timeoutMs) {
+        clearInterval(timer);
+        resolve(false);
+      }
+    }, 250);
+  });
+}
+
+/**
+ * Printed to stdout when the server wants its host to recover the hash for it.
+ *
+ * The desktop app spawns this server as a child process and already pipes and
+ * reads its stdout, so that pipe is a channel that exists rather than one that
+ * has to be built. desktop/main.js watches for this exact string — change one
+ * and change the other.
+ */
+export const HOST_RECOVER_MARKER = '__VGPT_PSN_RECOVER__';
+
+/**
  * Installed browsers to try, in order. These are channels rather than bundled
  * downloads: Playwright resolves each to the real application on disk and fails
  * immediately (a path check) when it isn't there, so listing several costs
