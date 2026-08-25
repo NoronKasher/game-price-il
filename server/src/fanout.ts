@@ -126,6 +126,13 @@ export async function searchGames(
     })
   );
 
+  // Returns the renames so the exact-match key can follow them: someone who
+  // typed "jedi fallen order" still gets that game opened, even though its group
+  // is now filed under the fuller "star wars jedi fallen order".
+  const renamed = mergeTruncatedTitles(hits);
+  const typedKey = groupKey(parsed.title);
+  const canonicalKey = renamed.get(typedKey) ?? typedKey;
+
   // Which of the wanted platforms have any active source (for "coming soon" chips).
   const platformStatus = Object.fromEntries(
     wanted.map((p) => [p, sources.some((s) => s.enabled && s.platforms.includes(p))])
@@ -133,7 +140,49 @@ export async function searchGames(
 
   // The grouping key for what was actually typed, so the client never has to
   // reimplement the normalisation and drift from it.
-  return { query: parsed, queryKey: groupKey(parsed.title), games: hits, platformStatus, sources: status };
+  return { query: parsed, queryKey: canonicalKey, games: hits, platformStatus, sources: status };
+}
+
+/**
+ * Merge groups where one store gave a shorter version of the same title.
+ *
+ * EA calls it "Jedi Fallen Order"; everyone else calls it "Star Wars Jedi Fallen
+ * Order". Different group keys, so the same game arrived as two cards — and with
+ * the DLC filter off, the search for it showed three.
+ *
+ * The rule is SUFFIX, not substring, and that distinction is the whole safety of
+ * it. Franchise names are prepended ("Star Wars …", "The Witcher …") while
+ * sequels are appended ("Hades" → "Hades II"), so:
+ *
+ *   "star wars jedi fallen order".endsWith("jedi fallen order")  → merge ✓
+ *   "hades ii".endsWith("hades")                                 → false, kept apart ✓
+ *
+ * Two guards against over-merging: the shorter key must be at least two words —
+ * so a game named "Rally" is never absorbed into "Dirt Rally" — and the match
+ * must fall on a word boundary, so "…lands" never swallows "…ands".
+ */
+function mergeTruncatedTitles(hits: GameHit[]): Map<string, string> {
+  const keys = [...new Set(hits.map((h) => h.groupKey))];
+  // Longest first: a short key should collapse into the fullest title available,
+  // not into a middling one that would then collapse again.
+  const byLength = keys.slice().sort((a, b) => b.length - a.length);
+
+  const canonical = new Map<string, string>();
+  for (const short of keys) {
+    if (short.split(' ').length < 2) continue;
+    for (const long of byLength) {
+      if (long === short || long.length <= short.length) continue;
+      if (long.endsWith(short) && long[long.length - short.length - 1] === ' ') {
+        canonical.set(short, long);
+        break;
+      }
+    }
+  }
+  for (const hit of hits) {
+    const target = canonical.get(hit.groupKey);
+    if (target) hit.groupKey = target;
+  }
+  return canonical;
 }
 
 /** Steam appID (for description/genre) from a game's refs, if any. */
@@ -148,23 +197,44 @@ export interface OffersResult {
 }
 
 /** Every price for one game on one platform, cheapest first. */
+export interface OffersProgress {
+  total: number;
+  done: number;
+  status: SourceStatus;
+  offers: Offer[];
+}
+
 export async function offersFor(
   sources: SourceAdapter[],
   refs: SourceRef[],
-  platform: Platform
+  platform: Platform,
+  onProgress?: (p: OffersProgress) => void
 ): Promise<OffersResult> {
   const offers: Offer[] = [];
   const status: SourceStatus[] = [];
+  // Refs naming a source we do not have (or one switched off) are skipped, so
+  // the total has to be the count that will actually be ASKED — otherwise a bar
+  // built from it stalls short of the end forever.
+  const askable = refs.filter((ref) => sources.find((s) => s.id === ref.sourceId)?.enabled);
+  let done = 0;
   await Promise.all(
-    refs.map(async (ref) => {
-      const source = sources.find((s) => s.id === ref.sourceId);
-      if (!source?.enabled) return;
+    askable.map(async (ref) => {
+      const source = sources.find((s) => s.id === ref.sourceId)!;
+      let got: Offer[] = [];
+      let outcome: SourceStatus;
       try {
-        const got = await source.getOffers(ref.sourceGameId, platform);
+        got = await source.getOffers(ref.sourceGameId, platform);
         offers.push(...got);
-        status.push({ id: source.id, name: source.nameHe, ok: true, count: got.length });
+        outcome = { id: source.id, name: source.nameHe, ok: true, count: got.length };
       } catch (err) {
-        status.push(statusFor(source, err));
+        outcome = statusFor(source, err);
+      }
+      status.push(outcome);
+      done++;
+      try {
+        onProgress?.({ total: askable.length, done, status: outcome, offers: got });
+      } catch (err) {
+        console.error('offers progress listener failed:', err);
       }
     })
   );

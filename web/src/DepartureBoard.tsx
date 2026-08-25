@@ -8,6 +8,8 @@ import { offerRisk, boardHasRisk, loadRegionNoticeHidden, saveRegionNoticeHidden
 import { loadBoardView, type BoardView } from './regions';
 import { boardHasEilatPrices, eilatPrice, eilatSaving } from './eilat';
 import { safeUrl } from './url';
+import { SearchProgressBar, type ProgressState } from './SearchProgressBar';
+import { loadProgressBar, loadProgressBlink } from './progressPrefs';
 import type { GameMeta, Offer, Platform, SourceRef } from './types';
 
 /**
@@ -102,6 +104,8 @@ export function DepartureBoard({
   onClose: () => void;
 }) {
   const [offers, setOffers] = useState<Offer[] | null>(null);
+  const [showProgress] = useState(loadProgressBar);
+  const [progressBlink] = useState(loadProgressBlink);
   const [error, setError] = useState(false);
   const [meta, setMeta] = useState<GameMeta | null | undefined>(undefined);
   // Filters — all permissive by default; a game/platform switch resets them.
@@ -122,6 +126,7 @@ export function DepartureBoard({
   /** Show Israeli-shop prices as they'd be in Eilat (VAT-free). Estimate, off by default. */
   const [eilat, setEilat] = useState(false);
   const [noticeDismissedNow, setNoticeDismissedNow] = useState(false);
+  const [priceProgress, setPriceProgress] = useState<ProgressState | null>(null);
 
   const refsKey = refs.map((r) => `${r.sourceId}:${r.sourceGameId}`).join('|');
 
@@ -146,7 +151,24 @@ export function DepartureBoard({
       setMeta(null);
       return;
     }
-    api.offers(refs, platform).then((r) => live && setOffers(r.offers)).catch(() => live && setError(true));
+    setPriceProgress(null);
+    // Prices arrive shop by shop, exactly like the search. Opening a game is a
+    // second fan-out — who has it, then what they charge — and there is no
+    // reason for the user to wait out the slowest shop twice with a blank board.
+    const landed: Offer[] = [];
+    let answered = 0;
+    api
+      .offersStream(refs, platform, (p) => {
+        if (!live) return;
+        landed.push(...p.offers);
+        if (p.status.ok) answered++;
+        setPriceProgress({ total: p.total, done: p.done, answered });
+        // Cheapest first while it fills, so the top row is meaningful from the
+        // first shop that answers rather than jumping around at the end.
+        setOffers([...landed].sort((a, b) => a.priceILS - b.priceILS));
+      })
+      .then((r) => live && setOffers(r.offers))
+      .catch(() => live && setError(true));
     api.meta(refs).then((r) => live && setMeta(r.meta)).catch(() => live && setMeta(null));
     return () => {
       live = false;
@@ -464,6 +486,12 @@ export function DepartureBoard({
               <p>{t.depEilatBody2}</p>
             </div>
           )}
+
+          <SearchProgressBar
+            progress={showProgress ? priceProgress : null}
+            blink={progressBlink}
+            onHidden={() => setPriceProgress(null)}
+          />
 
           <div className="dep-board">
             {error ? (

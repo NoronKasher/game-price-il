@@ -136,7 +136,9 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
       searchGames(sources, q, includeDlc, emit ? (progress) => emit(progress) : undefined)
     ),
 
-    offers: withDb((refs: SourceRef[], platform: Platform) => offersFor(sources, refs, platform)),
+    offers: withDb((refs: SourceRef[], platform: Platform, emit?: (p: unknown) => void) =>
+      offersFor(sources, refs, platform, emit ? (progress) => emit(progress) : undefined)
+    ),
 
     meta: withDb(async (refs: SourceRef[]) => {
       const appId = Array.isArray(refs) ? steamAppIdOf(refs) : null;

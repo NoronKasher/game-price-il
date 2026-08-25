@@ -18,6 +18,8 @@ import type {
   TrackDetail,
   WishlistItem,
   SearchProgress,
+  OffersProgress,
+  OffersResponse,
 } from './types';
 
 async function json<T>(res: Response): Promise<T> {
@@ -90,6 +92,62 @@ export const api = {
 
     // A stream that ended without its final line told us nothing usable.
     return final ?? (await api.search(q, includeDlc));
+  },
+
+  /**
+   * Prices for one game, reported per store as each answers.
+   *
+   * Opening a game is a second fan-out — the search asked who HAS the game, this
+   * asks what each of them charges — so it deserves the same treatment rather
+   * than a fresh silent wait.
+   */
+  async offersStream(
+    refs: SourceRef[],
+    platform: string,
+    onProgress: (p: OffersProgress) => void
+  ): Promise<OffersResponse> {
+    let res: Response;
+    try {
+      res = await fetch('/api/offers/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refs, platform }),
+      });
+      if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
+    } catch {
+      return api.offers(refs, platform);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let final: OffersResponse | null = null;
+
+    const handle = (raw: string) => {
+      const text = raw.trim();
+      if (!text) return;
+      let msg: { type?: string } & Record<string, unknown>;
+      try {
+        msg = JSON.parse(text);
+      } catch {
+        return;
+      }
+      if (msg.type === 'source') onProgress(msg as unknown as OffersProgress);
+      else if (msg.type === 'done') final = msg as unknown as OffersResponse;
+    };
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split(NEWLINE);
+        buffer = lines.pop() ?? '';
+        for (const l of lines) handle(l);
+      }
+      if (done) break;
+    }
+    handle(buffer);
+    return final ?? (await api.offers(refs, platform));
   },
 
   /** PlayStation hash status / manual override / re-discovery. */

@@ -200,6 +200,39 @@ app.get('/api/search/stream', async (req, res) => {
 });
 
 /**
+ * A game's prices, streamed per store — the same treatment as the search.
+ *
+ * Opening a game is a SECOND fan-out: the search asked "who has this game", this
+ * asks "what does each of them charge". They cannot be collapsed into one — the
+ * first returns dozens of games and pricing them all would be dozens of fan-outs
+ * — but there is no reason to make the user wait for the slowest shop again with
+ * nothing on screen.
+ */
+app.post('/api/offers/stream', async (req, res) => {
+  const { refs, platform } = (req.body ?? {}) as { refs?: SourceRef[]; platform?: Platform };
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+  const line = (obj: unknown) => res.write(`${JSON.stringify(obj)}
+`);
+
+  if (!Array.isArray(refs) || refs.length === 0 || !platform) {
+    line({ type: 'done', offers: [], partial: false, sources: [] });
+    return res.end();
+  }
+  try {
+    const result = await offersFor(sources, refs, platform, (p) => {
+      line({ type: 'source', total: p.total, done: p.done, status: p.status, offers: p.offers });
+    });
+    line({ type: 'done', ...result });
+  } catch (err) {
+    line({ type: 'error', message: err instanceof Error ? err.message : String(err) });
+  }
+  res.end();
+});
+
+/**
  * Fast title suggestions for the search box's autocomplete. Deliberately does
  * NOT touch the source fan-out — see suggest.ts.
  */

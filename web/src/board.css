@@ -1197,14 +1197,23 @@ a.dlc-offer-price:hover { text-decoration: underline; }
 
 /* The "a store didn't answer" banner's two ways out. Muting is per source and
    lasts only until that store answers again — see sourceNotice.ts. */
-.source-notice-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.source-notice-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+/* Solid, weighted buttons rather than outlines. A ghost button beside a warning
+   reads as a footnote, and these are the two things the user is meant to DO. */
 .source-notice-actions button {
-  font: inherit; font-size: 12.5px; cursor: pointer; border-radius: 999px;
-  padding: 4px 14px; background: none; border: 1px solid var(--line); color: var(--muted);
-  transition: color 0.15s ease, border-color 0.15s ease;
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  border-radius: 8px; padding: 7px 18px; border: 1px solid transparent;
+  transition: filter 0.15s ease, transform 0.05s ease;
 }
-.source-notice-ok { color: var(--text); }
-.source-notice-actions button:hover { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 45%, var(--line)); }
+.source-notice-actions button:active { transform: translateY(1px); }
+.source-notice-actions button:hover { filter: brightness(1.12); }
+/* The primary action carries the app's amber on the app's dark panel. */
+.source-notice-ok { background: var(--amber); color: #0d1117; }
+/* The longer-lasting choice is deliberately the quieter of the two. */
+.source-notice-mute {
+  background: var(--panel-2); color: var(--text);
+  border-color: color-mix(in srgb, var(--amber) 40%, var(--line));
+}
 
 /* Lookalikes, set apart from the games actually asked for. The gap is the
    message: these are a different kind of answer, not more of the same one. */
@@ -1241,10 +1250,10 @@ a.dlc-offer-price:hover { text-decoration: underline; }
   position: absolute; inset-inline-start: 0; top: 0; bottom: 0;
   border-radius: 999px; transition: width 0.35s ease, background 0.35s ease;
 }
-.searchprog-empty {
-  position: absolute; inset-inline-end: 0; top: 0; bottom: 0;
+.searchprog-failed {
+  position: absolute; top: 0; bottom: 0;
   background: repeating-linear-gradient(45deg, #d9a441 0 5px, #b8862c 5px 10px);
-  opacity: 0.9;
+  transition: width 0.35s ease, inset-inline-start 0.35s ease;
 }
 .searchprog-pct {
   font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12.5px;

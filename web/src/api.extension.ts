@@ -77,6 +77,8 @@ export const api: typeof LiveApi = {
   searchStream: (q, includeDlc, onProgress) =>
     callStreaming('search', (p) => onProgress(p as import('./types').SearchProgress), q, includeDlc),
   offers: (refs: SourceRef[], platform: string) => call('offers', refs, platform),
+  offersStream: (refs: SourceRef[], platform: string, onProgress) =>
+    callStreaming('offers', (p) => onProgress(p as import('./types').OffersProgress), refs, platform),
   meta: (refs: SourceRef[]) => call('meta', refs),
 
   wishlist: () => call('wishlist'),

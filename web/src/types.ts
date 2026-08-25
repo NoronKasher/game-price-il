@@ -245,3 +245,18 @@ export interface SearchProgress {
   status: SourceStatus;
   games: GameHit[];
 }
+
+/** What `api.offers` answers with. */
+export interface OffersResponse {
+  offers: Offer[];
+  partial?: boolean;
+  sources?: SourceStatus[];
+}
+
+/** One step of a streamed price lookup: a single store has quoted. */
+export interface OffersProgress {
+  total: number;
+  done: number;
+  status: SourceStatus;
+  offers: Offer[];
+}

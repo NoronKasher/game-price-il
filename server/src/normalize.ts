@@ -72,6 +72,15 @@ const DLC_EN = new RegExp(
       'starter\\s*pack',
       'base\\s*pack',
       'upgrade\\s*(?:pass|pack|edition)',
+      // "…Deluxe Upgrade", "…Digital Deluxe Edition Upgrade": here the word
+      // upgrade TRAILS the edition name instead of leading it, so the pattern
+      // above never matched and EA's "Jedi: Fallen Order Deluxe Upgrade" was
+      // offered as a game. An upgrade is something bought on top of a game you
+      // already own — an add-on by any reading.
+      //
+      // Anchored to the edition words rather than matching "upgrade" alone,
+      // which would swallow a game actually called "Upgrade" — and there is one.
+      '(?:deluxe|digital|standard|ultimate|premium|gold|complete|collector\'?s)\\s+(?:\\w+\\s+)?upgrade',
       'map\\s*pack',
       'character\\s*pack',
       'skin\\s*pack',

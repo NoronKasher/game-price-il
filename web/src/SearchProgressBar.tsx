@@ -13,13 +13,16 @@ import { t } from './he';
  *
  * TWO COLOURS, MEANING TWO DIFFERENT THINGS:
  *
- *   the filled part  — red at the start, amber halfway, green at the end. Simple
- *                      progress: how much of the work is done.
- *   the amber tail   — the share of stores that could not be reached. A search
- *                      where three of sixteen failed finishes full, but finishes
- *                      with a fifth of the bar amber, because "done" and
- *                      "complete" are not the same claim. The banner beneath
- *                      names those stores — same set, same meaning.
+ *   the filled part  — the stores that ANSWERED. Red at the start, amber
+ *                      halfway, green at the end.
+ *   the amber block  — the stores that could not be reached, sitting directly
+ *                      after the fill rather than pinned to the far corner, so
+ *                      the two together are what "done" means and the empty
+ *                      track beyond them is what is still outstanding.
+ *
+ * A search where three of sixteen failed therefore reaches the end of the track
+ * with a fifth of it amber: finished, but not complete, which are not the same
+ * claim. The banner beneath names exactly those stores.
  *
  * That distinction is the whole reason this is not just a spinner: a spinner
  * that stops tells you the search ended, never that it ended short.
@@ -80,8 +83,10 @@ export function SearchProgressBar({
 
   const fraction = Math.min(1, progress.done / progress.total);
   const pct = Math.round(fraction * 100);
-  // The share that could not be reached at all.
-  const emptyShare = progress.done > 0 ? (progress.done - progress.answered) / progress.total : 0;
+  // Split the completed part in two: reached, and not reached. They sit side by
+  // side and together they are `fraction`.
+  const okShare = Math.min(1, progress.answered / progress.total);
+  const failedShare = Math.max(0, fraction - okShare);
 
   return (
     <div
@@ -95,12 +100,18 @@ export function SearchProgressBar({
       <div className="searchprog-track">
         <div
           className="searchprog-fill"
-          style={{ width: `${pct}%`, background: fillColour(fraction) }}
+          style={{ width: `${Math.round(okShare * 100)}%`, background: fillColour(fraction) }}
         />
-        {/* The empty-handed share, pinned to the far end so it reads as "this
-            much of the answer is missing" rather than as progress. */}
-        {emptyShare > 0 && (
-          <div className="searchprog-empty" style={{ width: `${Math.round(emptyShare * 100)}%` }} />
+        {/* Butted against the fill, not against the far corner: these stores are
+            part of what has finished, they just finished with nothing. */}
+        {failedShare > 0 && (
+          <div
+            className="searchprog-failed"
+            style={{
+              width: `${Math.round(failedShare * 100)}%`,
+              insetInlineStart: `${Math.round(okShare * 100)}%`,
+            }}
+          />
         )}
       </div>
       <span className="searchprog-pct">{pct}%</span>
