@@ -229,3 +229,19 @@ export interface PsnHashStatus {
    */
   recovery?: 'browser' | 'self' | 'manual';
 }
+
+/**
+ * One step of a streamed search: a single store has answered.
+ *
+ * `games` is only what THAT source found — the caller accumulates. Re-sending
+ * the running total on every step would grow quadratically across a stream of
+ * sixteen for no benefit.
+ */
+export interface SearchProgress {
+  /** How many sources will be asked. Known from the first line onward. */
+  total: number;
+  /** How many have answered, successfully or not. */
+  done: number;
+  status: SourceStatus;
+  games: GameHit[];
+}

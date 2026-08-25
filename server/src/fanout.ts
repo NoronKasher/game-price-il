@@ -61,11 +61,34 @@ export interface SearchResult {
   sources: SourceStatus[];
 }
 
+/**
+ * Told about each source the moment it lands, rather than at the end.
+ *
+ * The fan-out cannot go faster than its slowest store — and the slowest stores
+ * are the Israeli ones this tool exists for, held to a 2.5s gap we are not going
+ * to shorten. What CAN change is making the user wait for it: CheapShark answers
+ * in ~370ms with most of the catalogue, and there is no reason to sit on that for
+ * four more seconds while Ivory finishes.
+ *
+ * `games` carries only what THIS source found, not the running total — the
+ * caller accumulates. Re-sending every hit on every step would grow quadratically
+ * over a stream for no benefit.
+ */
+export interface SearchProgress {
+  /** How many sources will be asked. Known before any of them answer. */
+  total: number;
+  /** How many have now answered, successfully or not. */
+  done: number;
+  status: SourceStatus;
+  games: GameHit[];
+}
+
 /** Search every applicable source at once and merge what comes back. */
 export async function searchGames(
   sources: SourceAdapter[],
   raw: string,
-  includeDlc = false
+  includeDlc = false,
+  onProgress?: (p: SearchProgress) => void
 ): Promise<SearchResult> {
   const parsed = parseQuery(raw.trim());
   const wanted = parsed.platforms.length ? parsed.platforms : ALL_PLATFORMS;
@@ -73,19 +96,32 @@ export async function searchGames(
   const hits: GameHit[] = [];
   const status: SourceStatus[] = [];
   const active = sources.filter((s) => s.enabled && s.platforms.some((p) => wanted.includes(p)));
+  let done = 0;
   await Promise.all(
     active.map(async (s) => {
+      let found: GameHit[] = [];
+      let outcome: SourceStatus;
       try {
         // Stores answer a search for a game with its add-ons too, so a search
         // for Far Cry 6 came back with cards for its Season Pass and credit
         // packs. Filtered centrally: every source has the same problem.
-        const found = (await s.search(parsed.title, wanted))
+        found = (await s.search(parsed.title, wanted))
           .map((h) => ({ ...h, dlc: describeProduct(h.title).dlc }))
           .filter((h) => includeDlc || !h.dlc);
         hits.push(...found);
-        status.push({ id: s.id, name: s.nameHe, ok: true, count: found.length });
+        outcome = { id: s.id, name: s.nameHe, ok: true, count: found.length };
       } catch (err) {
-        status.push(statusFor(s, err));
+        outcome = statusFor(s, err);
+      }
+      status.push(outcome);
+      // After the status is recorded, so a listener always sees a consistent
+      // count — and never inside the try, where a throwing listener would be
+      // reported as the source failing.
+      done++;
+      try {
+        onProgress?.({ total: active.length, done, status: outcome, games: found });
+      } catch (err) {
+        console.error('search progress listener failed:', err);
       }
     })
   );

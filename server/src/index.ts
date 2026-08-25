@@ -158,6 +158,48 @@ app.get('/api/search', async (req, res) => {
 });
 
 /**
+ * The same search, streamed a source at a time.
+ *
+ * NDJSON rather than SSE: one JSON object per line, which the browser reads off
+ * response.body with nothing but a TextDecoder — no EventSource, no reconnect
+ * semantics we would then have to think about, and the exact same shape the
+ * extension posts over its message port.
+ *
+ * The plain /api/search stays: the demo needs it, and a client that cannot
+ * stream must still be able to search.
+ */
+app.get('/api/search/stream', async (req, res) => {
+  const raw = String(req.query.q ?? '').trim();
+  const includeDlc = req.query.dlc === '1';
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+  // Proxies that buffer would defeat the entire point of this route.
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  /** One JSON object per line — the "ND" in NDJSON. */
+  const line = (obj: unknown) => res.write(`${JSON.stringify(obj)}\n`);
+
+  if (!raw) {
+    line({ type: 'done', query: { title: '', platforms: [] }, games: [], sources: [] });
+    return res.end();
+  }
+
+  try {
+    const result = await searchGames(sources, raw, includeDlc, (p) => {
+      // `total` rides on every line rather than a separate opening message: the
+      // count is only known once the sources are filtered by platform, which
+      // happens inside the fan-out.
+      line({ type: 'source', total: p.total, done: p.done, status: p.status, games: p.games });
+    });
+    line({ type: 'done', ...result });
+  } catch (err) {
+    line({ type: 'error', message: err instanceof Error ? err.message : String(err) });
+  }
+  res.end();
+});
+
+/**
  * Fast title suggestions for the search box's autocomplete. Deliberately does
  * NOT touch the source fan-out — see suggest.ts.
  */

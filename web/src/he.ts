@@ -432,6 +432,17 @@ export const t = {
   relatedTitle: 'יכול להיות שהתכוונתם גם ל־',
   relatedOnlyTitle: 'לא נמצאה התאמה מדויקת — אלה תוצאות עם שם דומה',
   relatedHint: 'התוצאות האלה לא מכילות את כל המילים שחיפשתם, אבל הן דומות בשם.',
+  // The bar exists because the wait is real and cannot be shortened — the slow
+  // sources are the Israeli shops, held to a 2.5s gap on purpose. What it can
+  // stop being is unexplained.
+  searchProgressLabel: (done: number, total: number) => `נבדקו ${done} מתוך ${total} חנויות`,
+  searchProgressCount: (done: number, total: number) => `${done}/${total} חנויות`,
+  progressTitle: 'סרגל התקדמות בחיפוש',
+  progressHint:
+    'מראה כמה מהחנויות כבר ענו, והתוצאות מתעדכנות תוך כדי. החלק הכתום בסוף הסרגל הוא חנויות שלא הצלחנו להגיע אליהן — אותן חנויות שמופיעות בהתראה שמתחת.',
+  progressShow: 'הצגת הסרגל',
+  progressBlinkLabel: 'הבהוב האחוזים בסיום',
+  progressBlinkHint: 'אם הגדרתם במערכת ההפעלה "הפחתת תנועה", ההבהוב כבוי ממילא.',
   sourcesUnavailable: 'חלק מהמקורות לא נבדקו בפעם הזו — ייתכן שחסרות הצעות:',
   sourceReasonError: 'לא זמין כרגע',
   sourceReasonRateLimited: 'ננוח מהחנות ונבדוק מאוחר יותר',
@@ -440,9 +451,9 @@ export const t = {
   // banner on every search for a week teaches people to ignore all of them.
   // There is no "never" — a permanently silenced source failing looks exactly
   // like a game not being sold, which is what this notice exists to prevent.
-  sourcesDismissNow: 'הבנתי',
-  sourcesMuteOne: (name: string) => `אל תזכירו לי את ${name} עד שיחזור`,
-  sourcesMuteMany: (n: number) => `אל תזכירו לי את ${n} המקורות האלה עד שיחזרו`,
+  sourcesDismissDay: 'הבנתי (לא להציג היום)',
+  sourcesMuteOne: (name: string) => `השתיקו את ${name} עד שיחזור לספק נתונים`,
+  sourcesMuteMany: (n: number) => `השתיקו את ${n} המקורות האלה עד שיחזרו לספק נתונים`,
   sourcesMutedTitle: 'מקורות שהשתקתם',
   sourcesMutedBody: (n: number) =>
     `${n} מקורות לא יציגו התראה כשהם לא זמינים, עד שיחזרו לענות. ברגע שמקור חוזר, ההשתקה שלו מתבטלת מעצמה.`,

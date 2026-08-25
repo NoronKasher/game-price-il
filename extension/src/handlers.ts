@@ -127,7 +127,14 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
     };
 
   const handlers = {
-    search: withDb((q: string, includeDlc = false) => searchGames(sources, q, includeDlc)),
+    /**
+     * `emit` is supplied by background.ts only for a streaming call, and is what
+     * turns the same fan-out into a progressive one — no second code path, and
+     * no chance of the streamed and non-streamed searches drifting apart.
+     */
+    search: withDb((q: string, includeDlc = false, emit?: (p: unknown) => void) =>
+      searchGames(sources, q, includeDlc, emit ? (progress) => emit(progress) : undefined)
+    ),
 
     offers: withDb((refs: SourceRef[], platform: Platform) => offersFor(sources, refs, platform)),
 

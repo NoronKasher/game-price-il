@@ -31,7 +31,9 @@ import { SearchBox, rememberSearch, loadIncludeDlc, saveIncludeDlc } from './Sea
 import type { HealthReport, PsnHashStatus } from './types';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
-import { clearMutesForWorkingSources, muteSource, visibleFailures } from './sourceNotice';
+import { SearchProgressBar, type ProgressState } from './SearchProgressBar';
+import { loadProgressBar, loadProgressBlink, saveProgressBar, saveProgressBlink } from './progressPrefs';
+import { clearMutesForWorkingSources, muteForADay, muteUntilBack, visibleFailures } from './sourceNotice';
 import {
   setCurrencyConfig,
   currencySymbol,
@@ -804,24 +806,24 @@ function normWords(q: string): string[] {
 }
 
 function SourceNotice({ sources }: { sources?: SourceStatus[] }) {
-  // Dismissed for this view only — deliberately not persisted, so the next
-  // search tells the truth again.
-  const [dismissedNow, setDismissedNow] = useState<Set<string>>(new Set());
   // Bumped when a mute is written, to re-read the stored set.
   const [, forceRender] = useState(0);
 
-  // A store that answered has come back, so its mute is spent. Doing this on
-  // every result is what makes "until it's back" mean what it says.
+  // A store that returned something has come back, so its mute is spent. Doing
+  // this on every result is what makes "until it's back" mean what it says.
   useEffect(() => {
     if (sources && clearMutesForWorkingSources(sources)) forceRender((n) => n + 1);
   }, [sources]);
 
-  const failed = visibleFailures(sources, dismissedNow);
+  const failed = visibleFailures(sources);
   if (failed.length === 0) return null;
 
-  const dismissNow = () => setDismissedNow(new Set(failed.map((s) => s.id)));
-  const muteUntilBack = () => {
-    for (const s of failed) muteSource(s.id);
+  const forADay = () => {
+    for (const s of failed) muteForADay(s.id);
+    forceRender((n) => n + 1);
+  };
+  const untilBack = () => {
+    for (const s of failed) muteUntilBack(s.id);
     forceRender((n) => n + 1);
   };
 
@@ -837,8 +839,8 @@ function SourceNotice({ sources }: { sources?: SourceStatus[] }) {
       </ul>
       <p className="source-notice-hint">{t.sourcesRetryHint}</p>
       <div className="source-notice-actions">
-        <button className="source-notice-ok" onClick={dismissNow}>{t.sourcesDismissNow}</button>
-        <button className="source-notice-mute" onClick={muteUntilBack}>
+        <button className="source-notice-ok" onClick={forADay}>{t.sourcesDismissDay}</button>
+        <button className="source-notice-mute" onClick={untilBack}>
           {failed.length === 1 ? t.sourcesMuteOne(failed[0]!.name) : t.sourcesMuteMany(failed.length)}
         </button>
       </div>
@@ -869,6 +871,9 @@ function SearchView({
 }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [progress, setProgress] = useState<ProgressState | null>(null);
+  const [showProgress] = useState(loadProgressBar);
+  const [progressBlink] = useState(loadProgressBlink);
   const [includeDlc, setIncludeDlc] = useState<boolean>(() => loadIncludeDlc());
   const [example] = useState(
     () => searchExamples[Math.floor(Math.random() * searchExamples.length)]
@@ -956,8 +961,23 @@ function SearchView({
     const seq = ++searchSeq.current;
     setBusy(true);
     setFailed(false);
+    setProgress(null);
+    // Results shown while the rest are still arriving. Accumulated here rather
+    // than in the child so a slow store landing never re-runs the whole grid.
+    const streamed: GameHit[] = [];
+    let answered = 0;
     try {
-      const r = await api.search(term, dlcOverride ?? includeDlc);
+      const r = await api.searchStream(term, dlcOverride ?? includeDlc, (p) => {
+        if (seq !== searchSeq.current) return;
+        streamed.push(...p.games);
+        // Reached, not necessarily fruitful: a shop that says it does not stock
+        // this game has answered. Only an unreachable one is missing.
+        if (p.status.ok) answered++;
+        setProgress({ total: p.total, done: p.done, answered });
+        // Show what has landed so far. The final answer replaces this wholesale,
+        // so a partial view is never what the user is left with.
+        setResult({ query: { title: term, platforms: [] }, games: [...streamed], sources: [] });
+      });
       if (seq === searchSeq.current) setResult(r);
     } catch {
       // A failed search used to reject silently, leaving the previous results on
@@ -1089,6 +1109,11 @@ function SearchView({
 
       {failed && <div className="empty">{t.searchFailed}</div>}
 
+      <SearchProgressBar
+        progress={showProgress ? progress : null}
+        blink={progressBlink}
+        onHidden={() => setProgress(null)}
+      />
       {result && <SourceNotice sources={result.sources} />}
 
       {result && groups.length === 0 && (
@@ -2047,6 +2072,8 @@ function SettingsView({
   boardView: BoardView;
   onChangeBoardView: (v: BoardView) => void;
 }) {
+  const [bar, setBar] = useState(loadProgressBar);
+  const [blinkPref, setBlinkPref] = useState(loadProgressBlink);
   const [keys, setKeys] = useState<KeysResponse | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const loadKeys = () =>
@@ -2103,6 +2130,48 @@ function SettingsView({
           <span className="toggle-text">{openAnim ? t.animOn : t.animOff}</span>
         </button>
       </div>
+
+      <div className="setting-row">
+        <div className="setting-text">
+          <span className="setting-label">{t.progressShow}</span>
+          <p className="setting-note">{t.progressHint}</p>
+        </div>
+        <button
+          className={`toggle ${bar ? 'on' : ''}`}
+          role="switch"
+          aria-checked={bar}
+          aria-label={t.progressShow}
+          onClick={() => {
+            saveProgressBar(!bar);
+            setBar(!bar);
+          }}
+        >
+          <span className="toggle-knob" aria-hidden="true" />
+          <span className="toggle-text">{bar ? t.animOn : t.animOff}</span>
+        </button>
+      </div>
+
+      {bar && (
+        <div className="setting-row">
+          <div className="setting-text">
+            <span className="setting-label">{t.progressBlinkLabel}</span>
+            <p className="setting-note">{t.progressBlinkHint}</p>
+          </div>
+          <button
+            className={`toggle ${blinkPref ? 'on' : ''}`}
+            role="switch"
+            aria-checked={blinkPref}
+            aria-label={t.progressBlinkLabel}
+            onClick={() => {
+              saveProgressBlink(!blinkPref);
+              setBlinkPref(!blinkPref);
+            }}
+          >
+            <span className="toggle-knob" aria-hidden="true" />
+            <span className="toggle-text">{blinkPref ? t.animOn : t.animOff}</span>
+          </button>
+        </div>
+      )}
 
       <div className="setting-row setting-row-block">
         <div className="setting-text">

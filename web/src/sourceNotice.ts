@@ -11,28 +11,39 @@ import type { SourceStatus } from './types';
  *
  * So there are two dismissals, and the difference between them is the point:
  *
- *   FOR NOW    — component state. Gone on the next search. For "yes, I know,
- *                let me read these results."
- *   UNTIL BACK — stored here, per source. The banner stays quiet for that store
- *                until it actually answers again, and then the dismissal is
- *                dropped so the NEXT outage is news again.
+ *   FOR A DAY  — "yes, I know." Stored with an expiry, so tomorrow's search
+ *                tells the truth again without the user having to remember they
+ *                once dismissed something.
+ *   UNTIL BACK — no expiry. The banner stays quiet for that store until it
+ *                actually returns data, and then the mute is dropped so the NEXT
+ *                outage is news again.
  *
  * There is deliberately no "never again". A permanently silenced source failing
  * is indistinguishable from a game not being sold, which is the exact confusion
- * this notice exists to prevent.
+ * this notice exists to prevent — so even the longer of the two ends by itself,
+ * on the one event that makes it safe to end.
  */
 
 const KEY = 'gp_source_notice_hidden';
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-type Hidden = Record<string, true>;
+/** `until` is an epoch ms, or 'back' for "when the store answers again". */
+type Mute = { until: number | 'back' };
+type Muted = Record<string, Mute>;
 
-function load(): Hidden {
+function load(): Muted {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as unknown;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
-    const out: Hidden = {};
+    const out: Muted = {};
     for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
-      if (v === true) out[id] = true;
+      // Tolerate the older shape (`true` meant "until back") rather than
+      // throwing away a preference somebody already expressed.
+      if (v === true) out[id] = { until: 'back' };
+      else if (v && typeof v === 'object') {
+        const u = (v as { until?: unknown }).until;
+        if (u === 'back' || (typeof u === 'number' && Number.isFinite(u))) out[id] = { until: u };
+      }
     }
     return out;
   } catch {
@@ -40,48 +51,68 @@ function load(): Hidden {
   }
 }
 
-function save(hidden: Hidden): void {
+function save(muted: Muted): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(hidden));
+    localStorage.setItem(KEY, JSON.stringify(muted));
   } catch {
     /* private browsing; the preference simply will not persist */
   }
 }
 
-/** Silence this source's warning until it answers again. */
-export function muteSource(id: string): void {
-  save({ ...load(), [id]: true });
+/** "I know about this" — quiet until tomorrow. */
+export function muteForADay(id: string): void {
+  save({ ...load(), [id]: { until: Date.now() + DAY_MS } });
+}
+
+/** Quiet until this store actually returns data again. */
+export function muteUntilBack(id: string): void {
+  save({ ...load(), [id]: { until: 'back' } });
+}
+
+function isMuted(m: Mute | undefined): boolean {
+  if (!m) return false;
+  return m.until === 'back' || m.until > Date.now();
 }
 
 /**
- * Drop the mute for every source that answered this time.
+ * Drop the mute for every source that came back with something.
  *
- * Called on each result, so "until it's back" means what it says: the moment the
- * store returns, its next failure is worth telling the user about again.
+ * "Until we can get data from them again" is taken literally: answering with an
+ * error does not count, and neither does answering with nothing. Called on each
+ * result, so the moment a store is useful again its next failure is news.
  * Returns true when anything changed, so the caller can re-render.
  */
 export function clearMutesForWorkingSources(sources: SourceStatus[]): boolean {
-  const hidden = load();
+  const muted = load();
   let changed = false;
   for (const s of sources) {
-    if (s.ok && hidden[s.id]) {
-      delete hidden[s.id];
+    if (s.ok && s.count > 0 && muted[s.id]) {
+      delete muted[s.id];
       changed = true;
     }
   }
-  if (changed) save(hidden);
+  // Day-long mutes that have simply run out, tidied on the way past.
+  for (const [id, m] of Object.entries(muted)) {
+    if (!isMuted(m)) {
+      delete muted[id];
+      changed = true;
+    }
+  }
+  if (changed) save(muted);
   return changed;
 }
 
-/** The failures still worth showing: not muted, and not dismissed for this view. */
-export function visibleFailures(sources: SourceStatus[] | undefined, dismissedNow: Set<string>): SourceStatus[] {
-  const hidden = load();
-  return (sources ?? []).filter((s) => !s.ok && !hidden[s.id] && !dismissedNow.has(s.id));
+/** The failures still worth showing. */
+export function visibleFailures(sources: SourceStatus[] | undefined): SourceStatus[] {
+  const muted = load();
+  return (sources ?? []).filter((s) => !s.ok && !isMuted(muted[s.id]));
 }
 
-/** For the settings screen: how many stores are currently silenced. */
-export function mutedSourceIds(): string[] {
-  return Object.keys(load());
+/** For the settings screen: which stores are currently silenced, and how. */
+export function mutedSources(): { id: string; until: number | 'back' }[] {
+  return Object.entries(load())
+    .filter(([, m]) => isMuted(m))
+    .map(([id, m]) => ({ id, until: m.until }));
 }
 
 export function unmuteAll(): void {

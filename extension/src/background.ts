@@ -94,14 +94,20 @@ const handlers: Record<string, Handler> = makeHandlers(sources);
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'vgpt') return;
-  port.onMessage.addListener(async (msg: { id: number; method: string; args: unknown[] }) => {
+  port.onMessage.addListener(async (msg: { id: number; method: string; args: unknown[]; streaming?: boolean }) => {
     const handler = handlers[msg.method];
     if (!handler) {
       port.postMessage({ id: msg.id, error: `unknown method "${msg.method}"` });
       return;
     }
     try {
-      const result = await (handler as (...a: unknown[]) => Promise<unknown>)(...(msg.args ?? []));
+      // A streaming caller gets an extra argument: something to report partial
+      // answers through. Posting them under the SAME id is what lets the client
+      // keep one pending promise while the steps arrive.
+      const args = msg.streaming
+        ? [...(msg.args ?? []), (progress: unknown) => port.postMessage({ id: msg.id, progress })]
+        : (msg.args ?? []);
+      const result = await (handler as (...a: unknown[]) => Promise<unknown>)(...args);
       port.postMessage({ id: msg.id, result });
     } catch (err) {
       // Errors must cross the port as data — an Error does not survive

@@ -17,6 +17,7 @@ import type {
   TickerDeal,
   TrackDetail,
   WishlistItem,
+  SearchProgress,
 } from './types';
 
 async function json<T>(res: Response): Promise<T> {
@@ -24,12 +25,72 @@ async function json<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** The line separator of the NDJSON search stream. */
+const NEWLINE = '\n';
+
 export const api = {
   /** `includeDlc` opts into add-on results; without it the search is games only. */
   search: (q: string, includeDlc = false) =>
     fetch(`/api/search?q=${encodeURIComponent(q)}${includeDlc ? '&dlc=1' : ''}`).then((r) =>
       json<SearchResponse>(r)
     ),
+
+  /**
+   * The same search, reported store by store as each one lands.
+   *
+   * The fan-out cannot beat its slowest source — the Israeli shops, held to a
+   * 2.5s gap this project will not shorten. What it can stop doing is making the
+   * user stare at nothing while CheapShark's 370ms answer waits for Ivory's 2.3s
+   * one. Falls back to the plain search if the stream is unavailable, so a
+   * client that cannot read a body stream still works.
+   */
+  async searchStream(
+    q: string,
+    includeDlc: boolean,
+    onProgress: (p: SearchProgress) => void
+  ): Promise<SearchResponse> {
+    let res: Response;
+    try {
+      res = await fetch(`/api/search/stream?q=${encodeURIComponent(q)}${includeDlc ? '&dlc=1' : ''}`);
+      if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
+    } catch {
+      return api.search(q, includeDlc);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let final: SearchResponse | null = null;
+
+    const handle = (raw: string) => {
+      const text = raw.trim();
+      if (!text) return;
+      let msg: { type?: string } & Record<string, unknown>;
+      try {
+        msg = JSON.parse(text);
+      } catch {
+        return; // a torn line is not worth failing a search over
+      }
+      if (msg.type === 'source') onProgress(msg as unknown as SearchProgress);
+      else if (msg.type === 'done') final = msg as unknown as SearchResponse;
+    };
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+        // Everything before the last newline is complete; the tail may not be.
+        const lines = buffer.split(NEWLINE);
+        buffer = lines.pop() ?? '';
+        for (const l of lines) handle(l);
+      }
+      if (done) break;
+    }
+    handle(buffer);
+
+    // A stream that ended without its final line told us nothing usable.
+    return final ?? (await api.search(q, includeDlc));
+  },
 
   /** PlayStation hash status / manual override / re-discovery. */
   getPsnHash: () => fetch('/api/psn-hash').then((r) => json<PsnHashStatus>(r)),

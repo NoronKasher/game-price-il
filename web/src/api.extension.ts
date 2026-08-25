@@ -17,6 +17,8 @@ import type { SourceRef } from './types';
 interface Pending {
   resolve: (value: unknown) => void;
   reject: (err: Error) => void;
+  /** Set for streaming calls; each partial answer is handed straight over. */
+  onProgress?: (p: unknown) => void;
 }
 
 let port: chrome.runtime.Port | null = null;
@@ -26,9 +28,15 @@ const pending = new Map<number, Pending>();
 function connect(): chrome.runtime.Port {
   if (port) return port;
   const p = chrome.runtime.connect({ name: 'vgpt' });
-  p.onMessage.addListener((msg: { id: number; result?: unknown; error?: string }) => {
+  p.onMessage.addListener((msg: { id: number; result?: unknown; error?: string; progress?: unknown }) => {
     const waiting = pending.get(msg.id);
     if (!waiting) return;
+    // A progress message is one step of an answer, not the answer: the call
+    // stays pending, which also keeps the port — and so the worker — alive.
+    if (msg.progress !== undefined) {
+      waiting.onProgress?.(msg.progress);
+      return;
+    }
     pending.delete(msg.id);
     if (msg.error) waiting.reject(new Error(msg.error));
     else waiting.resolve(msg.result);
@@ -51,8 +59,23 @@ function call<T>(method: string, ...args: unknown[]): Promise<T> {
   });
 }
 
+/** Like `call`, but partial answers arrive on the way. */
+function callStreaming<T>(
+  method: string,
+  onProgress: (p: unknown) => void,
+  ...args: unknown[]
+): Promise<T> {
+  const id = nextId++;
+  return new Promise<T>((resolve, reject) => {
+    pending.set(id, { resolve: resolve as (v: unknown) => void, reject, onProgress });
+    connect().postMessage({ id, method, args, streaming: true });
+  });
+}
+
 export const api: typeof LiveApi = {
   search: (q, includeDlc = false) => call('search', q, includeDlc),
+  searchStream: (q, includeDlc, onProgress) =>
+    callStreaming('search', (p) => onProgress(p as import('./types').SearchProgress), q, includeDlc),
   offers: (refs: SourceRef[], platform: string) => call('offers', refs, platform),
   meta: (refs: SourceRef[]) => call('meta', refs),
 
