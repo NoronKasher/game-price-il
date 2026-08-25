@@ -112,9 +112,33 @@ const DLC_CURRENCY = new RegExp(
 );
 const DLC_HE = /(חבילת\s*הרחבה|הרחבה|פס\s*קול|חבילת\s*מטבעות)/;
 
+/**
+ * An upgrade sold on top of a game you already own, named without any of the
+ * edition words above: "Diablo IV Prime Evil Upgrade", "Cyberpunk 2077 Phantom
+ * Liberty Upgrade". Those are add-ons and were being offered as games.
+ *
+ * The test is POSITIONAL rather than another keyword, because "upgrade" on its
+ * own is a perfectly ordinary word in a game's name. It counts only as the final
+ * word of a title with at least three of them:
+ *   "Diablo IV Prime Evil Upgrade"  → 5 words, ends with upgrade → add-on
+ *   "Upgrade Simulator"             → does not end with it       → game
+ *   "The Upgrade"                   → only 2 words               → game
+ */
+function looksLikeUpgradeProduct(title: string): boolean {
+  const words = title
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+  if (words.length < 3) return false;
+  const last = words[words.length - 1]!;
+  return last === 'upgrade' || last === 'שדרוג';
+}
+
 /** True when a listing is add-on content rather than the game itself. */
 export function looksLikeDlc(title: string): boolean {
-  return DLC_EN.test(title) || DLC_CURRENCY.test(title) || DLC_HE.test(title);
+  return DLC_EN.test(title) || DLC_CURRENCY.test(title) || DLC_HE.test(title) || looksLikeUpgradeProduct(title);
 }
 
 /** True when a store listing looks like an accessory/collectible rather than a game. */
@@ -217,14 +241,61 @@ export function stripPlatformTokens(title: string): { title: string; platforms: 
  * spellings unify ("Ragnarök" from PSN and "Ragnarok" from a local store are
  * the same game).
  */
+/**
+ * Roman numerals a game title actually uses, mapped to digits.
+ *
+ * Stores cannot agree how to write a sequel: Steam and CheapShark say "Diablo
+ * IV", Arcadia says "Diablo 4", and the tool filed them as two different games.
+ * Same for "Final Fantasy VII" / "Final Fantasy 7" and "The Last of Us Part I" /
+ * "Part 1". Normalising one way makes every one of those pairs meet.
+ */
+const ROMAN: Record<string, string> = {
+  ii: '2', iii: '3', iv: '4', vi: '6', vii: '7', viii: '8', ix: '9',
+  xi: '11', xii: '12', xiii: '13', xiv: '14', xv: '15', xvi: '16',
+  xvii: '17', xviii: '18', xix: '19', xx: '20',
+};
+
+/**
+ * Convert roman numerals to digits, but only where they are certainly numerals.
+ *
+ * Multi-letter numerals are unambiguous — no game is called "Ix" or "Vii". The
+ * SINGLE letters are not: "I", "V", "X", "C", "D", "M" and "L" are all common
+ * words or initials, and blindly converting them would turn "I Am Setsuna" into
+ * "1 am setsuna" and "X-Men" into "10 men". So single letters convert only as
+ * the LAST word of a multi-word title, which is where a sequel number lives —
+ * "Grand Theft Auto V" → 5, while "X-Men" and "I Am Setsuna" are untouched.
+ * Even then only I, V and X, since a title ending in "C" or "M" is far more
+ * likely to be an initial than a hundred.
+ */
+const TRAILING_ROMAN: Record<string, string> = { i: '1', v: '5', x: '10' };
+
+function normalizeNumerals(key: string): string {
+  const words = key.split(' ');
+  return words
+    .map((w, i) => {
+      if (ROMAN[w]) return ROMAN[w];
+      const last = i === words.length - 1;
+      if (last && words.length > 1 && TRAILING_ROMAN[w]) return TRAILING_ROMAN[w];
+      return w;
+    })
+    .join(' ');
+}
+
 function normalizeKey(base: string): string {
-  return base
+  const flat = base
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '') // strip combining diacritics: ö→o, é→e
     .toLowerCase()
+    // Apostrophes are DELETED, not turned into a space like other punctuation.
+    // Stores disagree about possessives — Steam writes "Assassin's Creed",
+    // Israeli shops write "Assassins Creed" — and splitting on the apostrophe
+    // made those "assassin s creed" and "assassins creed": two different games.
+    // Same for Marvel's Spider-Man, Tom Clancy's, Sid Meier's, Baldur's Gate.
+    .replace(/['’`´]/g, '')
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
     .replace(/\s+/g, ' ');
+  return normalizeNumerals(flat);
 }
 
 /** Normalized grouping key for a raw title (base game, editions collapsed). */

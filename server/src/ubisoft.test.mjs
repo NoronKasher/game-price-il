@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseTiles, pickGameTile } from './adapters/ubisoft.ts';
+import { groupKey } from './normalize.ts';
 
 /**
  * Fixtures are trimmed from real store.ubisoft.com search grids. Ubisoft titles
@@ -103,6 +104,9 @@ test("an entity-encoded apostrophe does not fork the title's group key", () => {
   // "Assassin&rsquo;s Creed" must land on the same key as "Assassin's Creed",
   // or the same game stops matching itself from store to store.
   const html = tile('Assassin&rsquo;s Creed Mirage', 'Standard Edition', '$49.99');
-  const pick = pickGameTile(parseTiles(html), 'assassin s creed mirage');
+  // Derived, not written out: this test is about the two spellings AGREEING, and
+  // a literal key here quietly encodes today's normalisation as the point of the
+  // test. It went stale the moment apostrophes stopped splitting a word.
+  const pick = pickGameTile(parseTiles(html), groupKey("Assassin's Creed Mirage"));
   assert.equal(pick.value, 49.99);
 });
