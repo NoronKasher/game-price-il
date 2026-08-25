@@ -31,6 +31,7 @@ import { SearchBox, rememberSearch, loadIncludeDlc, saveIncludeDlc } from './Sea
 import type { HealthReport, PsnHashStatus } from './types';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
+import { clearMutesForWorkingSources, muteSource, visibleFailures } from './sourceNotice';
 import {
   setCurrencyConfig,
   currencySymbol,
@@ -784,9 +785,46 @@ function prettierTitle(a: string, b: string): string {
  * "this store is down or resting", not silently as "the game isn't sold". Renders
  * nothing when every source responded.
  */
+/**
+ * Accent- and punctuation-insensitive text, so "Assassin's" and "Assassins"
+ * are the same word and a apostrophe never decides whether a game is a match.
+ */
+function normText(v: string): string {
+  return v
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .toLowerCase()
+    .trim();
+}
+
+/** The words a query is asking about. One-letter noise is dropped. */
+function normWords(q: string): string[] {
+  return normText(q).split(' ').filter((w) => w.length > 1);
+}
+
 function SourceNotice({ sources }: { sources?: SourceStatus[] }) {
-  const failed = (sources ?? []).filter((s) => !s.ok);
+  // Dismissed for this view only — deliberately not persisted, so the next
+  // search tells the truth again.
+  const [dismissedNow, setDismissedNow] = useState<Set<string>>(new Set());
+  // Bumped when a mute is written, to re-read the stored set.
+  const [, forceRender] = useState(0);
+
+  // A store that answered has come back, so its mute is spent. Doing this on
+  // every result is what makes "until it's back" mean what it says.
+  useEffect(() => {
+    if (sources && clearMutesForWorkingSources(sources)) forceRender((n) => n + 1);
+  }, [sources]);
+
+  const failed = visibleFailures(sources, dismissedNow);
   if (failed.length === 0) return null;
+
+  const dismissNow = () => setDismissedNow(new Set(failed.map((s) => s.id)));
+  const muteUntilBack = () => {
+    for (const s of failed) muteSource(s.id);
+    forceRender((n) => n + 1);
+  };
+
   return (
     <div className="source-notice" role="status">
       <p className="source-notice-head">⚠️ {t.sourcesUnavailable}</p>
@@ -798,6 +836,12 @@ function SourceNotice({ sources }: { sources?: SourceStatus[] }) {
         ))}
       </ul>
       <p className="source-notice-hint">{t.sourcesRetryHint}</p>
+      <div className="source-notice-actions">
+        <button className="source-notice-ok" onClick={dismissNow}>{t.sourcesDismissNow}</button>
+        <button className="source-notice-mute" onClick={muteUntilBack}>
+          {failed.length === 1 ? t.sourcesMuteOne(failed[0]!.name) : t.sourcesMuteMany(failed.length)}
+        </button>
+      </div>
     </div>
   );
 }
@@ -954,6 +998,37 @@ function SearchView({
     return [...map.values()];
   }, [result]);
 
+  /**
+   * What you searched for, and what merely shares a word with it.
+   *
+   * Store search is fuzzy on purpose — it has to be, or a typo finds nothing —
+   * but the results come back flat, so "Ring of Pain" sits in the same grid as
+   * "Elden Ring" looking equally like the thing you asked for. The fuzziness is
+   * worth keeping; presenting it as if it were all one answer is not.
+   *
+   * The rule is deliberately simple enough to state: a game whose title contains
+   * EVERY word you typed is one of the games you asked for — "Elden Ring
+   * Nightreign" for "elden ring" — and anything else is a lookalike. When a typo
+   * means nothing matches, everything lands under "related", which is both true
+   * and the most useful thing to show.
+   */
+  const { matched, related } = useMemo(() => {
+    const words = normWords(result?.query.title ?? '');
+    if (words.length === 0) return { matched: groups, related: [] as GameGroup[] };
+    const hit: GameGroup[] = [];
+    const near: GameGroup[] = [];
+    for (const g of groups) {
+      const titleWords = normText(g.title).split(' ');
+      // Whole words, not substrings. A plain `includes` put "Tower of Shades",
+      // "Cool Shades" and "Shades of Sakura" among the results for "Hades" —
+      // because "hades" IS inside "shades". `startsWith` on each title word
+      // keeps the useful looseness (assassin → assassins) without that.
+      const ok = words.every((w) => titleWords.some((tw) => tw.startsWith(w)));
+      (ok ? hit : near).push(g);
+    }
+    return { matched: hit, related: near };
+  }, [groups, result]);
+
   /** The group whose board is open, if it is still in the current results. */
   const openGroup = expanded ? groups.find((g) => g.key === expanded.key) : undefined;
 
@@ -1061,7 +1136,7 @@ function SearchView({
       )}
 
       <div className="results" ref={resultsRef}>
-        {groups.map((g) => {
+        {matched.map((g) => {
           // The opened card has gone INTO the board above, so it isn't drawn in
           // the grid; the remaining results keep their order below it.
           if (expanded != null && expanded.key === g.key) return null;
@@ -1094,6 +1169,47 @@ function SearchView({
           );
         })}
       </div>
+
+      {related.length > 0 && (
+        <section className="related">
+          <h3 className="related-head">
+            {matched.length > 0 ? t.relatedTitle : t.relatedOnlyTitle}
+            <span className="related-count">{related.length}</span>
+          </h3>
+          <p className="related-hint">{t.relatedHint}</p>
+          <div className="results">
+            {related.map((g) => {
+              if (expanded != null && expanded.key === g.key) return null;
+              return (
+                <article className="card" key={g.key}>
+                  {g.image ? (
+                    <img src={safeUrl(g.image)} alt={g.title} loading="lazy" />
+                  ) : (
+                    <div className="noart">{g.title}</div>
+                  )}
+                  <div className="body">
+                    <h3>
+                      {g.title}
+                      {g.dlc && <span className="dlc-badge">{t.dlcBadge}</span>}
+                    </h3>
+                    <div className="chips">
+                      {[...g.byPlatform.keys()].map((platform) => (
+                        <button
+                          key={platform}
+                          className={`chip ${platform}`}
+                          onClick={(e) => openBoard(g, platform, e.currentTarget.closest('.card'))}
+                        >
+                          {platformNames[platform]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* The card-into-board flight: a fixed clone morphing from the card's old
           box into the board's game pane. Fast on purpose; it clears itself. */}

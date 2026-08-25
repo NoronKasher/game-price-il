@@ -1194,3 +1194,31 @@ body {
 a.dlc-offer-price:hover { text-decoration: underline; }
 /* Expanded: let the list breathe and scroll instead of running off the pane. */
 .dlc-card.big .dlc-offers { max-height: 320px; overflow-y: auto; }
+
+/* The "a store didn't answer" banner's two ways out. Muting is per source and
+   lasts only until that store answers again — see sourceNotice.ts. */
+.source-notice-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.source-notice-actions button {
+  font: inherit; font-size: 12.5px; cursor: pointer; border-radius: 999px;
+  padding: 4px 14px; background: none; border: 1px solid var(--line); color: var(--muted);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.source-notice-ok { color: var(--text); }
+.source-notice-actions button:hover { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 45%, var(--line)); }
+
+/* Lookalikes, set apart from the games actually asked for. The gap is the
+   message: these are a different kind of answer, not more of the same one. */
+.related { margin-top: 34px; padding-top: 22px; border-top: 1px solid var(--line); direction: rtl; }
+.related-head {
+  margin: 0 0 4px; font-size: 15px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 9px;
+}
+.related-count {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px;
+  color: var(--muted); background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 1px 8px;
+}
+.related-hint { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); }
+/* Visibly secondary, without being hard to read. */
+.related .card { opacity: 0.82; transition: opacity 0.15s ease; }
+.related .card:hover { opacity: 1; }

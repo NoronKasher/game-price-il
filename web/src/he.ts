@@ -427,10 +427,26 @@ export const t = {
   importDone: (games: number, points: number) => `יובאו ${games} משחקים ו-${points} נקודות מחיר.`,
   importError: 'הקובץ אינו תקין. ודאו שזהו קובץ ייצוא של הכלי.',
   // Source availability (honest visibility when a store is down / rate-limited)
+  // Fuzzy store search is worth keeping — a typo has to find something — but
+  // presenting a lookalike as if it were the game you asked for is not.
+  relatedTitle: 'יכול להיות שהתכוונתם גם ל־',
+  relatedOnlyTitle: 'לא נמצאה התאמה מדויקת — אלה תוצאות עם שם דומה',
+  relatedHint: 'התוצאות האלה לא מכילות את כל המילים שחיפשתם, אבל הן דומות בשם.',
   sourcesUnavailable: 'חלק מהמקורות לא נבדקו בפעם הזו — ייתכן שחסרות הצעות:',
   sourceReasonError: 'לא זמין כרגע',
   sourceReasonRateLimited: 'ננוח מהחנות ונבדוק מאוחר יותר',
   sourcesRetryHint: 'נסו שוב עוד רגע — זו בעיה זמנית של המקור, לא של המשחק.',
+  // Two dismissals, on purpose. A store can be down for a week, and the same
+  // banner on every search for a week teaches people to ignore all of them.
+  // There is no "never" — a permanently silenced source failing looks exactly
+  // like a game not being sold, which is what this notice exists to prevent.
+  sourcesDismissNow: 'הבנתי',
+  sourcesMuteOne: (name: string) => `אל תזכירו לי את ${name} עד שיחזור`,
+  sourcesMuteMany: (n: number) => `אל תזכירו לי את ${n} המקורות האלה עד שיחזרו`,
+  sourcesMutedTitle: 'מקורות שהשתקתם',
+  sourcesMutedBody: (n: number) =>
+    `${n} מקורות לא יציגו התראה כשהם לא זמינים, עד שיחזרו לענות. ברגע שמקור חוזר, ההשתקה שלו מתבטלת מעצמה.`,
+  sourcesUnmuteAll: 'בטלו את כל ההשתקות',
   officialBadge: 'רשמי',
   launcherLabel: 'פלטפורמה',
   forRegionNote: (name: string) => `מוצג עבור האזור המועדף: ${name}. מחירים אצל ספקים חיצוניים עשויים להשתנות לפי אזור.`,
