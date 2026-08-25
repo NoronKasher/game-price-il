@@ -20,6 +20,7 @@ import { bug } from '../../server/src/adapters/bug.ts';
 import { xbox } from '../../server/src/adapters/xbox.ts';
 import { nintendo } from '../../server/src/adapters/nintendo.ts';
 import { psn } from '../../server/src/adapters/psn.ts';
+import { gog } from '../../server/src/adapters/gog.ts';
 import { ggdeals } from '../../server/src/adapters/ggdeals.ts';
 import { itad } from '../../server/src/adapters/itad.ts';
 
@@ -57,6 +58,7 @@ const sources: SourceAdapter[] = [
   xbox,
   nintendo,
   psn,
+  gog,
   ggdeals,
   itad,
 ];

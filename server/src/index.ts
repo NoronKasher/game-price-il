@@ -20,6 +20,7 @@ import { bug } from './adapters/bug.ts';
 import { xbox } from './adapters/xbox.ts';
 import { nintendo } from './adapters/nintendo.ts';
 import { psn } from './adapters/psn.ts';
+import { gog } from './adapters/gog.ts';
 import { RateLimitedError, setPoliteStore } from './adapters/politeFetch.ts';
 import {
   addToWishlist,
@@ -118,6 +119,7 @@ const sources: SourceAdapter[] = [
   psn,
   xbox,
   nintendo,
+  gog,
 ];
 
 // Before any adapter can fetch: point the rate limiter at storage that outlives

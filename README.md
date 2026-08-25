@@ -30,9 +30,14 @@ everything to shekels, and says plainly which risks come attached.
 
 ## What it does
 
-**Compares 16 sources in one search.** Steam (per-region), PlayStation Store, Xbox, Nintendo, Epic,
-Ubisoft Connect, EA App, CheapShark, GG.deals, IsThereAnyDeal, and six Israeli retailers —
-VGS, Player1, Arcadia, Game Storm, Ivory and Bug.
+**Compares 17 sources in one search.** Steam (per-region), PlayStation Store, Xbox, Nintendo, Epic,
+GOG (per-region), Ubisoft Connect, EA App, CheapShark, GG.deals, IsThereAnyDeal, and six Israeli
+retailers — VGS, Player1, Arcadia, Game Storm, Ivory and Bug.
+
+GOG was already visible through CheapShark, but only as a single listing at a single price with no
+region. Measured through the new adapter, Cyberpunk 2077 spans **₪26.93 in Ukraine to ₪73.96 in South
+Africa — a factor of 2.75** across 30 markets. That gap is the whole point of the tool, and it was
+invisible.
 
 **Shows regional prices honestly.** Every offer says which region it is from, and foreign-region rows
 carry a badge explaining what can go wrong — a store may require a payment method from that country, a
@@ -68,7 +73,7 @@ a discount that exists only in our arithmetic would be worse than none.
 **No bot-protection bypassing, ever.** This is a hard rule in the project, not a preference:
 
 - No CAPTCHA solving, no Cloudflare circumvention, no rotating proxies or forged fingerprints.
-- **All sixteen sources introduce themselves by name.** Fifteen always did; the PlayStation adapter
+- **Every source introduces itself by name.** All but one always did; the PlayStation adapter
   sent a forged Chrome string until it was measured and found to be pointless — the store answers the
   honest identifier with the same results and the same HTML. It was a costume that bought nothing and
   spent the one thing this project says it will not. If a store ever does start demanding a browser
