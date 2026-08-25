@@ -211,6 +211,21 @@ export interface HealthResponse {
 export interface PsnHashStatus {
   hash: string;
   source: 'env' | 'saved' | 'builtin';
-  /** Engine we could drive for automatic recovery, or null if none was found. */
-  browser: 'chrome' | 'msedge' | 'chromium' | 'firefox' | 'webkit' | null;
+  /** Name of the engine we could drive, when recovery is 'browser'. */
+  browser: string | null;
+  /**
+   * HOW automatic recovery happens here, which is not the same question as
+   * "did we find a browser".
+   *
+   * A single nullable engine name conflated three different situations and
+   * answered all of them with "no Chromium-based browser was found on this
+   * machine" — a sentence people read inside a Chromium-based browser, on a
+   * machine with three of them, while the desktop build was quietly recovering
+   * hashes perfectly well using its own.
+   *
+   *  'browser' — the server drives an installed browser (`browser` names it)
+   *  'self'    — the desktop app uses the Chromium it already is
+   *  'manual'  — not available in this shell; pasting one takes half a minute
+   */
+  recovery?: 'browser' | 'self' | 'manual';
 }

@@ -1,4 +1,6 @@
 import type { Browser, BrowserType } from 'playwright-core';
+import fs from 'node:fs';
+import path from 'node:path';
 
 /**
  * Playwright is loaded on demand, never at import time.
@@ -134,12 +136,103 @@ function hashFromUrl(raw: string): string | null {
 }
 
 /** Which engine we managed to start, for reporting in Settings. */
-export type BrowserEngine = 'chrome' | 'msedge' | 'chromium' | 'firefox' | 'webkit';
+export type BrowserEngine = string;
+
+/**
+ * Chromium-family browsers that are NOT Chrome or Edge.
+ *
+ * Playwright's `channel` option resolves a fixed set of known applications —
+ * Chrome, Edge, and its own downloaded builds. It has no idea what Brave,
+ * Vivaldi, Opera, Arc or Perplexity's Comet are, even though every one of them
+ * is Chromium underneath and drives perfectly well through `executablePath`.
+ *
+ * That gap produced a genuinely insulting message: someone reading "no
+ * Chromium-based browser was found on this machine" inside a Chromium-based
+ * browser.
+ *
+ * Anything found here is only a CANDIDATE. Whether it can actually be driven is
+ * settled by trying to start it, which costs a failed spawn and nothing else.
+ */
+function registeredBrowsers(): { name: string; path: string }[] {
+  if (process.platform !== 'win32') return [];
+
+  // Chromium's own installer lays every build out the same way:
+  //   <vendor>\<product>\Application\<name>.exe
+  // Verified against three different browsers on one machine —
+  //   BraveSoftware\Brave-Browser\Application\brave.exe
+  //   Perplexity\Comet\Application\comet.exe
+  //   Microsoft\Edge\Application\msedge.exe
+  // — which is why this looks for the SHAPE rather than for known names. A list
+  // of names is out of date the moment somebody ships a new browser, and this
+  // whole function exists because that already happened.
+  const roots = [process.env.LOCALAPPDATA, process.env.ProgramFiles, process.env['ProgramFiles(x86)']]
+    .filter((r): r is string => Boolean(r));
+
+  const found = new Map<string, string>();
+  const collect = (dir: string) => {
+    const appDir = path.join(dir, 'Application');
+    let entries: string[];
+    try {
+      entries = fs.readdirSync(appDir);
+    } catch {
+      return; // no Application/ here
+    }
+    for (const file of entries) {
+      if (!file.toLowerCase().endsWith('.exe')) continue;
+      const name = path.basename(file, path.extname(file)).toLowerCase();
+      // Chrome and Edge are already covered by their channels above.
+      if (['chrome', 'msedge'].includes(name)) continue;
+      // A Chromium install ships a crowd of helper binaries beside the browser —
+      // *_proxy, pwahelper, the crash reporter, the updater. Each one accepts
+      // being launched and then exits, so without this every candidate list ends
+      // in four or five pointless spawns that each take a couple of seconds to
+      // fail. Observed on one machine: 3 real browsers, 4 helpers.
+      if (/_proxy$|helper|crashpad|setup|elevation|updater|notification/.test(name)) continue;
+      if (!found.has(name)) found.set(name, path.join(appDir, file));
+    }
+  };
+
+  const listDirs = (dir: string): string[] => {
+    try {
+      return fs
+        .readdirSync(dir, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => path.join(dir, e.name));
+    } catch {
+      return [];
+    }
+  };
+
+  // Two levels: <root>\<product>\Application and <root>\<vendor>\<product>\Application.
+  // Bounded on purpose — an unbounded walk of Program Files is not something to
+  // do on the way to answering "can we recover a hash".
+  for (const root of roots) {
+    for (const vendor of listDirs(root)) {
+      collect(vendor);
+      for (const product of listDirs(vendor)) collect(product);
+    }
+  }
+  return [...found].map(([name, exe]) => ({ name, path: exe }));
+}
 
 async function launchInstalledBrowser(): Promise<{ browser: Browser; engine: BrowserEngine } | null> {
   const pw = await playwright();
   if (!pw) return null;
   const { chromium, firefox, webkit } = pw;
+  // An explicit choice always wins — the escape hatch for a browser installed
+  // somewhere nothing can be expected to guess.
+  const override = process.env.VGPT_BROWSER_PATH?.trim();
+  if (override) {
+    try {
+      return {
+        browser: await chromium.launch({ headless: true, executablePath: override }),
+        engine: path.basename(override, path.extname(override)),
+      };
+    } catch (err) {
+      console.error(`VGPT_BROWSER_PATH is set but could not be started: ${(err as Error).message}`);
+    }
+  }
+
   for (const channel of CHANNELS) {
     try {
       return { browser: await chromium.launch({ headless: true, channel }), engine: channel };
@@ -147,6 +240,17 @@ async function launchInstalledBrowser(): Promise<{ browser: Browser; engine: Bro
       // Not installed under this channel — try the next.
     }
   }
+
+  // Whatever else this machine has. Brave, Vivaldi, Opera, Arc, Comet — all
+  // Chromium, none of them things Playwright's channel list has heard of.
+  for (const { name, path: exe } of registeredBrowsers()) {
+    try {
+      return { browser: await chromium.launch({ headless: true, executablePath: exe }), engine: name };
+    } catch {
+      // Not a Chromium after all, or refuses to start headless — try the next.
+    }
+  }
+
   // Playwright-managed engines, present only if `playwright install` was run.
   for (const [engine, type] of [
     ['chromium', chromium],

@@ -87,6 +87,10 @@ function startServer(port) {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
       VGPT_PORT: String(port),
+      // Tells the server which shell it is inside, so Settings can report that
+      // PlayStation recovery works here via the app's own Chromium rather than
+      // claiming no browser was found.
+      VGPT_HOST: 'desktop',
       VGPT_WEB_DIR: web,
       VGPT_DATA_DIR: dataDir(),
     },

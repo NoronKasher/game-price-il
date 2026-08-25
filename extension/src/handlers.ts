@@ -351,6 +351,10 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
       hash: currentSearchHash(),
       source: searchHashSource(),
       browser: null,
+      // Not "no browser found" — the user is reading this IN a browser. An
+      // extension has no way to start one and watch its requests, which is a
+      // fact about extensions, not about their machine.
+      recovery: 'manual' as const,
     })),
     setPsnHash: withDb(async (hash: string) => {
       const raw = String(hash ?? '').trim().toLowerCase();

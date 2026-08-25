@@ -181,10 +181,16 @@ app.post('/api/health/run', async (_req, res) => {
  * secret, so it is shown in full — seeing it is how a user confirms a fix.
  */
 app.get('/api/psn-hash', async (_req, res) => {
+  // The desktop shell recovers with the Chromium it already is (desktop/psnHash.js),
+  // so it never needs — and never finds — an installed browser to drive. Saying
+  // "no browser found" there would report a working feature as broken.
+  const host = process.env.VGPT_HOST;
+  const engine = host === 'desktop' ? null : await probeBrowser();
   res.json({
     hash: currentSearchHash(),
     source: searchHashSource(),
-    browser: await probeBrowser(),
+    browser: engine,
+    recovery: host === 'desktop' ? 'self' : engine ? 'browser' : 'manual',
     // For a host that can drive a browser of its own — the desktop build asks
     // for this and goes and gets a fresh hash when it turns true.
     needsRecovery: hashNeedsRecovery(),

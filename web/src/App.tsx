@@ -1866,7 +1866,13 @@ function PsnPanel() {
       {status && (
         <>
           <p className={`psn-browser ${status.browser ? 'ok' : 'warn'}`}>
-            {status.browser ? t.psnBrowserOk(status.browser) : t.psnBrowserNone}
+            {status.recovery === 'self'
+              ? t.psnBrowserSelf
+              : status.recovery === 'manual'
+                ? t.psnBrowserManual
+                : status.browser
+                  ? t.psnBrowserOk(status.browser)
+                  : t.psnBrowserNone}
           </p>
           <div className="psn-row">
             <span className="psn-label">{t.psnSourceLabel}</span>
