@@ -40,12 +40,18 @@ const PRICE_API = 'https://api.ec.nintendo.com/v1/price';
 interface AlgoliaHit {
   title: string;
   nsuid?: string;
-  productImageSquare?: string;
+  /** Ready-made cover URL. Explicitly null on most of the catalogue. */
+  productImageSquare?: string | null;
+  /** Cloudinary public id for the same art — present even when the URL isn't. */
+  productImage?: string | null;
 }
 interface SolrDoc {
   title: string;
   nsuid_txt?: string[];
   image_url?: string;
+  image_url_sq_s?: string;
+  image_url_h2x1_s?: string;
+  image_url_h16x9_s?: string;
 }
 interface NintendoPrice {
   title_id: number;
@@ -60,6 +66,36 @@ interface Merged {
   image?: string;
   americas?: string; // nsuid
   europe?: string; // nsuid
+}
+
+/**
+ * Nintendo's own image CDN, with the transform the eShop itself asks for.
+ *
+ * Americas listings carry their art twice: `productImageSquare` is a finished
+ * delivery URL, but it comes back null on most of the catalogue, while
+ * `productImage` — the Cloudinary public id that same URL is built from — is
+ * always there. Assembling the URL from the id yields the identical
+ * first-party picture, so a null square costs the game nothing.
+ */
+const ASSETS = 'https://assets.nintendo.com/image/upload/q_auto/f_auto';
+
+/** Cover art for an Americas (Algolia) listing. */
+function americasImage(h: AlgoliaHit): string | undefined {
+  if (h.productImageSquare) return h.productImageSquare;
+  return h.productImage ? `${ASSETS}/${h.productImage}` : undefined;
+}
+
+/**
+ * Cover art for a Europe (Solr) listing.
+ *
+ * `image_url` alone — the only field this used to read — is absent from every
+ * recently added game, Switch 2 titles included, which is why half of a
+ * results grid came back as bare text boxes. `image_url_sq_s` is the square
+ * box art the eShop prints on its own tiles, so it leads; the wide banners
+ * cover the older entries that have no square.
+ */
+function europeImage(doc: SolrDoc): string | undefined {
+  return doc.image_url_sq_s || doc.image_url || doc.image_url_h2x1_s || doc.image_url_h16x9_s || undefined;
 }
 
 const priceCache = new Map<string, { price: NintendoPrice | null; at: number }>();
@@ -128,7 +164,7 @@ export const nintendo: SourceAdapter = {
       if (d.accessory) continue;
       const m = merged.get(d.groupKey) ?? { title: d.base || h.title, edition: d.edition };
       m.americas = h.nsuid;
-      m.image ??= h.productImageSquare;
+      m.image ??= americasImage(h);
       merged.set(d.groupKey, m);
     }
     for (const doc of euDocs) {
@@ -138,7 +174,7 @@ export const nintendo: SourceAdapter = {
       if (d.accessory) continue;
       const m = merged.get(d.groupKey) ?? { title: d.base || doc.title, edition: d.edition };
       m.europe = nsuid;
-      m.image ??= doc.image_url;
+      m.image ??= europeImage(doc);
       merged.set(d.groupKey, m);
     }
 

@@ -21,6 +21,19 @@ const tile = (title, subtitle, sales, standard) => `
     </span>
   </div>`;
 
+/**
+ * A tile's picture sits ABOVE its details in Ubisoft's grid, so in the raw HTML
+ * it precedes the `card-details__title-wrapper` it belongs to. `alt` carries the
+ * full SKU name, which is what ties the two back together.
+ */
+const art = (alt, file) => `
+  <div class="product-image card-image-wrapper">
+    <img class="product_image primary-image lazy responsive_image card-image"
+      src="/on/demandware.static/Sites-us_ubisoft-Site/-/default/dw323b9f18/images/loading-state.gif"
+      data-src="https://store.ubisoft.com/dw/image/v2/ABBS_PRD/on/demandware.static/-/Sites-masterCatalog/default/dw9d1ff632/images/large/${file}.jpg?sw=300&amp;sh=395&amp;sm=fit"
+      alt="${alt}" />
+  </div>`;
+
 const US_FAR_CRY_5 = [
   tile('Far Cry 5', 'Gold Edition', '$13.50', '$89.99'),
   tile('Far Cry 5', 'Standard Edition', '$9.00', '$59.99'),
@@ -105,4 +118,53 @@ test("an entity-encoded apostrophe does not fork the title's group key", () => {
   const html = tile('Assassin&rsquo;s Creed Mirage', 'Standard Edition', '$49.99');
   const pick = pickGameTile(parseTiles(html), 'assassin s creed mirage');
   assert.equal(pick.value, 49.99);
+});
+
+test('a tile takes the cover art printed above it', () => {
+  const html = art('Far Cry 5 Gold Edition', 'gold') + tile('Far Cry 5', 'Gold Edition', '$13.50');
+  const [t] = parseTiles(html);
+  // "&amp;" decoded, so the URL keeps its real query separators.
+  assert.equal(
+    t.image,
+    'https://store.ubisoft.com/dw/image/v2/ABBS_PRD/on/demandware.static/-/Sites-masterCatalog/default/dw9d1ff632/images/large/gold.jpg?sw=300&sh=395&sm=fit'
+  );
+});
+
+test('each tile gets its own art, never the neighbour above it', () => {
+  const html =
+    art('Far Cry 5 Gold Edition', 'gold') +
+    tile('Far Cry 5', 'Gold Edition', '$13.50') +
+    art('Far Cry 6 Standard Edition', 'fc6') +
+    tile('Far Cry 6', 'Standard Edition', '$29.99');
+  const tiles = parseTiles(html);
+  assert.match(tiles[0].image, /\/gold\.jpg/);
+  assert.match(tiles[1].image, /\/fc6\.jpg/);
+});
+
+test('a picture that does not name this game is dropped, not attached', () => {
+  // If Ubisoft ever moves the image below the details, every tile would
+  // inherit its neighbour's box art. No art beats the wrong art.
+  const html = art('Assassin&rsquo;s Creed Mirage', 'acm') + tile('Far Cry 5', 'Standard Edition', '$9.00');
+  assert.equal(parseTiles(html)[0].image, undefined);
+});
+
+test('art is only ever taken from Ubisoft itself', () => {
+  const html =
+    `<div class="product-image card-image-wrapper"><img class="product_image primary-image lazy card-image"
+       data-src="https://notubisoft.com/x.jpg" alt="Far Cry 5 Standard Edition" /></div>` +
+    tile('Far Cry 5', 'Standard Edition', '$9.00');
+  assert.equal(parseTiles(html)[0].image, undefined);
+});
+
+test('a tile with no picture is still parsed and priced', () => {
+  const [t] = parseTiles(tile('Far Cry 3', null, '$19.99'));
+  assert.equal(t.image, undefined);
+  assert.equal(t.sales, '$19.99');
+});
+
+test('a spelling difference between title and alt does not lose the art', () => {
+  // The US grid really does list "FARCRY 3 Blood Dragon" under an alt of
+  // "Far Cry 3 Blood Dragon"; matching has to ignore spacing and punctuation.
+  const html = art('Far Cry 3 Blood Dragon', 'bd') + tile('FARCRY 3 Blood Dragon', null, '$4.99');
+  assert.match(parseTiles(html)[0].image, /\/bd\.jpg/);
 });

@@ -91,6 +91,42 @@ interface EaPrice {
   currency?: string;
 }
 
+/**
+ * EA's image objects are a set of aspect-ratio crops, never a `{ url }`.
+ * Reaching for `.url` — which is what this did — came back undefined every
+ * time, which is why an EA hit has always rendered as a bare title box.
+ */
+interface EaImage {
+  ar1X1?: string;
+  ar3X4?: string;
+  ar2X3?: string;
+  ar16X9?: string;
+  ar2X1?: string;
+}
+
+/** Pack art from an EA image object, squarest crop first. */
+function artOf(art: unknown): string | undefined {
+  if (typeof art === 'string') return art || undefined;
+  if (!art || typeof art !== 'object') return undefined;
+  const a = art as EaImage;
+  return a.ar1X1 || a.ar3X4 || a.ar2X3 || a.ar16X9 || a.ar2X1 || undefined;
+}
+
+/**
+ * Cover art per catalog path, remembered from buy pages already read.
+ *
+ * EA publishes no art in anything `search` fetches: the sitemap is bare
+ * <loc> URLs (no image extension), and the pack art lives only on each game's
+ * own buy page. Reading those during a search would mean up to MAX_HITS extra
+ * requests to ea.com per search, which is not a cost this tool imposes on a
+ * store to decorate a grid. So search reuses the art from any buy page a price
+ * lookup has already fetched, and shows none otherwise: an EA game gets its
+ * cover once its prices have been opened, and keeps it for the life of the
+ * process. Unlike `pageCache` this has no TTL — prices go stale, box art
+ * doesn't — and it is bounded by the catalog, ~97 entries.
+ */
+const artByPath = new Map<string, string>();
+
 /** Read the game's title, art and cheapest edition price off its buy page. */
 async function readBuyPage(
   path: string
@@ -117,6 +153,12 @@ async function readBuyPage(
     ?.gameDetails;
   if (!gd) return null;
 
+  // The game's own pack art, falling back to the art of the edition being
+  // priced. Read before the price guard below: a game EA has stopped selling
+  // still shows up as a search hit, and it can still have a cover.
+  const image = artOf(gd.packArt) ?? artOf((gd.lowestPriceGameEdition as { packArt?: unknown } | undefined)?.packArt);
+  if (image) artByPath.set(path, image);
+
   // Cheapest edition EA lists; `lowestPriceGameEdition` is EA's own pick.
   const lowest = (gd.lowestPriceGameEdition as { price?: EaPrice } | undefined)?.price;
   const editions = (gd.editions as { price?: EaPrice }[] | undefined) ?? [];
@@ -129,10 +171,9 @@ async function readBuyPage(
   const platforms = ((gd.platformDetails as { name?: string; platform?: string }[] | undefined) ?? []).map((p) =>
     String(p.name ?? p.platform ?? '').toUpperCase()
   );
-  const art = gd.packArt as { url?: string } | string | undefined;
   return {
     title: String(gd.gameTitle ?? '') || titleFromSlug(path.split('/').pop()!),
-    image: typeof art === 'string' ? art : art?.url,
+    image,
     price,
     // A game EA lists only for consoles isn't an EA App purchase.
     onEaApp: platforms.length === 0 || platforms.some((p) => p.includes('EA-APP') || p.includes('PC')),
@@ -165,6 +206,7 @@ export const ea: SourceAdapter = {
         title: d.base,
         groupKey: d.groupKey,
         edition: d.edition,
+        image: artByPath.get(g.path),
         platform: 'pc',
       });
       if (hits.length >= MAX_HITS) break;

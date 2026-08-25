@@ -119,6 +119,8 @@ interface Tile {
   sales: string;
   /** Pre-discount price as printed, when the tile shows one. */
   standard: string | null;
+  /** Cover art from the tile's own <img>, when it can be tied to this tile. */
+  image?: string;
 }
 
 /**
@@ -140,16 +142,50 @@ const GAME_EDITION =
 const BASE_EDITION = /\bstandard\b/i;
 
 /**
+ * The tile's cover art, read out of the chunk BEFORE its details.
+ *
+ * Ubisoft renders the picture above the title, so splitting on the details
+ * wrapper leaves every tile's `<img>` at the tail of the preceding chunk. That
+ * offset is a layout convention and nothing more, and hanging the neighbour's
+ * box art on a game is the same class of confident-and-wrong output the tile
+ * picker above exists to prevent — so the `alt`, which Ubisoft writes as the
+ * full SKU name ("Far Cry 5 Gold Edition"), has to start with this tile's own
+ * title before the URL is taken. If the markup ever moves, tiles lose their art
+ * rather than wear someone else's.
+ *
+ * The art itself costs nothing: it is served by Ubisoft off the very page the
+ * price was parsed from, so no store sees a second request for it.
+ */
+const TILE_IMAGE = /class="[^"]*primary-image[^"]*"[\s\S]{0,900}?data-src="([^"]+)"[\s\S]{0,400}?alt="([^"]*)"/g;
+
+/** Letters and digits only — enough to compare a title against an alt attribute. */
+function squash(s: string): string {
+  return decodeEntities(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function imageBefore(chunk: string, title: string): string | undefined {
+  const last = [...chunk.matchAll(TILE_IMAGE)].at(-1);
+  if (!last) return undefined;
+  const url = decodeEntities(last[1]!);
+  // Only Ubisoft's own CDN. An image URL is the one scraped field a browser
+  // will go and fetch, so it must not be able to point somewhere else.
+  if (!/^https:\/\/([\w-]+\.)*ubisoft\.com\//.test(url)) return undefined;
+  return squash(last[2]!).startsWith(squash(title)) ? url : undefined;
+}
+
+/**
  * Split a Ubisoft search grid into product tiles.
  *
  * Every tile opens with `card-details__title-wrapper` (verified 1:1 with the
  * per-tile title and price markers), so splitting on it yields one chunk per
- * product; the leading chunk is page chrome and is dropped.
+ * product. The leading chunk is page chrome — apart from the first tile's
+ * picture, which sits above its details and so lands there; see `imageBefore`.
  */
 export function parseTiles(html: string): Tile[] {
-  const chunks = html.split('card-details__title-wrapper').slice(1);
+  const chunks = html.split('card-details__title-wrapper');
   const tiles: Tile[] = [];
-  for (const chunk of chunks) {
+  for (let i = 1; i < chunks.length; i++) {
+    const chunk = chunks[i]!;
     const title = firstGroup(chunk, /class="prod-title"[^>]*>([\s\S]*?)<\/div>/);
     const sales = firstGroup(chunk, /class="price-sales[^"]*"[^>]*>([\s\S]*?)<\/span>/);
     if (!title || !sales) continue;
@@ -158,7 +194,7 @@ export function parseTiles(html: string): Tile[] {
     // merging "Far Cry 5" with a Korean "스탠다드 에디션" would change the group key
     // and silently drop every non-English store from the board.
     const subtitle = firstGroup(chunk, /class="card-subtitle"[^>]*>([\s\S]*?)<\/div>/);
-    tiles.push({ title, subtitle, sales, standard });
+    tiles.push({ title, subtitle, sales, standard, image: imageBefore(chunks[i - 1]!, title) });
   }
   return tiles;
 }
@@ -227,6 +263,7 @@ export const ubisoft: SourceAdapter = {
         title: d.base,
         groupKey: d.groupKey,
         edition: d.edition,
+        image: tile.image,
         platform: 'pc',
       });
       if (hits.length >= 12) break;
