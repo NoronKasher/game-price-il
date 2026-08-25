@@ -16,6 +16,42 @@ fs.mkdirSync(dist, { recursive: true });
 // it. It is Chrome's bookkeeping, not ours, and shipping it in a store upload
 // is a rejection waiting to happen.
 fs.rmSync(path.join(dist, '_metadata'), { recursive: true, force: true });
+
+/**
+ * Drop assets from earlier builds.
+ *
+ * Vite writes content-hashed filenames, and this directory is built with
+ * `emptyOutDir: false` — the UI build and the service-worker build each add to
+ * it, and neither may wipe it without destroying the other's output. So every
+ * rebuild leaves the previous bundle behind under its old hash, and nothing ever
+ * removes it. Measured before this existed: 292 KB of real assets and 1,605 KB
+ * of orphans across ten dead files, all of it headed for the store upload.
+ *
+ * index.html is the authority on what is live — it names the exact hashed files
+ * this build produced.
+ */
+function pruneStaleAssets() {
+  const assets = path.join(dist, 'assets');
+  const indexHtml = path.join(dist, 'index.html');
+  if (!fs.existsSync(assets) || !fs.existsSync(indexHtml)) return;
+
+  const html = fs.readFileSync(indexHtml, 'utf8');
+  const live = new Set([...html.matchAll(/(?:src|href)="[^"]*assets\/([^"]+)"/g)].map((m) => m[1]));
+
+  let removed = 0;
+  let freed = 0;
+  for (const file of fs.readdirSync(assets)) {
+    if (live.has(file)) continue;
+    const full = path.join(assets, file);
+    freed += fs.statSync(full).size;
+    fs.rmSync(full, { force: true });
+    removed++;
+  }
+  if (removed > 0) {
+    console.log(`pruned ${removed} stale asset(s) from earlier builds — ${Math.round(freed / 1024)} KB`);
+  }
+}
+pruneStaleAssets();
 for (const f of ['manifest.json', 'rules.json']) {
   fs.copyFileSync(path.join(here, f), path.join(dist, f));
 }
