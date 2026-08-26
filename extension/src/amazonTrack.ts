@@ -29,13 +29,14 @@ export async function trackAmazonListing(listing: AmazonListing): Promise<void> 
   }
   const priceILS = await toILS(listing.price, listing.currency);
 
+  // 'other', not 'pc'. An Amazon listing rarely says which platform it is for in
+  // a way worth parsing, and filing it under a console we guessed would be the
+  // tool inventing an answer — the one thing it is built not to do.
   const row =
-    findWishlist(listing.title, 'pc') ??
+    findWishlist(listing.title, 'other') ??
     addToWishlist({
       title: listing.title,
-      // Amazon sells across every platform and the listing rarely says which in
-      // a way worth parsing. 'pc' is the neutral bucket rather than a claim.
-      platform: 'pc',
+      platform: 'other',
       refs: [{ sourceId: AMAZON_SOURCE, sourceGameId: listing.asin }],
     });
 

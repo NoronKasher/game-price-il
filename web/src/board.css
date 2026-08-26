@@ -170,6 +170,9 @@ body {
 .chip.xbox { background: var(--xbox); border-color: var(--xbox); color: #fff; }
 .chip.xbox:hover { background: color-mix(in srgb, var(--xbox) 85%, #fff); }
 .chip.switch { background: color-mix(in srgb, var(--switch) 26%, transparent); border-color: var(--switch); }
+/* "Other" is the absence of a platform claim, so it is deliberately colourless —
+   a neutral chip, not a fifth console competing with the real ones. */
+.chip.other { background: var(--panel-2); border-color: var(--line); color: var(--muted); }
 .chip.soon { background: none; border: 1px dashed var(--line); color: var(--muted); cursor: default; }
 
 /* ── board (offers + wishlist tables) ── */
@@ -1349,3 +1352,13 @@ a.dlc-offer-price:hover { text-decoration: underline; }
   color: var(--muted); border: 1px solid var(--line); background: var(--panel-2);
 }
 .dt-ftoggle.on .dt-help { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 50%, var(--line)); }
+
+/* Start tracking from the summary that just told you to. */
+.pstat-track {
+  width: 100%; margin-top: 12px; padding: 9px 0; border: 0; border-radius: 8px;
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: var(--amber); color: #0d1117;
+}
+.pstat-track:hover { filter: brightness(1.08); }
+.pstat-track:disabled { opacity: .6; cursor: default; }
+.pstat-tracked { margin: 12px 0 0; font-size: 12px; color: var(--down); }

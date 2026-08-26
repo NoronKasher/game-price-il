@@ -203,6 +203,8 @@ export const t = {
     when ? `הנמוך ביותר שנרשם: ${price} (${when})` : `הנמוך ביותר שנרשם: ${price}`,
   statsChecks: (n: number) => `${n} בדיקות מחיר שמורות`,
   statsOneCheck: 'נרשמה בדיקת מחיר אחת — עוד לא מספיק לגרף.',
+  statsTrackThis: '➕ עקבו אחרי המשחק הזה',
+  statsTracked: '✓ המשחק במעקב — המחירים נרשמים אוטומטית',
   statsNoHistory: 'אין עדיין היסטוריית מחירים למשחק הזה. הוסיפו אותו למעקב כדי להתחיל לאסוף.',
   // Every row goes somewhere — a comparison that cannot be acted on is trivia.
   depColGo: 'לרכישה',
@@ -486,6 +488,8 @@ export const platformNames: Record<Platform, string> = {
   ps4: 'PS4',
   xbox: 'Xbox',
   switch: 'Switch',
+  // Not a console: a row whose platform we genuinely do not know.
+  other: 'אחר',
 };
 
 /**

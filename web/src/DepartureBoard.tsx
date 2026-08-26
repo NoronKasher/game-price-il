@@ -371,6 +371,8 @@ export function DepartureBoard({
               offers={filtered}
               title={title}
               platform={platform}
+              image={image}
+              refs={refs}
               eilat={eilat}
               filtered={filtered.length !== all.length}
             />

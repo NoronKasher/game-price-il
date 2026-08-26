@@ -3,7 +3,7 @@ import { api } from './api';
 import { nis, t } from './he';
 import { cleanStoreName, regionLabel } from './source';
 import { eilatPrice } from './eilat';
-import type { HistoryPoint, Offer, Platform } from './types';
+import type { HistoryPoint, Offer, Platform, SourceRef } from './types';
 
 /**
  * What the board's prices add up to, under the game it belongs to.
@@ -115,6 +115,8 @@ export function PriceStats({
   offers,
   title,
   platform,
+  image,
+  refs,
   eilat,
   filtered,
 }: {
@@ -122,21 +124,35 @@ export function PriceStats({
   offers: Offer[];
   title: string;
   platform: Platform;
+  image?: string;
+  /** Needed to start tracking from here — the panel is where people ask to. */
+  refs: SourceRef[];
   eilat: boolean;
   /** True when filters are hiding something, so the numbers can say what they cover. */
   filtered: boolean;
 }) {
   const [history, setHistory] = useState<HistoryPoint[] | null>(null);
+  const [tracked, setTracked] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // The tracked history, if this game has any. A local database read: opening a
   // game must never cost a store a request it did not already need.
   useEffect(() => {
     let live = true;
     setHistory(null);
+    setTracked(null);
     api
       .trackStatus(title, platform)
-      .then((r) => live && setHistory(r.history ?? []))
-      .catch(() => live && setHistory([]));
+      .then((r) => {
+        if (!live) return;
+        setHistory(r.history ?? []);
+        setTracked(r.tracked);
+      })
+      .catch(() => {
+        if (!live) return;
+        setHistory([]);
+        setTracked(false);
+      });
     return () => {
       live = false;
     };
@@ -236,6 +252,28 @@ export function PriceStats({
       )}
       {points.length === 1 && <p className="pstat-checks">{t.statsOneCheck}</p>}
       {history !== null && points.length === 0 && <p className="pstat-checks">{t.statsNoHistory}</p>}
+
+      {/* The panel told people to start tracking and then gave them no way to.
+          An instruction with no control is worse than no instruction. */}
+      {tracked === false && refs.length > 0 && (
+        <button
+          className="pstat-track"
+          disabled={saving}
+          onClick={async () => {
+            setSaving(true);
+            try {
+              const r = await api.track({ title, platform, image, refs });
+              setHistory(r.history ?? []);
+              setTracked(true);
+            } finally {
+              setSaving(false);
+            }
+          }}
+        >
+          {saving ? t.tracking : t.statsTrackThis}
+        </button>
+      )}
+      {tracked && <p className="pstat-tracked">{t.statsTracked}</p>}
     </section>
   );
 }

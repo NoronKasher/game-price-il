@@ -15,7 +15,19 @@
 // single Smart Delivery SKU and one disc plays on both, so a per-generation
 // split only scattered the same game's offers across two boards. PS4/PS5 stay
 // separate — those really are different discs at different prices.
-export type Platform = 'pc' | 'ps5' | 'ps4' | 'xbox' | 'switch';
+/**
+ * `other` is not a console — it is the absence of a claim.
+ *
+ * A price read off an Amazon page (or any future source we cannot query) rarely
+ * says which platform the listing is for in a way worth parsing, and filing it
+ * under `pc` would be inventing an answer. The tool's whole posture is to say
+ * what it knows, so an unknown platform is labelled unknown and the user decides
+ * what it is.
+ *
+ * Deliberately excluded from ALL_PLATFORMS: no adapter should ever be SEARCHED
+ * for it. It exists only as a home for rows that arrive already priced.
+ */
+export type Platform = 'pc' | 'ps5' | 'ps4' | 'xbox' | 'switch' | 'other';
 
 /**
  * The result of parsing a free-text search query.
