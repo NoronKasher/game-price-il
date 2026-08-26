@@ -31,6 +31,7 @@ import { SearchBox, rememberSearch, loadIncludeDlc, saveIncludeDlc } from './Sea
 import type { HealthReport, PsnHashStatus } from './types';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
+import { HoldToConfirm } from './HoldToConfirm';
 import { SearchProgressBar, type ProgressState } from './SearchProgressBar';
 import { loadProgressBar, loadProgressBlink, saveProgressBar, saveProgressBlink } from './progressPrefs';
 import { clearMutesForWorkingSources, muteForADay, muteUntilBack, visibleFailures } from './sourceNotice';
@@ -803,6 +804,75 @@ function normText(v: string): string {
 /** The words a query is asking about. One-letter noise is dropped. */
 function normWords(q: string): string[] {
   return normText(q).split(' ').filter((w) => w.length > 1);
+}
+
+/**
+ * Every alert that has ever fired, in Settings.
+ *
+ * The bell is a place things pass through: it is cleared, and once cleared the
+ * fact that a price ever dropped is gone. That is the wrong shape for the one
+ * record the tool keeps of its own behaviour — someone who cleared the bell by
+ * reflex, or who was not looking, has no way to find out what they missed.
+ *
+ * So the log shows everything, read or not, and clearing it is deliberately
+ * harder than clearing the bell: three seconds of holding, because unlike the
+ * bell this really is the last copy.
+ */
+function NotificationLog() {
+  const [items, setItems] = useState<AppNotification[] | null>(null);
+
+  const load = () =>
+    api
+      .getNotifications()
+      .then((r) => setItems(r.items))
+      .catch(() => setItems([]));
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const clear = async () => {
+    await api.clearNotifications();
+    await load();
+  };
+
+  return (
+    <div className="setting-row setting-row-block">
+      <div className="setting-text">
+        <span className="setting-label">{t.logTitle}</span>
+        <p className="setting-note">{t.logHint}</p>
+
+        {items === null ? (
+          <p className="log-empty">{t.depLoading}</p>
+        ) : items.length === 0 ? (
+          <p className="log-empty">{t.logEmpty}</p>
+        ) : (
+          <>
+            <ul className="log-list">
+              {items.map((n) => (
+                <li key={n.id} className={n.read ? '' : 'unread'}>
+                  <span className="log-when">{t.timeAgo(n.created_at)}</span>
+                  <span className="log-title">{n.title}</span>
+                  <span className="log-msg">{n.message}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="log-count">{t.logCount(items.length)}</p>
+          </>
+        )}
+
+        <div className="log-actions">
+          <HoldToConfirm
+            label={t.logClear}
+            holding={t.logClearHolding}
+            done={t.logCleared}
+            onConfirm={() => void clear()}
+          />
+          <p className="log-clear-note">{t.logClearNote}</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SourceNotice({ sources }: { sources?: SourceStatus[] }) {
@@ -2130,6 +2200,8 @@ function SettingsView({
           <span className="toggle-text">{openAnim ? t.animOn : t.animOff}</span>
         </button>
       </div>
+
+      <NotificationLog />
 
       <div className="setting-row">
         <div className="setting-text">

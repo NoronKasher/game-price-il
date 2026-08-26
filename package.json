@@ -22,7 +22,7 @@
     "desktop:smoke": "npm run build:desktop && electron desktop/main.js --smoke",
     "package:ext": "npm run build:ext && node extension/zip.mjs",
     "package:desktop": "npm run build:desktop && electron-builder --win",
-    "test:ext": "tsx --test extension/src/*.test.mjs",
+    "test:ext": "tsx --import ./server/src/testEnv.mjs --test extension/src/*.test.mjs",
     "changelog": "node scripts/changelog.mjs",
     "desktop:psn-hash": "npm run build:desktop && electron desktop/main.js --psn-hash"
   },

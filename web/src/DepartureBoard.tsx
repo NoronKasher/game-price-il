@@ -213,6 +213,20 @@ export function DepartureBoard({
     return list;
   }, [all, types, region, onSale, hiddenStores, onlyBuyable, preferred]);
 
+  /**
+   * Whether the "only what I can buy from here" toggle can still change anything.
+   *
+   * Judged on what is CURRENTLY VISIBLE, not on the whole board. Once the other
+   * filters have already removed every row that carries a caveat — showing only
+   * discs, say, which are never region-locked — the toggle is a control that
+   * does nothing, and offering it invites the user to press it and conclude the
+   * tool is broken. Same reasoning as the recover button that could not recover.
+   */
+  const filterableRisk = useMemo(
+    () => !onlyBuyable && boardHasRisk(filtered, preferred),
+    [filtered, preferred, onlyBuyable]
+  );
+
   const rows = useMemo<Row[]>(() => {
     let list = filtered;
     const byPrice = (a: Offer, b: Offer) => a.priceILS - b.priceILS;
@@ -402,7 +416,7 @@ export function DepartureBoard({
                 {t.depOnSale}
               </button>
             )}
-            {anyRisk && (
+            {(filterableRisk || onlyBuyable) && (
               <button
                 className={`dt-ftoggle ${onlyBuyable ? 'on' : ''}`}
                 aria-pressed={onlyBuyable}

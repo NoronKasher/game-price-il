@@ -432,6 +432,18 @@ export const t = {
   relatedTitle: 'יכול להיות שהתכוונתם גם ל־',
   relatedOnlyTitle: 'לא נמצאה התאמה מדויקת — אלה תוצאות עם שם דומה',
   relatedHint: 'התוצאות האלה לא מכילות את כל המילים שחיפשתם, אבל הן דומות בשם.',
+  // The bell is a place things pass through; this is the record. Clearing it is
+  // deliberately harder, because unlike the bell it really is the last copy.
+  logTitle: 'יומן התראות',
+  logHint:
+    'כל ההתראות שנשלחו, כולל כאלה שכבר נקראו או שנוקו מהפעמון. אם פספסתם התראה או ניקיתם את הפעמון בטעות — היא עדיין כאן.',
+  logEmpty: 'עוד לא נשלחה אף התראה.',
+  logCount: (n: number) => `${n} התראות ביומן`,
+  logClear: 'מחיקת היומן — החזיקו 3 שניות',
+  logClearHolding: 'ממשיכים להחזיק…',
+  logCleared: 'היומן נמחק ✓',
+  logClearNote:
+    'המחיקה סופית ואין לה ביטול — זו הרשומה האחרונה של ההתראות. לכן צריך להחזיק את הכפתור שלוש שניות; שחרור באמצע מבטל.',
   // The bar exists because the wait is real and cannot be shortened — the slow
   // sources are the Israeli shops, held to a 2.5s gap on purpose. What it can
   // stop being is unexplained.

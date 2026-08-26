@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "node src/index.ts",
-    "test": "tsx --test src/*.test.mjs"
+    "test": "tsx --import ./src/testEnv.mjs --test src/*.test.mjs"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

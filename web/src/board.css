@@ -1302,3 +1302,41 @@ a.dlc-offer-price:hover { text-decoration: underline; }
   .searchprog-fill { transition: none; }
   .searchprog.blink .searchprog-pct { animation: none; }
 }
+
+/* Hold-to-confirm: a destructive action that cannot be triggered by reflex.
+   The fill is the affordance — it shows both that something is happening and
+   that letting go stops it. */
+.holdbtn {
+  position: relative; overflow: hidden; font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; border-radius: 8px; padding: 8px 18px;
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--up) 45%, var(--line));
+  transition: border-color 0.15s ease;
+}
+.holdbtn:hover { border-color: var(--up); }
+.holdbtn-fill {
+  position: absolute; inset-inline-start: 0; top: 0; bottom: 0;
+  background: color-mix(in srgb, var(--up) 55%, transparent);
+  transition: width 0.06s linear;
+}
+.holdbtn-text { position: relative; }
+.holdbtn.holding { border-color: var(--up); }
+.holdbtn.fired { background: color-mix(in srgb, var(--down) 22%, var(--panel-2)); border-color: var(--down); }
+.holdbtn:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* The alert log itself. */
+.log-list {
+  list-style: none; margin: 12px 0 0; padding: 0; direction: rtl;
+  max-height: 260px; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2);
+}
+.log-list li { display: grid; gap: 2px; padding: 9px 12px; font-size: 12.5px; }
+.log-list li + li { border-top: 1px solid var(--line); }
+.log-list li.unread { background: color-mix(in srgb, var(--amber) 6%, transparent); }
+.log-when { color: var(--muted); font-size: 11px; }
+.log-title { color: var(--text); font-weight: 600; }
+.log-msg { color: var(--muted); line-height: 1.5; }
+.log-empty { margin: 12px 0 0; color: var(--muted); font-size: 12.5px; }
+.log-count { margin: 8px 0 0; color: var(--muted); font-size: 11.5px; }
+.log-actions { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.log-clear-note { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.6; max-width: 46ch; }
