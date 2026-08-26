@@ -134,8 +134,12 @@ export function parsePrice(text: string): { price: number; currency: string } | 
 
   // 1.234,56 (European) vs 1,234.56 (Anglo): the LAST separator is the decimal
   // one. Getting this backwards turns €1.234 into €1.23.
-  const digits = cleaned.match(/\d[\d.,]*/)?.[0];
-  if (!digits) return null;
+  // A leading minus means a savings line ("-$10.00"), not a price. The digit
+  // scan alone reads it as a positive number, which would record a discount
+  // amount as what the item costs.
+  const match = cleaned.match(/(-|−|–)?(\d[\d.,]*)/);
+  if (!match || match[1]) return null;
+  const digits = match[2]!;
   const lastDot = digits.lastIndexOf('.');
   const lastComma = digits.lastIndexOf(',');
   let normalised: string;

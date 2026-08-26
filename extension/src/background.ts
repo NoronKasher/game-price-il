@@ -5,6 +5,7 @@ import { setChangeListener } from './db.browser.ts';
 import { scheduleSyncPush, startSyncMirror } from './syncMirror.ts';
 import { startAutoCapture } from './autoCapture.ts';
 import { trackAmazonListing, untrackAmazonListing, recordAmazonVisit } from './amazonTrack.ts';
+import { comparePage, type CompareRequest } from './comparePage.ts';
 import type { SourceAdapter } from '../../server/src/adapters/types.ts';
 
 import { cheapshark } from '../../server/src/adapters/cheapshark.ts';
@@ -128,6 +129,31 @@ chrome.runtime.onConnect.addListener((port) => {
  * line is where it is.
  */
 const AMAZON_ACTIONS = new Set(['amazon-track', 'amazon-untrack', 'amazon-seen']);
+
+/**
+ * Storefronts whose product pages carry the comparison panel.
+ *
+ * Checked against the SENDER, not against anything the message says about
+ * itself: a message claiming to come from Steam is not the same as one that
+ * came from there.
+ */
+const STORE_ORIGINS =
+  /^https:\/\/(store\.steampowered\.com|www\.gog\.com|www\.xbox\.com|store\.playstation\.com|www\.nintendo\.com|store\.epicgames\.com)/;
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.__vgpt !== 'compare-page') return;
+  const from = sender.origin ?? sender.url ?? '';
+  if (!STORE_ORIGINS.test(from)) {
+    sendResponse({ ok: false, error: 'unexpected sender' });
+    return;
+  }
+  // The one fan-out in this extension that a page can start — and only after a
+  // person clicked a button on it. See storePage.ts.
+  void comparePage(sources, msg.page as CompareRequest)
+    .then((comparison) => sendResponse({ ok: true, comparison }))
+    .catch((err) => sendResponse({ ok: false, error: err instanceof Error ? err.message : 'failed' }));
+  return true; // keep the channel open, which also keeps the worker awake
+});
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!AMAZON_ACTIONS.has(msg?.__vgpt)) return;

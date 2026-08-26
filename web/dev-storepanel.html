@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head><meta charset="utf-8"><title>store panel harness</title>
+<!--
+  A development harness for the store-page panel.
+
+  The panel otherwise can only be looked at by building the extension, loading
+  it unpacked and visiting a real shop, which is a slow loop for a change to a
+  margin. This is a stand-in Steam page: `mountStorePanel` takes an href for
+  exactly this reason, and `chrome.runtime` is stubbed with the reply the worker
+  would send.
+
+  Served by the dev server at /dev-storepanel.html. Not an entry point, so it
+  never reaches a build — verified against web/dist.
+-->
+<style>body{background:#11151c;color:#c9d1d9;font:14px system-ui;margin:0;padding:40px}
+.fake{max-width:560px}.fake h1{font-size:26px}.game_area_purchase_game_wrapper{border:1px solid #333;padding:12px;margin:14px 0}</style>
+</head>
+<body>
+<div class="fake">
+  <h1 id="appHubAppName">Hollow Knight</h1>
+  <div class="game_area_purchase_game_wrapper"><div class="game_purchase_price">₪89.12</div></div>
+  <div class="game_area_purchase_game_wrapper"><div class="discount_final_price">₪150.00</div></div>
+  <p>A stand-in for a Steam product page, so the panel can be looked at.</p>
+</div>
+<script type="module">
+  window.chrome = { runtime: { lastError: null, sendMessage: (msg, cb) => setTimeout(() => cb({
+    ok: true,
+    comparison: {
+      matchedTitle: 'Hollow Knight',
+      rows: [
+        { store: 'Steam 🇹🇷', regionName: 'טורקיה', flag: '🇹🇷', priceILS: 21.4, url: 'https://example.test/1' },
+        { store: 'GOG', priceILS: 33.9, url: 'https://example.test/2' },
+        { store: 'Fanatical · ITAD', priceILS: 41.2 },
+      ],
+      pagePriceILS: 89.12,
+      savingILS: 67.72,
+    },
+  }), 400) } };
+  const { mountStorePanel } = await import('/../extension/src/storePanel.ts');
+  mountStorePanel('https://store.steampowered.com/app/367520/Hollow_Knight/');
+</script>
+</body>
+</html>

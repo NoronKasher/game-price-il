@@ -56,7 +56,7 @@ for (const f of ['manifest.json', 'rules.json']) {
   fs.copyFileSync(path.join(here, f), path.join(dist, f));
 }
 
-const need = ['manifest.json', 'rules.json', 'background.js', 'bridge.js', 'amazon.js', 'index.html'];
+const need = ['manifest.json', 'rules.json', 'background.js', 'bridge.js', 'amazon.js', 'storepage.js', 'index.html'];
 const missing = need.filter((f) => !fs.existsSync(path.join(dist, f)));
 if (missing.length) {
   console.error(`extension build incomplete — missing: ${missing.join(', ')}`);

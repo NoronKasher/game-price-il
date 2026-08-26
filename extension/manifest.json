@@ -37,7 +37,11 @@
     "https://web.np.playstation.com/*",
     "https://store.playstation.com/*",
     "https://api.gg.deals/*",
-    "https://api.isthereanydeal.com/*"
+    "https://api.isthereanydeal.com/*",
+    "https://www.gog.com/*",
+    "https://catalog.gamepass.com/*",
+    "https://api.steampowered.com/*",
+    "https://steamcommunity.com/*"
   ],
   "declarative_net_request": {
     "rule_resources": [
@@ -78,6 +82,21 @@
       ],
       "js": [
         "amazon.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://store.steampowered.com/app/*",
+        "https://www.gog.com/*/game/*",
+        "https://www.gog.com/game/*",
+        "https://www.xbox.com/*/games/store/*",
+        "https://store.playstation.com/*/product/*",
+        "https://www.nintendo.com/*/store/products/*",
+        "https://store.epicgames.com/*/p/*"
+      ],
+      "js": [
+        "storepage.js"
       ],
       "run_at": "document_idle"
     }
