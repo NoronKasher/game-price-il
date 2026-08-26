@@ -79,9 +79,21 @@ body {
   background: var(--amber); color: #14100a; font-weight: 500; border-radius: 4px;
   z-index: 1;
 }
-.ticker .reel { display: inline-block; padding-inline-start: 100%; animation: reel 60s linear infinite; }
+/* Two identical runs, scrolled by exactly half the track. When the first run
+   has left the strip the second is precisely where it started, so the loop has
+   no gap and no visible restart — the old single pass had to travel its own
+   width and snap back, which read as the ticker "ending". */
+.ticker .reel { display: flex; width: max-content; animation: reel 70s linear infinite; }
+.ticker .reel-run { display: flex; flex: none; }
 /* Pause the marquee on hover so a deal can actually be read and clicked. */
 .ticker:hover .reel { animation-play-state: paused; }
+/* Somebody who has asked for less motion should not be handed a moving strip;
+   the deals are all still there and still clickable, they simply sit still. */
+@media (prefers-reduced-motion: reduce) {
+  .ticker { overflow-x: auto; }
+  .ticker .reel { animation: none; }
+  .ticker .reel-run[aria-hidden='true'] { display: none; }
+}
 .ticker .reel .deal {
   margin-inline-end: 34px; color: var(--muted);
   font: inherit; background: none; border: none; padding: 0; cursor: pointer;
@@ -89,7 +101,12 @@ body {
 .ticker .reel .deal:hover b { color: var(--amber); text-decoration: underline; }
 .ticker .reel b { color: var(--text); font-weight: 500; }
 .ticker .reel .pct { color: var(--down); font-weight: 700; }
-@keyframes reel { to { transform: translateX(100%); } }
+/* 50% is one full run: the track is two of them. In RTL the runs lay out
+   right-to-left, so a positive shift walks the strip in the reading direction. */
+@keyframes reel {
+  from { transform: translateX(0); }
+  to { transform: translateX(50%); }
+}
 
 /* ── layout ── */
 .main { flex: 1; width: min(1060px, 100%); margin: 0 auto; padding: 26px 20px 60px; }
@@ -487,6 +504,48 @@ body {
 }
 .notif-panel-title { margin: 0 0 10px; font-size: 15px; color: var(--amber); }
 
+/* ── the deals page ── */
+.deals-title { margin: 0 0 4px; font-size: 20px; color: var(--amber); }
+.deals-intro { margin: 0 0 14px; max-width: 620px; font-size: 12.5px; color: var(--muted); line-height: 1.7; }
+.deals-sort { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.deals-sort-btn {
+  padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+  background: none; color: var(--muted); font: inherit; font-size: 12.5px;
+}
+.deals-sort-btn.on { border-color: var(--amber); color: var(--amber); }
+.deals-grid {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+.deal-card {
+  width: 100%; height: 100%; box-sizing: border-box; text-align: start; cursor: pointer;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 13px; border-radius: 11px;
+  background: var(--panel); border: 1px solid var(--line); color: var(--fg); font: inherit;
+}
+.deal-card:hover { border-color: var(--amber); }
+.deal-card-title { font-weight: 600; font-size: 13.5px; line-height: 1.4; }
+.deal-card-prices { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.deal-card-now { font-family: ui-monospace, monospace; color: var(--amber); font-size: 15px; }
+.deal-card-was {
+  font-family: ui-monospace, monospace; font-size: 11.5px;
+  color: var(--muted); text-decoration: line-through;
+}
+.deal-card-pct { color: var(--down); font-weight: 700; font-size: 12px; }
+.deal-card-rating { font-size: 11px; color: var(--muted); }
+.deals-note { margin: 16px 0 0; max-width: 620px; font-size: 11px; color: var(--muted); line-height: 1.7; }
+
+/* The automatic first check for rows that arrived without a price. */
+.firstcheck { max-width: 640px; margin: 0 0 14px; }
+.firstcheck-bar {
+  height: 6px; border-radius: 999px; overflow: hidden;
+  background: color-mix(in srgb, var(--line) 70%, transparent);
+}
+.firstcheck-bar span { display: block; height: 100%; background: var(--amber); transition: width .25s ease; }
+.firstcheck-text { margin-top: 5px; font-size: 11.5px; color: var(--muted); }
+.firstcheck-title { opacity: .85; }
+
 /* The portable token: a wall of text you paste, never type. */
 .token-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 10px 0; }
 .token-make {
@@ -866,6 +925,13 @@ body {
 .dt-included-head { font-size: 12.5px; font-weight: 600; }
 .dt-included-list { margin: 2px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--down); }
 .dt-included-note { margin-top: 4px; font-size: 10.5px; color: var(--muted); line-height: 1.45; }
+.dt-included-ack {
+  margin-top: 7px; padding: 5px 10px; border-radius: 7px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--down) 42%, var(--line));
+  background: none; color: var(--muted); font: inherit; font-size: 11px;
+}
+.dt-included-ack:hover { color: var(--fg); }
+.dt-included-acked { margin-top: 7px; font-size: 11px; color: var(--muted); }
 
 /* Somebody else's record, deliberately quieter than the board's own numbers:
    it is a yardstick, not a price anyone can buy at right now. */

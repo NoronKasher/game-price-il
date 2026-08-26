@@ -335,3 +335,11 @@ export interface SteamImportOutcome {
 }
 
 export type SteamImportResult = ({ ok: true } & SteamImportOutcome) | { ok: false; reason: string };
+
+/** One step of the "fill in the never-priced rows" pass. */
+export interface FirstCheckProgress {
+  total: number;
+  done?: number;
+  title?: string;
+  updated?: number;
+}

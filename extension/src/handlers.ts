@@ -28,6 +28,8 @@ import {
   addToWishlist,
   removeFromWishlist,
   listWishlist,
+  lastCheckedAt,
+  addNotification,
   getWishlistRow,
   findWishlist,
   setPreferredRegion,
@@ -262,6 +264,51 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
       return { updated };
     }),
 
+    /**
+     * Price the rows that have never been priced.
+     *
+     * A game reaches the list without a price whenever it arrived by something
+     * other than the track button — a wishlist import, a shared file, a token
+     * from another machine. Those rows read "טרם נבדק" and used to sit that way
+     * until the six-hourly capture came round, which looks exactly like a
+     * tracker that does not work.
+     *
+     * Not `refresh`: that re-prices everything, which is the wrong cost for a
+     * list that mostly has prices already.
+     */
+    refreshUnchecked: withDb(async (emit?: (p: unknown) => void) => {
+      const pending = listWishlist().filter((row) => lastCheckedAt(row.id) === null);
+      emit?.({ total: pending.length, done: 0, updated: 0 });
+      let updated = 0;
+      for (let i = 0; i < pending.length; i++) {
+        const row = pending[i]!;
+        try {
+          const { offers } = await offersFor(sources, refsOf(row), row.platform as Platform);
+          if (offers.length > 0) {
+            recordOffers(
+              row.id,
+              offers.map((o) => ({
+                store: o.store,
+                region: o.region ?? null,
+                kind: o.kind ?? null,
+                price: o.price,
+                currency: o.currency,
+                priceILS: o.priceILS,
+              }))
+            );
+            await evaluateAlerts(row);
+            updated++;
+          }
+        } catch {
+          // One game nobody can price must not stop the rest of the list.
+        }
+        emit?.({ total: pending.length, done: i + 1, title: row.title, updated });
+      }
+      await flush();
+      refreshBadge();
+      return updated;
+    }),
+
     setTrackSetting: withDb(
       async (
         id: number,
@@ -331,19 +378,44 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
       return result;
     }),
 
+    /**
+     * "Already on Game Pass" into the bell and the Settings log.
+     *
+     * The decision to raise it belongs to the page — whether the feature is on,
+     * and whether this game was acknowledged, are preferences in that browser's
+     * storage. This only puts the alert where every other alert goes.
+     */
+    notifyGamePass: withDb(async (title: string, platform: string, subscriptions: string[]) => {
+      const names = Array.isArray(subscriptions) ? subscriptions.filter((s) => typeof s === 'string').slice(0, 4) : [];
+      if (!title || names.length === 0) return { ok: false };
+      addNotification({
+        wishlistId: null,
+        title: String(title).slice(0, 200),
+        message: `כלול במנוי ${names.join(' · ')} — ייתכן שאין צורך לקנות אותו.`,
+        priceILS: 0,
+        kind: 'gamepass',
+        platform: platform ? String(platform).slice(0, 20) : null,
+        scope: null,
+      });
+      await flush();
+      refreshBadge();
+      return { ok: true };
+    }),
+
     /** The tracked list as one pasteable string. Same code the server runs. */
-    exportToken: withDb(async (withHistory = true) => {
+    exportToken: withDb(async (withHistory = true, prefs?: Record<string, string>) => {
       const items = exportAll().map((item) => (withHistory ? item : { ...item, history: [] }));
-      return { token: await encodeToken(items) };
+      return { token: await encodeToken(items, prefs) };
     }),
 
     importToken: withDb(async (token: string) => {
-      const items = typeof token === 'string' ? await decodeToken(token) : null;
+      const decoded = typeof token === 'string' ? await decodeToken(token) : null;
       // A bad paste is expected input. It comes back as null and the UI says so.
-      if (!items) return null;
-      const result = importAll(items);
+      if (!decoded) return null;
+      const result = importAll(decoded.items);
       await flush();
-      return result;
+      // Preferences go back to the page to apply — they belong in its storage.
+      return { ...result, prefs: decoded.prefs };
     }),
 
     /**
@@ -394,7 +466,7 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
      * CheapShark publishes a JSON API and opts into cross-origin use, so the
      * extension can make it exactly as the server does.
      */
-    ticker: async () => ({ deals: await tickerDeals() }),
+    ticker: async (limit?: number) => ({ deals: await tickerDeals(limit) }),
 
     /**
      * The adapter canary. GET reads the stored report and makes no requests;

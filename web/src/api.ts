@@ -3,6 +3,7 @@ import type {
   AlertRule,
   AlertScope,
   AppNotification,
+  FirstCheckProgress,
   GameMeta,
   HealthReport,
   HealthResponse,
@@ -219,15 +220,70 @@ export const api = {
       body: JSON.stringify(patch),
     }).then((r) => json<{ ok: boolean }>(r)),
 
+  /** Raise a "already on Game Pass" alert into the bell and the Settings log. */
+  notifyGamePass: (title: string, platform: string, subscriptions: string[]) =>
+    fetch('/api/notify/gamepass', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, platform, subscriptions }),
+    }).then(() => undefined),
+
+  /**
+   * Price the rows that have never been priced, reporting as it goes.
+   *
+   * Separate from `refresh` on purpose: that one re-prices the whole list,
+   * which is the wrong cost for a list that mostly has prices already.
+   */
+  async refreshUnchecked(onProgress: (p: FirstCheckProgress) => void): Promise<number> {
+    const res = await fetch('/api/refresh/unchecked', { method: 'POST' });
+    if (!res.ok || !res.body) return 0;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let updated = 0;
+
+    const handle = (raw: string) => {
+      const text = raw.trim();
+      if (!text) return;
+      let msg: { type?: string } & Record<string, unknown>;
+      try {
+        msg = JSON.parse(text);
+      } catch {
+        return;
+      }
+      if (msg.type === 'start' || msg.type === 'progress') onProgress(msg as unknown as FirstCheckProgress);
+      else if (msg.type === 'done') updated = Number(msg.updated ?? 0);
+    };
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split(NEWLINE);
+        buffer = lines.pop() ?? '';
+        for (const l of lines) handle(l);
+      }
+      if (done) break;
+    }
+    handle(buffer);
+    return updated;
+  },
+
   /**
    * The tracked list as one pasteable string, and back again.
    *
    * The file export stays; this is for where a file is awkward — moving between
    * the extension and the desktop app, a phone, or a chat message.
    */
-  exportToken: (withHistory: boolean) =>
-    fetch(`/api/export/token?history=${withHistory ? '1' : '0'}`).then((r) => json<{ token: string }>(r)),
-  importToken: async (token: string): Promise<{ games: number; points: number } | null> => {
+  exportToken: (withHistory: boolean, prefs: Record<string, string>) =>
+    fetch('/api/export/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ history: withHistory, prefs }),
+    }).then((r) => json<{ token: string }>(r)),
+  importToken: async (
+    token: string
+  ): Promise<{ games: number; points: number; prefs?: Record<string, string> } | null> => {
     const res = await fetch('/api/import/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -333,7 +389,8 @@ export const api = {
   refresh: () =>
     fetch('/api/refresh', { method: 'POST' }).then((r) => json<{ updated: number }>(r)),
 
-  ticker: () => fetch('/api/ticker').then((r) => json<{ deals: TickerDeal[] }>(r)),
+  ticker: (limit?: number) =>
+    fetch(`/api/ticker${limit ? `?limit=${limit}` : ''}`).then((r) => json<{ deals: TickerDeal[] }>(r)),
 
   /** Is this game tracked, plus its full price history for the graph. */
   trackStatus: (title: string, platform: string) =>

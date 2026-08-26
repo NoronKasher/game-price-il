@@ -337,3 +337,94 @@ test('a game that other sources can refresh is never reminded about', async () =
   );
   assert.equal(await remindAboutStaleRows(), 0);
 });
+
+/* ── Rows that arrived without a price ───────────────────────────────────── */
+
+test('a game added without a price is picked up and priced', async () => {
+  // This is the bug the feature exists for: a game reaches the list unpriced
+  // whenever it came from somewhere other than the track button — a wishlist
+  // import, a shared file, a token — and it then read "טרם נבדק" until the
+  // six-hourly capture happened to come round. Indistinguishable from a
+  // tracker that does not work.
+  const { makeHandlers } = await import('./handlers.ts');
+  db.__setTables({});
+  const imported = db.addToWishlist({
+    title: 'Imported Game',
+    platform: 'pc',
+    refs: [{ sourceId: 'steam-regional', sourceGameId: '1' }],
+  });
+  const priced = db.addToWishlist({
+    title: 'Already Priced',
+    platform: 'pc',
+    refs: [{ sourceId: 'steam-regional', sourceGameId: '2' }],
+  });
+  db.recordOffers(
+    priced.id,
+    [{ store: 'Steam', region: null, kind: 'digital', price: 100, currency: 'ILS', priceILS: 100 }],
+    ago(1)
+  );
+
+  const calls = [];
+  const handlers = makeHandlers([fakeSource('steam-regional', 149, calls)]);
+  const steps = [];
+  const updated = await handlers.refreshUnchecked((p) => steps.push(p));
+
+  assert.equal(updated, 1);
+  assert.deepEqual(calls, ['steam-regional'], 'only the unpriced row costs a store a request');
+  assert.ok(db.fullOfferHistory(imported.id).some((p) => p.price_ils === 149), 'it must actually be priced now');
+  assert.equal(db.fullOfferHistory(priced.id).length, 1, 'the priced row is left completely alone');
+  assert.equal(steps.at(-1).done, 1, 'progress is reported, because the wait is real');
+});
+
+test('nothing unpriced means no store is touched', async () => {
+  const { makeHandlers } = await import('./handlers.ts');
+  db.__setTables({});
+  const row = db.addToWishlist({
+    title: 'Already Priced',
+    platform: 'pc',
+    refs: [{ sourceId: 'steam-regional', sourceGameId: '1' }],
+  });
+  db.recordOffers(
+    row.id,
+    [{ store: 'Steam', region: null, kind: 'digital', price: 100, currency: 'ILS', priceILS: 100 }],
+    ago(1)
+  );
+  const calls = [];
+  const handlers = makeHandlers([fakeSource('steam-regional', 149, calls)]);
+  assert.equal(await handlers.refreshUnchecked(), 0);
+  assert.equal(calls.length, 0);
+});
+
+test('one game nobody can price does not strand the rest', async () => {
+  const { makeHandlers } = await import('./handlers.ts');
+  db.__setTables({});
+  db.addToWishlist({ title: 'Broken', platform: 'pc', refs: [{ sourceId: 'steam-regional', sourceGameId: '1' }] });
+  const fine = db.addToWishlist({
+    title: 'Fine',
+    platform: 'pc',
+    refs: [{ sourceId: 'steam-regional', sourceGameId: '2' }],
+  });
+  let first = true;
+  const flaky = {
+    id: 'steam-regional',
+    name: 'x',
+    nameHe: 'x',
+    platforms: ['pc'],
+    enabled: true,
+    async search() {
+      return [];
+    },
+    async getOffers() {
+      if (first) {
+        first = false;
+        throw new Error('store is down');
+      }
+      return [
+        { store: 'Steam', kind: 'digital', location: 'international', price: 99, currency: 'ILS', priceILS: 99 },
+      ];
+    },
+  };
+  const handlers = makeHandlers([flaky]);
+  assert.equal(await handlers.refreshUnchecked(), 1);
+  assert.ok(db.fullOfferHistory(fine.id).some((p) => p.price_ils === 99));
+});

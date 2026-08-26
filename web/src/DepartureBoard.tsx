@@ -10,6 +10,14 @@ import { boardHasEilatPrices, eilatPrice, eilatSaving } from './eilat';
 import { safeUrl } from './url';
 import { SearchProgressBar, type ProgressState } from './SearchProgressBar';
 import { loadProgressBar, loadProgressBlink } from './progressPrefs';
+import { loadQuietNotices } from './prefs';
+import {
+  acknowledge,
+  isAcknowledged,
+  loadGamePassAlerts,
+  markAlerted,
+  shouldAlert,
+} from './gamepassAlerts';
 import type { GameMeta, HistoryLow, Inclusion, Offer, Platform, SourceRef } from './types';
 
 /**
@@ -131,6 +139,8 @@ export function DepartureBoard({
   const [lows, setLows] = useState<HistoryLow[]>([]);
   /** Subscriptions that already carry this game in Israel. */
   const [includedIn, setIncludedIn] = useState<Inclusion[]>([]);
+  /** Re-rendered when the user says "I know" — the state itself is in storage. */
+  const [ackBump, setAckBump] = useState(0);
 
   const refsKey = refs.map((r) => `${r.sourceId}:${r.sourceGameId}`).join('|');
 
@@ -152,6 +162,7 @@ export function DepartureBoard({
     setEilat(false);
     setLows([]);
     setIncludedIn([]);
+    setAckBump(0);
     if (refs.length === 0) {
       setOffers([]);
       setMeta(null);
@@ -187,6 +198,26 @@ export function DepartureBoard({
       live = false;
     };
   }, [refsKey, platform]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * Raise the "already on a subscription" alert, if it was asked for.
+   *
+   * Only when the switch in Settings is on: telling somebody who does not
+   * subscribe that a game is free with a subscription is noise dressed as a
+   * saving, and the tool cannot know whether they subscribe. The badge on the
+   * board is a different thing and always shows — that is a fact sitting beside
+   * the prices, this is an interruption, and an interruption has to be asked
+   * for.
+   */
+  const alertKey = `${title}|${platform}`;
+  useEffect(() => {
+    if (includedIn.length === 0) return;
+    if (!shouldAlert(alertKey)) return;
+    markAlerted(alertKey);
+    void api.notifyGamePass(title, platform, includedIn.map((i) => i.name)).catch(() => {
+      /* a failed alert must never take the board down with it */
+    });
+  }, [includedIn, alertKey, title, platform]);
 
   const all = offers ?? [];
   // Only surface a control when it can actually do something for this game.
@@ -326,7 +357,10 @@ export function DepartureBoard({
     setNoticeDismissedNow(true);
   };
 
-  const showNotice = anyRisk && !noticeHidden && !noticeDismissedNow;
+  // The settings switch silences the explanatory notices altogether — see
+  // prefs.ts. Read at render rather than cached, so flipping it in Settings
+  // takes effect the next time a board opens rather than on the next reload.
+  const showNotice = anyRisk && !noticeHidden && !noticeDismissedNow && !loadQuietNotices();
   const absorbClass = absorb === 'active' ? 'absorbing' : absorb === 'done' ? 'absorbed' : '';
 
   return (
@@ -357,10 +391,12 @@ export function DepartureBoard({
             </div>
           )}
           {includedIn.length > 0 && (
+            /* ackBump is read here only to re-render after "I know" — the state
+               itself lives in storage, not in React. */
             /* The loudest thing this board can say. Placed above the genres and
                the price summary because it can make the whole table moot: the
                cheapest price for a game you already have access to is none. */
-            <div className="dt-included" title={t.includedTitle}>
+            <div className="dt-included" title={t.includedTitle} data-ack={ackBump}>
               <span className="dt-included-mark" aria-hidden="true">✓</span>
               <div>
                 <div className="dt-included-head">{t.includedHead}</div>
@@ -370,6 +406,23 @@ export function DepartureBoard({
                   ))}
                 </ul>
                 <div className="dt-included-note">{t.includedNote}</div>
+                {/* Only meaningful when the alerts are on: without them there is
+                    nothing to acknowledge, and a button that silences something
+                    that never speaks is just confusing. */}
+                {loadGamePassAlerts() &&
+                  (isAcknowledged(alertKey) ? (
+                    <div className="dt-included-acked">{t.includedAcked}</div>
+                  ) : (
+                    <button
+                      className="dt-included-ack"
+                      onClick={() => {
+                        acknowledge(alertKey);
+                        setAckBump((n) => n + 1);
+                      }}
+                    >
+                      {t.includedAck}
+                    </button>
+                  ))}
               </div>
             </div>
           )}

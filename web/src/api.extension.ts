@@ -111,7 +111,12 @@ export const api: typeof LiveApi = {
   getSettings: () => call('getSettings'),
   setSettings: (patch) => call('setSettings', patch),
   importData: (items: unknown) => call('importData', items),
-  exportToken: (withHistory: boolean) => call('exportToken', withHistory),
+  notifyGamePass: async (title: string, platform: string, subscriptions: string[]) => {
+    await call('notifyGamePass', title, platform, subscriptions);
+  },
+  refreshUnchecked: (onProgress) =>
+    callStreaming('refreshUnchecked', (p) => onProgress(p as import('./types').FirstCheckProgress)),
+  exportToken: (withHistory: boolean, prefs: Record<string, string>) => call('exportToken', withHistory, prefs),
   importToken: (token: string) => call('importToken', token),
   // Streamed through the same port as search and prices: the import is minutes
   // long and the worker must stay awake for it (an open port counts as
@@ -129,7 +134,7 @@ export const api: typeof LiveApi = {
    */
   suggest: async () => ({ suggestions: [] }),
 
-  ticker: () => call('ticker'),
+  ticker: (limit?: number) => call('ticker', limit),
 
   /**
    * The canary reads its stored report for free; RUNNING one is sixteen real

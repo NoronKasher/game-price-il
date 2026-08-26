@@ -29,7 +29,12 @@ export interface TickerDeal {
 const FEED =
   'https://www.cheapshark.com/api/1.0/deals?sortBy=Deal%20Rating&metacritic=75&steamRating=80&onSale=1&pageSize=40';
 
+/**
+ * The strip shows fifteen. The deals PAGE wants more than a strip can carry, so
+ * the cap is a parameter and this is only the default.
+ */
 const MAX_DEALS = 15;
+const HARD_MAX = 40;
 
 interface RawDeal {
   title: string;
@@ -40,7 +45,7 @@ interface RawDeal {
 }
 
 /** Never throws: an empty ticker is a quiet strip, a thrown one is a broken page. */
-export async function tickerDeals(): Promise<TickerDeal[]> {
+export async function tickerDeals(limit = MAX_DEALS): Promise<TickerDeal[]> {
   try {
     const res = await fetch(FEED, { headers: CHEAPSHARK_HEADERS });
     if (!res.ok) return [];
@@ -68,7 +73,7 @@ export async function tickerDeals(): Promise<TickerDeal[]> {
         savings: Math.round(Number(d.savings)),
         rating: d.steamRatingPercent ? Number(d.steamRatingPercent) : undefined,
       });
-      if (deals.length >= MAX_DEALS) break;
+      if (deals.length >= Math.min(Math.max(1, limit), HARD_MAX)) break;
     }
     return deals;
   } catch {

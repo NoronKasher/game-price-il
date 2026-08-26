@@ -28,10 +28,13 @@ import {
 import { PriceGraph, TrackGraph } from './PriceGraph';
 import { DepartureBoard } from './DepartureBoard';
 import { SearchBox, rememberSearch, loadIncludeDlc, saveIncludeDlc } from './SearchBox';
-import type { HealthReport, PsnHashStatus, SteamImportProgress } from './types';
+import type { FirstCheckProgress, HealthReport, PsnHashStatus, SteamImportProgress } from './types';
+import { applyPrefs, collectPrefs, loadQuietNotices, saveQuietNotices } from './prefs';
+import { loadGamePassAlerts, saveGamePassAlerts } from './gamepassAlerts';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
 import { HoldToConfirm } from './HoldToConfirm';
+import { DealsView } from './DealsView';
 import { SearchProgressBar, type ProgressState } from './SearchProgressBar';
 import { loadProgressBar, loadProgressBlink, saveProgressBar, saveProgressBlink } from './progressPrefs';
 import { clearMutesForWorkingSources, muteForADay, muteUntilBack, visibleFailures } from './sourceNotice';
@@ -64,8 +67,37 @@ import type {
   WishlistItem,
 } from './types';
 
+/** One pass of the ticker's deals. Rendered twice — see the reel. */
+function TickerRun({
+  deals,
+  onPick,
+  'aria-hidden': hidden,
+}: {
+  deals: TickerDeal[];
+  onPick: (title: string) => void;
+  'aria-hidden'?: boolean;
+}) {
+  return (
+    <div className="reel-run" aria-hidden={hidden || undefined}>
+      {deals.map((d, i) => (
+        <button
+          key={i}
+          className="deal"
+          title={t.tickerDealHint}
+          tabIndex={hidden ? -1 : undefined}
+          onClick={() => onPick(d.title)}
+        >
+          <b>{d.title}</b> <span className="num">{nis(d.salePrice)}</span>{' '}
+          <span className="pct num">{d.savings}%-</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 type View =
   | { name: 'search' }
+  | { name: 'deals' }
   | { name: 'offers'; group: GameGroup; platform: Platform }
   | { name: 'wishlist' }
   | { name: 'settings' };
@@ -76,6 +108,12 @@ export function App() {
   // Search state lives here so returning from a game's board keeps the results.
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<SearchResponse | null>(null);
+  /** A deal picked from the ticker or the deals page → search for it. */
+  const openDeal = (title: string) => {
+    setView({ name: 'search' });
+    setAutoQuery(title);
+  };
+
   // A title clicked in the ticker → jump to search and run it automatically.
   const [autoQuery, setAutoQuery] = useState<string | null>(null);
   // The user's preferred region — global, persisted, pins to the top everywhere.
@@ -160,6 +198,12 @@ export function App() {
             {t.searchTab}
           </button>
           <button
+            className={view.name === 'deals' ? 'active' : ''}
+            onClick={() => setView({ name: 'deals' })}
+          >
+            {t.dealsTab}
+          </button>
+          <button
             className={view.name === 'wishlist' ? 'active' : ''}
             onClick={() => setView({ name: 'wishlist' })}
           >
@@ -182,23 +226,18 @@ export function App() {
       </header>
 
       {ticker.length > 0 && (
+        /* The reel carries the deals TWICE. A single pass has to travel its own
+           width and then jump back, which shows as a gap crossing the strip and
+           an obvious restart. With a second identical copy behind it, the
+           animation ends exactly where it began and the loop cannot be seen. */
         <div className="ticker">
           <span className="label">{t.tickerTitle}</span>
           <div className="reel">
-            {ticker.map((d, i) => (
-              <button
-                key={i}
-                className="deal"
-                title={t.tickerDealHint}
-                onClick={() => {
-                  setView({ name: 'search' });
-                  setAutoQuery(d.title);
-                }}
-              >
-                <b>{d.title}</b> <span className="num">{nis(d.salePrice)}</span>{' '}
-                <span className="pct num">{d.savings}%-</span>
-              </button>
-            ))}
+            <TickerRun deals={ticker} onPick={openDeal} />
+            {/* The copy exists only to fill the gap, so it is hidden from
+                assistive tech and from the tab order — every deal on it is
+                already reachable on the first pass. */}
+            <TickerRun deals={ticker} onPick={openDeal} aria-hidden />
           </div>
         </div>
       )}
@@ -226,6 +265,7 @@ export function App() {
             onBack={() => setView({ name: 'search' })}
           />
         )}
+        {view.name === 'deals' && <DealsView onPick={openDeal} />}
         {view.name === 'wishlist' && (
           <WishlistView
             rule={alerts}
@@ -410,7 +450,13 @@ const MAX_TOASTS = 3;
 
 /** Icon for why an alert fired — a plain drop, a discount, or the price you asked for. */
 function reasonIcon(kind: string | null): string {
-  return kind === 'price' ? '🎯' : kind === 'pct' ? '🏷️' : '📉';
+  if (kind === 'price') return '🎯';
+  if (kind === 'pct') return '🏷️';
+  // Not a price drop at all: the game is already covered by a subscription, or
+  // a page-read row has gone stale and only a person can refresh it.
+  if (kind === 'gamepass') return '✓';
+  if (kind === 'stale') return '🕗';
+  return '📉';
 }
 
 /**
@@ -530,9 +576,10 @@ function Toast({
     <div className="toast">
       <button
         className="toast-body"
-        title={t.notifJumpHint}
+        title={n.wishlist_id == null ? undefined : t.notifJumpHint}
         onClick={() => {
-          onOpen(n.wishlist_id);
+          // Nothing to jump to for an alert that fired from a search.
+          if (n.wishlist_id != null) onOpen(n.wishlist_id);
           onDismiss(n.id);
         }}
       >
@@ -620,8 +667,13 @@ function NotificationBell({
                 <li key={n.id} className={n.read ? '' : 'unread'}>
                   <button
                     className="bell-item"
-                    title={t.notifJumpHint}
+                    // A subscription alert fires from a SEARCH, before anything
+                    // is tracked, so there is nothing to jump to. Offering the
+                    // jump anyway would promise a page that does not exist.
+                    title={n.wishlist_id == null ? undefined : t.notifJumpHint}
+                    disabled={n.wishlist_id == null}
                     onClick={() => {
+                      if (n.wishlist_id == null) return;
                       onOpenGame(n.wishlist_id);
                       setOpen(false);
                     }}
@@ -887,6 +939,10 @@ function SourceNotice({ sources }: { sources?: SourceStatus[] }) {
   useEffect(() => {
     if (sources && clearMutesForWorkingSources(sources)) forceRender((n) => n + 1);
   }, [sources]);
+
+  // "I know how this tool works, stop explaining it." Distinct from dismissing
+  // one notice, which means "not this one, for now".
+  if (loadQuietNotices()) return null;
 
   const failed = visibleFailures(sources);
   if (failed.length === 0) return null;
@@ -2309,6 +2365,14 @@ function SettingsView({
         <p className="settings-intro">{t.loadingDetails}</p>
       )}
 
+      <h2 className="settings-section">{t.gpAlertsTitle}</h2>
+      <p className="settings-intro">{t.gpAlertsIntro}</p>
+      <GamePassToggle />
+
+      <h2 className="settings-section">{t.quietTitle}</h2>
+      <p className="settings-intro">{t.quietIntro}</p>
+      <QuietToggle />
+
       <TokenPanel />
 
       <HealthPanel />
@@ -2318,6 +2382,56 @@ function SettingsView({
       <h2 className="settings-section">{t.currencyTitle}</h2>
       <p className="settings-intro">{t.currencySettingsNote}</p>
     </section>
+  );
+}
+
+/**
+ * The switch that turns the subscription alerts on.
+ *
+ * Off by default and it stays that way. Most people do not subscribe, and
+ * "included with Game Pass" is only a saving for somebody who pays for Game
+ * Pass — which this tool has no way of knowing. The badge on the price board
+ * always shows; this is about whether it also interrupts you.
+ */
+function GamePassToggle() {
+  const [on, setOn] = useState(loadGamePassAlerts);
+  return (
+    <label className="check-row" title={t.gpAlertsHint}>
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={(e) => {
+          setOn(e.target.checked);
+          saveGamePassAlerts(e.target.checked);
+        }}
+      />
+      {t.gpAlertsLabel}
+    </label>
+  );
+}
+
+/**
+ * The switch that turns the explanatory notices off for good.
+ *
+ * Dismissing a notice means "not this one, for now". This means "I have read
+ * that VGS goes down and that a Turkish price needs a Turkish account, and I do
+ * not need telling again" — a different thing, and one the tool was making
+ * people re-decide every time either happened.
+ */
+function QuietToggle() {
+  const [quiet, setQuiet] = useState(loadQuietNotices);
+  return (
+    <label className="check-row" title={t.quietHint}>
+      <input
+        type="checkbox"
+        checked={quiet}
+        onChange={(e) => {
+          setQuiet(e.target.checked);
+          saveQuietNotices(e.target.checked);
+        }}
+      />
+      {t.quietLabel}
+    </label>
   );
 }
 
@@ -2340,7 +2454,9 @@ function TokenPanel() {
     setBusy(true);
     setMessage('');
     try {
-      const r = await api.exportToken(withHistory);
+      // The browser's own remembered choices ride along — the dismissed
+      // notices and switches that could not travel with the list before.
+      const r = await api.exportToken(withHistory, collectPrefs());
       setToken(r.token);
       setCopied(false);
     } catch {
@@ -2369,7 +2485,8 @@ function TokenPanel() {
       const r = await api.importToken(paste.trim());
       // A bad paste is ordinary input, not an error: a truncated copy or the
       // wrong clipboard entry both land here.
-      setMessage(r ? t.tokenImported(r.games, r.points) : t.tokenBad);
+      const applied = r?.prefs ? applyPrefs(r.prefs) : 0;
+      setMessage(r ? t.tokenImported(r.games, r.points, applied) : t.tokenBad);
       if (r) setPaste('');
     } catch {
       setMessage(t.tokenFailed);
@@ -2579,6 +2696,42 @@ function WishlistView({
     }
   };
 
+  /**
+   * Price the rows that arrived without a price.
+   *
+   * A game reaches this list unpriced whenever it came from somewhere other
+   * than the track button — a Steam wishlist import, a shared file, a token
+   * from another machine. It then read "טרם נבדק" and stayed that way until the
+   * six-hourly capture happened to come round, which is indistinguishable from
+   * a tracker that does not work.
+   *
+   * So it runs by itself, once, when the list is opened and something on it has
+   * never been checked. Visible while it does: a fan-out per game with the
+   * usual gap between them is minutes for a big import, and a page that sat
+   * silently for minutes would have replaced one confusing wait with another.
+   */
+  const firstCheckDone = useRef(false);
+  useEffect(() => {
+    if (!items || firstCheckDone.current) return;
+    if (!items.some((it) => !it.current)) return;
+    firstCheckDone.current = true;
+    let live = true;
+    void (async () => {
+      try {
+        await api.refreshUnchecked((p) => live && setFirstCheck(p));
+      } finally {
+        if (live) {
+          setFirstCheck(null);
+          await load();
+          pricesChecked();
+        }
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Arrived here by clicking a notification: open that game straight away.
   useEffect(() => {
     if (focusId == null || !items) return;
@@ -2609,6 +2762,7 @@ function WishlistView({
     saveHideAllDesc(next);
   };
 
+  const [firstCheck, setFirstCheck] = useState<FirstCheckProgress | null>(null);
   const [importMsg, setImportMsg] = useState('');
   // Steam wishlist import: open, because a tracker with an empty list
   // demonstrates nothing and nobody types eighty titles by hand.
@@ -2707,6 +2861,23 @@ function WishlistView({
         )}
         {importMsg && <span className="meta">{importMsg}</span>}
       </div>
+
+      {/* The automatic first check, while it runs. Not a spinner: this is one
+          fan-out per game with a gap between them, so it is minutes for a big
+          import and the count is the only honest way to show that. */}
+      {firstCheck && (
+        <div className="firstcheck">
+          <div className="firstcheck-bar">
+            <span
+              style={{ width: `${Math.round(((firstCheck.done ?? 0) / Math.max(1, firstCheck.total)) * 100)}%` }}
+            />
+          </div>
+          <div className="firstcheck-text">
+            {t.firstCheckRunning(firstCheck.done ?? 0, firstCheck.total)}
+            {firstCheck.title && <span className="firstcheck-title"> · {firstCheck.title}</span>}
+          </div>
+        </div>
+      )}
 
       {/* Steam wishlist import. Placed with the tracked list rather than in
           Settings because it is how the list gets its contents, not a

@@ -22,9 +22,101 @@ const items = [
   { title: 'Celeste', platform: 'switch', refs: [], history: [] },
 ];
 
+/** The export shape, which is what the compact form has to reconstruct. */
+const exported = [
+  {
+    title: 'Hollow Knight',
+    platform: 'pc',
+    image: 'https://example.test/hk.jpg',
+    refs: [{ sourceId: 'steam-regional', sourceGameId: '367520' }],
+    preferred_region: 'IL',
+    hide_desc: 0,
+    added_at: '2026-07-01 08:00:00',
+    history: [
+      { store: 'Steam', region: 'IL', kind: 'digital', price: 89.12, currency: 'ILS', price_ils: 89.12, checked_at: '2026-08-01 10:00:00' },
+      { store: 'Steam', region: 'TR', kind: 'digital', price: 199, currency: 'TRY', price_ils: 21.4, checked_at: '2026-08-08 10:00:00' },
+    ],
+  },
+  {
+    title: 'Celeste',
+    platform: 'switch',
+    image: null,
+    refs: [],
+    preferred_region: null,
+    hide_desc: 0,
+    added_at: '2026-07-02 08:00:00',
+    history: [],
+  },
+];
+
 test('a list survives the round trip exactly', async () => {
-  const token = await encodeToken(items);
-  assert.deepEqual(await decodeToken(token), items);
+  const token = await encodeToken(exported);
+  const back = await decodeToken(token);
+  assert.deepEqual(back.items, exported, 'the compact form must reconstruct the export shape byte for byte');
+});
+
+test('prices and timestamps come back with no drift', async () => {
+  // Prices travel as integer agorot and timestamps as seconds since the
+  // previous point in the same game. Both are lossless for the values the
+  // database actually holds, and a test is the only thing keeping them so.
+  const back = await decodeToken(await encodeToken(exported));
+  const [first, second] = back.items[0].history;
+  assert.equal(first.price, 89.12);
+  assert.equal(second.price, 199);
+  assert.equal(second.price_ils, 21.4);
+  assert.equal(first.checked_at, '2026-08-01 10:00:00');
+  assert.equal(second.checked_at, '2026-08-08 10:00:00', 'the delta must rebuild the real time');
+});
+
+test('the compact form is much shorter than the plain one', async () => {
+  // Measured on the real database, 9,876 characters became 6,024. Length is
+  // what decides whether somebody actually pastes this into a chat message.
+  const many = Array.from({ length: 30 }, (_, i) => ({
+    ...exported[0],
+    title: `Game ${i}`,
+    history: Array.from({ length: 30 }, (_, k) => ({
+      store: 'Xbox 🇹🇷',
+      region: 'TR',
+      kind: 'digital',
+      price: 199 + k,
+      currency: 'TRY',
+      price_ils: 21.4 + k,
+      checked_at: `2026-08-${String((k % 28) + 1).padStart(2, '0')} 10:00:00`,
+    })),
+  }));
+  const compact = (await encodeToken(many)).length;
+  const plain = JSON.stringify({ v: 1, items: many }).length;
+  assert.ok(compact < plain / 8, `expected well under an eighth of ${plain}, got ${compact}`);
+});
+
+test('a v1 token still decodes', async () => {
+  // Somebody saved one before the compact format existed. It costs a dozen
+  // lines to keep reading them and a silent failure not to.
+  const legacy = { v: 1, at: '2026-08-01T00:00:00Z', items: exported, prefs: { gp_open_anim: '0' } };
+  const bytes = new Uint8Array(
+    await new Response(
+      new Blob([JSON.stringify(legacy)]).stream().pipeThrough(new CompressionStream('gzip'))
+    ).arrayBuffer()
+  );
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  const token = 'VGPT1-' + btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const back = await decodeToken(token);
+  assert.deepEqual(back.items, exported);
+  assert.deepEqual(back.prefs, { gp_open_anim: '0' });
+});
+
+test('remembered preferences travel with the list', async () => {
+  // The whole point of carrying them: arriving on a new machine to popups you
+  // dismissed for good a month ago is the opposite of "your data moved".
+  const prefs = { gp_hide_region_notice: '1', gp_quiet_notices: '1' };
+  const back = await decodeToken(await encodeToken(exported, prefs));
+  assert.deepEqual(back.prefs, prefs);
+});
+
+test('a token with no preferences yields an empty object, not undefined', async () => {
+  const back = await decodeToken(await encodeToken(exported));
+  assert.deepEqual(back.prefs, {});
 });
 
 test('the token is compact enough to paste', async () => {
@@ -56,14 +148,14 @@ test('the token is compact enough to paste', async () => {
 test('a token that got wrapped in transit still decodes', async () => {
   // Chat clients and mail both break long strings across lines, and the paste
   // comes back with newlines through the middle of it.
-  const token = await encodeToken(items);
+  const token = await encodeToken(exported);
   const wrapped = token.replace(/(.{40})/g, '$1\n');
-  assert.deepEqual(await decodeToken(wrapped), items);
+  assert.deepEqual((await decodeToken(wrapped)).items, exported);
 });
 
 test('surrounding whitespace is forgiven', async () => {
-  const token = await encodeToken(items);
-  assert.deepEqual(await decodeToken(`   ${token}  `), items);
+  const token = await encodeToken(exported);
+  assert.deepEqual((await decodeToken(`   ${token}  `)).items, exported);
 });
 
 test('something that is not our token is null, not an exception', async () => {
@@ -94,7 +186,7 @@ test('a token whose payload is not ours decodes to nothing', async () => {
 });
 
 test('an empty list is still a valid token', async () => {
-  assert.deepEqual(await decodeToken(await encodeToken([])), []);
+  assert.deepEqual((await decodeToken(await encodeToken([]))).items, []);
 });
 
 test('a large list encodes without blowing the stack', async () => {
@@ -112,8 +204,8 @@ test('a large list encodes without blowing the stack', async () => {
   }));
   const token = await encodeToken(many);
   const back = await decodeToken(token);
-  assert.equal(back.length, 400);
-  assert.equal(back[399].history.length, 20);
+  assert.equal(back.items.length, 400);
+  assert.equal(back.items[399].history.length, 20);
 });
 
 test('looksLikeToken tells a paste apart from a file', () => {

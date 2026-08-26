@@ -64,6 +64,7 @@ import {
   importAll,
   type SourceRef,
   type WishlistRow,
+  addNotification,
 } from './db.ts';
 import { steamMeta } from './adapters/steam.ts';
 import { toILS, ilsTo } from './rates.ts';
@@ -430,6 +431,49 @@ app.post('/api/refresh', async (_req, res) => {
 });
 
 /**
+ * Fill in the rows that have never been priced.
+ *
+ * A game reaches the tracked list without a price whenever it was added by
+ * something other than the track button — a wishlist import, a shared file, a
+ * token from another machine. Those rows read "טרם נבדק" and, before this, sat
+ * that way until the six-hourly auto-capture happened to come round, which
+ * looks exactly like a tracker that does not work.
+ *
+ * Deliberately NOT /api/refresh: that one re-prices everything, which is the
+ * wrong cost to pay for a list that mostly has prices already. This touches
+ * only the rows with nothing at all.
+ *
+ * Streamed and spaced, for the same reason the Steam import is: eighty games
+ * that have just been imported is eighty fan-outs, the shops are held to a gap
+ * we are not removing, and a progress line is the honest way to show a wait
+ * that is genuinely minutes long.
+ */
+app.post('/api/refresh/unchecked', async (_req, res) => {
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+  const line = (obj: unknown) => res.write(JSON.stringify(obj) + '\n');
+
+  const pending = listWishlist().filter((item) => lastCheckedAt(item.id) === null);
+  line({ type: 'start', total: pending.length });
+  let updated = 0;
+  for (let i = 0; i < pending.length; i++) {
+    const item = pending[i]!;
+    try {
+      if ((await captureAndAlert(item)) > 0) updated++;
+    } catch (err) {
+      // One game nobody can price must not stop the rest of the list.
+      console.error(`first check failed for #${item.id}:`, err);
+    }
+    line({ type: 'progress', total: pending.length, done: i + 1, title: item.title, updated });
+    if (i < pending.length - 1) await sleep(GAME_GAP_MS);
+  }
+  line({ type: 'done', updated, total: pending.length });
+  res.end();
+});
+
+/**
  * Opt-in tracking for one game: add it and record the first full set of offers —
  * only for this game, never the whole catalog.
  */
@@ -641,10 +685,14 @@ app.post('/api/import', (req, res) => {
  * moving between the extension and the desktop app, a phone, or a chat message.
  * `history=0` leaves the price history out, which is about nine times shorter.
  */
-app.get('/api/export/token', async (req, res) => {
-  const withHistory = String(req.query.history ?? '1') !== '0';
+app.post('/api/export/token', async (req, res) => {
+  const { history, prefs } = (req.body ?? {}) as { history?: boolean; prefs?: Record<string, string> };
+  const withHistory = history !== false;
   const items = exportAll().map((item) => (withHistory ? item : { ...item, history: [] }));
-  res.json({ token: await encodeToken(items) });
+  // The browser's own remembered choices ride along. They live in localStorage,
+  // which is right for per-browser UI state, and were therefore the one thing
+  // that could not travel with everything else.
+  res.json({ token: await encodeToken(items, prefs) });
 });
 
 /**
@@ -655,9 +703,11 @@ app.get('/api/export/token', async (req, res) => {
  */
 app.post('/api/import/token', async (req, res) => {
   const { token } = (req.body ?? {}) as { token?: string };
-  const items = typeof token === 'string' ? await decodeToken(token) : null;
-  if (!items) return res.status(400).json({ error: 'bad_token' });
-  res.json(importAll(items));
+  const decoded = typeof token === 'string' ? await decodeToken(token) : null;
+  if (!decoded) return res.status(400).json({ error: 'bad_token' });
+  // The preferences go back to the CLIENT to apply: they belong in that
+  // browser's storage, and the server has no business holding them.
+  res.json({ ...importAll(decoded.items), prefs: decoded.prefs });
 });
 
 /**
@@ -723,9 +773,41 @@ app.post('/api/import/steam', async (req, res) => {
   res.end();
 });
 
+/**
+ * Raise a "this is already on Game Pass" alert.
+ *
+ * Fired by the client, not the server, because the decision is the client's:
+ * whether the feature is on, and whether this game has already been
+ * acknowledged, are both preferences that live in that browser. The server's
+ * job is only to put the alert where every other alert goes — the bell and the
+ * Settings log — so it is read, cleared and kept exactly like the rest.
+ *
+ * `wishlistId` is null: this fires from a SEARCH, before anything is tracked.
+ */
+app.post('/api/notify/gamepass', (req, res) => {
+  const { title, platform, subscriptions } = (req.body ?? {}) as {
+    title?: string;
+    platform?: string;
+    subscriptions?: string[];
+  };
+  const names = Array.isArray(subscriptions) ? subscriptions.filter((s) => typeof s === 'string').slice(0, 4) : [];
+  if (!title || names.length === 0) return res.status(400).json({ error: 'missing fields' });
+  addNotification({
+    wishlistId: null,
+    title: String(title).slice(0, 200),
+    message: `כלול במנוי ${names.join(' · ')} — ייתכן שאין צורך לקנות אותו.`,
+    priceILS: 0,
+    kind: 'gamepass',
+    platform: platform ? String(platform).slice(0, 20) : null,
+    scope: null,
+  });
+  res.json({ ok: true });
+});
+
 /** Ticker of today's deals worth caring about — see ticker.ts for what it picks. */
-app.get('/api/ticker', async (_req, res) => {
-  res.json({ deals: await tickerDeals() });
+app.get('/api/ticker', async (req, res) => {
+  const limit = Number(req.query.limit);
+  res.json({ deals: await tickerDeals(Number.isFinite(limit) ? limit : undefined) });
 });
 
 /**

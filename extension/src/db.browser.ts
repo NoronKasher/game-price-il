@@ -314,7 +314,12 @@ function byNewest(a: NotificationRow, b: NotificationRow): number {
 }
 
 export function addNotification(n: {
-  wishlistId: number;
+  /**
+   * Null for an alert that is not about a tracked game — the Game Pass notice
+   * fires from a search, before anything has been tracked. The bell simply
+   * offers no jump for those.
+   */
+  wishlistId: number | null;
   title: string;
   message: string;
   priceILS: number;
@@ -324,7 +329,7 @@ export function addNotification(n: {
 }): void {
   tables.notifications.push({
     id: tables.nextId.notification++,
-    wishlist_id: n.wishlistId,
+    wishlist_id: n.wishlistId ?? null,
     title: n.title,
     message: n.message,
     price_ils: n.priceILS,

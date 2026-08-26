@@ -11,6 +11,19 @@ export const t = {
   searchTab: 'חיפוש',
   wishlistTab: 'רשימת מעקב',
   settingsTab: 'הגדרות',
+  dealsTab: 'מבצעים',
+  // The deals page: the same feed as the strip at the top, standing still.
+  dealsTitle: 'מבצעים היום',
+  dealsIntro:
+    'המבצעים שרצים בסרגל שלמעלה, בלי לרוץ. לחיצה על משחק מריצה עליו חיפוש מלא בכל החנויות — המחיר כאן הוא של חנות אחת, והשוואה היא כל מה שהכלי הזה עושה.',
+  dealsLoading: 'טוען מבצעים…',
+  dealsEmpty: 'אין מבצעים להצגה כרגע.',
+  dealsFailed: 'לא הצלחנו לטעון את המבצעים. אפשר לנסות שוב מאוחר יותר.',
+  dealsSort: { discount: 'לפי אחוז הנחה', price: 'לפי מחיר', rating: 'לפי דירוג שחקנים' } as Record<string, string>,
+  dealsCardHint: 'לחצו כדי להשוות את המחיר בכל החנויות',
+  dealsRating: (pct: number) => `${pct}% משוב חיובי בסטים`,
+  dealsNote:
+    'הנתונים מגיעים מ‑CheapShark — הקריאה היחידה בכלי הזה שלא נוגעת באף חנות ישירות. המחירים הם למחשב, והומרו לשקלים לפי שער יציג.',
   // Sale-alert notifications
   notifTitle: 'התראות מבצעים',
   notifEmpty: 'אין התראות עדיין. כל המשחקים ברשימת המעקב נבדקים אוטומטית — ברגע שמחיר יירד, ההתראה תופיע כאן.',
@@ -218,6 +231,17 @@ export const t = {
       'הסכום בשקלים הוא המרה לפי שער היום של מחיר שנרשם בעבר, ולא מה ששילמו עליו אז.',
       ...(others.length ? [`שפל בחלונות קצרים יותר — ${others.join(' · ')}`] : []),
     ].join('\n'),
+  // Turning the explanatory notices off for good — different from dismissing
+  // one, which means "not this one, for now".
+  quietTitle: 'הודעות הסבר',
+  quietLabel: 'אל תציגו הודעות על חנויות חסרות ועל רכישה מאזור אחר',
+  quietIntro:
+    'הכלי מסביר כשחנות לא זמינה, וכשמחיר מאזור אחר דורש חשבון באותו אזור. אם כבר ברור לכם איך זה עובד, אפשר לכבות את ההסברים האלה לגמרי — הנתונים עצמם לא משתנים, רק ההודעות נעלמות.',
+  quietHint:
+    'ההגדרה הזו נשמרת גם בקוד ההעברה למכשיר אחר, יחד עם כל הודעה שסגרתם לתמיד.',
+  // The automatic first price check for rows that arrived without one.
+  firstCheckRunning: (done: number, total: number) =>
+    `בודקים מחירים ראשונים למשחקים שנוספו — ${done} מתוך ${total}`,
   // The whole tracked list as one pasteable string. Lives in Settings because
   // it is about the installation, not about the games on any one page.
   tokenTitle: 'העברת הנתונים למכשיר אחר',
@@ -234,8 +258,8 @@ export const t = {
   tokenPastePlaceholder: 'הדביקו כאן קוד שמתחיל ב־VGPT1-',
   tokenLoad: 'טעינה',
   tokenWorking: 'טוען…',
-  tokenImported: (games: number, points: number) =>
-    `נטענו ${games} משחקים ו־${points} רישומי מחיר. מה שכבר היה כאן לא נמחק.`,
+  tokenImported: (games: number, points: number, prefs: number) =>
+    `נטענו ${games} משחקים ו־${points} רישומי מחיר${prefs > 0 ? `, וגם ${prefs} העדפות תצוגה` : ''}. מה שכבר היה כאן לא נמחק.`,
   tokenBad: 'זה לא נראה כמו קוד שלנו. ודאו שהעתקתם את כולו — הוא מתחיל ב־VGPT1-.',
   tokenFailed: 'משהו השתבש. אפשר לנסות שוב.',
   tokenNote:
@@ -282,6 +306,17 @@ export const t = {
   includedNote: 'לפי הקטלוג הישראלי הנוכחי. משחקים נכנסים ויוצאים מהמנויים — בדקו לפני שאתם מוותרים על רכישה.',
   includedTitle:
     'רשימות המנויים נקראות ישירות מהקטלוג הרשמי של מיקרוסופט, עבור השוק הישראלי בלבד.\nזה לא אומר שהמשחק חינם — הוא כלול במנוי בתשלום, ורק אם יש לכם אותו.',
+  includedAck: 'הבנתי — אל תתריעו לי על המשחק הזה שוב',
+  includedAcked: '✓ לא נתריע יותר על המשחק הזה',
+  // The Settings switch that turns the subscription alerts on. Off by default:
+  // most people do not subscribe, and telling them a game is free with a
+  // subscription they do not have is noise dressed as a saving.
+  gpAlertsTitle: 'התראות על משחקים שכלולים במנוי',
+  gpAlertsLabel: 'הודיעו לי כשמשחק שחיפשתי כבר כלול במנוי',
+  gpAlertsIntro:
+    'כשהאפשרות הזו דולקת, פתיחת משחק שנמצא בקטלוג של Xbox Game Pass, PC Game Pass או EA Play תיצור התראה בפעמון וברשומות שבהגדרות. אפשר לאשר לכל משחק בנפרד שהבנתם — ואז הוא לא יתריע יותר. הסימון הירוק בלוח המחירים מוצג תמיד, בלי קשר להגדרה הזו.',
+  gpAlertsHint:
+    'כבוי כברירת מחדל: אם אין לכם מנוי, "כלול במנוי" הוא לא חיסכון אלא רעש. ההגדרה נשמרת גם בקוד ההעברה למכשיר אחר.',
   // Every row goes somewhere — a comparison that cannot be acted on is trivia.
   depColGo: 'לרכישה',
   depGoAria: (store: string, price: string) => `פתיחת ההצעה ב${store} — ${price} (נפתח בלשונית חדשה)`,

@@ -390,7 +390,12 @@ export interface NotificationRow {
 const MAX_NOTIFICATIONS = 200;
 
 export function addNotification(n: {
-  wishlistId: number;
+  /**
+   * Null for an alert that is not about a tracked game — the Game Pass notice
+   * fires from a search, before anything has been tracked. The column is
+   * nullable and the bell simply offers no jump for those.
+   */
+  wishlistId: number | null;
   title: string;
   message: string;
   priceILS: number;
@@ -401,7 +406,7 @@ export function addNotification(n: {
   db.prepare(
     `INSERT INTO notifications (wishlist_id, title, message, price_ils, kind, platform, scope)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(n.wishlistId, n.title, n.message, n.priceILS, n.kind, n.platform ?? null, n.scope ?? null);
+  ).run(n.wishlistId ?? null, n.title, n.message, n.priceILS, n.kind, n.platform ?? null, n.scope ?? null);
   // Prune anything past the newest MAX_NOTIFICATIONS.
   db.prepare(
     `DELETE FROM notifications WHERE id NOT IN (
