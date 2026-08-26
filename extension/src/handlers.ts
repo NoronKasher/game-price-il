@@ -10,6 +10,12 @@ import { steamAppIdOf } from '../../server/src/fanout.ts';
 import { ilsTo } from '../../server/src/rates.ts';
 import { refreshBadge } from './badge.ts';
 import { tickerDeals } from '../../server/src/ticker.ts';
+import {
+  fetchWishlist,
+  importWishlist,
+  resolveProfile,
+  type ImportSink,
+} from '../../server/src/steamWishlist.ts';
 import { runHealthCheck, lastHealthReport, healthCheckDue } from '../../server/src/health.ts';
 import { hasApiKey, setApiKey, apiKeySource, type ApiKeyName } from './keys.browser.ts';
 import { currentSearchHash, searchHashSource } from '../../server/src/adapters/psn.ts';
@@ -322,6 +328,49 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
       const result = importAll(items);
       await flush();
       return result;
+    }),
+
+    /**
+     * Import a public Steam wishlist, same code as the server runs.
+     *
+     * steamWishlist.ts touches no `node:` anything, so it ports here unchanged;
+     * only the sink differs (IndexedDB rather than SQLite). The call arrives on
+     * the streaming port, which is what keeps this worker alive through an
+     * import that can run for minutes — an open port counts as activity, so the
+     * lifetime is exactly the work.
+     */
+    importSteam: withDb(async (profile: string, emit?: (p: unknown) => void) => {
+      const steamId = await resolveProfile(String(profile ?? ''));
+      if (!steamId) return { ok: false, reason: 'profile' };
+      const entries = await fetchWishlist(steamId);
+      // Valve answers 200 with nothing for an empty wishlist AND for a private
+      // one. We cannot tell them apart, so we do not guess which it was.
+      if (entries.length === 0) return { ok: false, reason: 'empty' };
+
+      const tracked = new Set<string>();
+      for (const row of listWishlist()) {
+        try {
+          for (const ref of JSON.parse(row.refs) as SourceRef[]) {
+            if (ref.sourceId === 'steam-regional') tracked.add(ref.sourceGameId);
+          }
+        } catch {
+          /* one malformed row must not stop an import */
+        }
+      }
+
+      const sink: ImportSink = {
+        has: (appId) => tracked.has(appId),
+        add: (row) => {
+          addToWishlist(row);
+          tracked.add(row.refs[0]!.sourceGameId);
+        },
+      };
+
+      emit?.({ total: entries.length, done: 0, added: 0, skipped: 0 });
+      const outcome = await importWishlist(entries, sink, (p) => emit?.(p));
+      await flush();
+      refreshBadge();
+      return { ok: true, ...outcome };
     }),
 
     /**

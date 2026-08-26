@@ -218,6 +218,33 @@ export const t = {
       'הסכום בשקלים הוא המרה לפי שער היום של מחיר שנרשם בעבר, ולא מה ששילמו עליו אז.',
       ...(others.length ? [`שפל בחלונות קצרים יותר — ${others.join(' · ')}`] : []),
     ].join('\n'),
+  // Steam wishlist import. The wait is real (Valve retired the bulk app list,
+  // so every title is its own spaced request), so the copy says so rather than
+  // letting a three-minute spinner look like a hang.
+  steamImportButton: '🎮 ייבוא רשימת משאלות מ‑Steam',
+  steamImportTitle: 'ייבוא רשימת המשאלות שלכם מ‑Steam',
+  steamImportIntro:
+    'הדביקו קישור לפרופיל Steam שלכם (או את שם המשתמש). הכלי יקרא את רשימת המשאלות הפומבית דרך ה‑API הרשמי של Valve ויוסיף את המשחקים למעקב. לא נדרשת התחברות ולא נשמרת שום סיסמה.',
+  steamImportPlaceholder: 'https://steamcommunity.com/id/שם-המשתמש',
+  steamImportGo: 'ייבוא',
+  steamImportWorking: 'מייבא…',
+  steamImportStep: (done: number, total: number) => `${done} מתוך ${total}`,
+  steamImportNote:
+    'הייבוא איטי בכוונה: Valve סגרה את הממשק שמחזיר שמות של הרבה משחקים בבת אחת, ולכן כל כותרת נקראת בבקשה קטנה נפרדת עם רווח ביניהן. רשימה של 80 משחקים תיקח כמה דקות. אפשר להריץ שוב בכל עת — מה שכבר במעקב מדולג בלי בקשה נוספת.',
+  steamImportDone: (r: { added: number; skipped: number; nonGames: number; unresolved: number }) => {
+    const parts = [r.added === 1 ? 'משחק אחד נוסף למעקב' : `${r.added} משחקים נוספו למעקב`];
+    if (r.skipped > 0) parts.push(`${r.skipped} כבר היו ברשימה`);
+    if (r.nonGames > 0) parts.push(`${r.nonGames} תוספות/דמו דולגו`);
+    if (r.unresolved > 0) parts.push(`${r.unresolved} לא נמצאו בחנות`);
+    return parts.join(' · ');
+  },
+  steamImportError: {
+    profile: 'לא הצלחנו לזהות פרופיל Steam מהכתובת הזו. נסו את הקישור המלא לפרופיל, למשל https://steamcommunity.com/id/שם-המשתמש',
+    empty:
+      'לא קיבלנו משחקים מהפרופיל הזה. או שרשימת המשאלות ריקה, או שהיא מוגדרת כפרטית — Steam מחזיר את אותה תשובה לשני המקרים. אפשר לשנות את הפרטיות בהגדרות הפרופיל ב‑Steam ולנסות שוב.',
+    failed: 'הייבוא נכשל. ייתכן ש‑Steam לא זמין כרגע — אפשר לנסות שוב בעוד כמה דקות.',
+    demo: 'הדגמה מציגה צילום מוקלט של נתונים ואין לה לאן לשמור. התקינו את התוסף או הריצו את הכלי מקומית כדי לייבא באמת.',
+  } as Record<string, string>,
   // Already covered by a subscription. Phrased as a fact about the catalogue,
   // never as a claim about this buyer's cost: they may not subscribe, and the
   // subscription is not free even when the game is.

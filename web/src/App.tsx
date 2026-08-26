@@ -28,7 +28,7 @@ import {
 import { PriceGraph, TrackGraph } from './PriceGraph';
 import { DepartureBoard } from './DepartureBoard';
 import { SearchBox, rememberSearch, loadIncludeDlc, saveIncludeDlc } from './SearchBox';
-import type { HealthReport, PsnHashStatus } from './types';
+import type { HealthReport, PsnHashStatus, SteamImportProgress } from './types';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
 import { HoldToConfirm } from './HoldToConfirm';
@@ -2485,6 +2485,31 @@ function WishlistView({
   };
 
   const [importMsg, setImportMsg] = useState('');
+  // Steam wishlist import: open, because a tracker with an empty list
+  // demonstrates nothing and nobody types eighty titles by hand.
+  const [steamOpen, setSteamOpen] = useState(false);
+  const [steamProfile, setSteamProfile] = useState('');
+  const [steamBusy, setSteamBusy] = useState(false);
+  const [steamStep, setSteamStep] = useState<SteamImportProgress | null>(null);
+  const [steamMsg, setSteamMsg] = useState('');
+
+  const runSteamImport = async () => {
+    if (!steamProfile.trim() || steamBusy) return;
+    setSteamBusy(true);
+    setSteamMsg('');
+    setSteamStep(null);
+    try {
+      const r = await api.importSteam(steamProfile.trim(), setSteamStep);
+      setSteamMsg(r.ok ? t.steamImportDone(r) : t.steamImportError[r.reason] ?? t.steamImportError.failed!);
+      if (r.ok && r.added > 0) await load();
+    } catch {
+      setSteamMsg(t.steamImportError.failed!);
+    } finally {
+      setSteamBusy(false);
+      setSteamStep(null);
+    }
+  };
+
   const onImport = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -2527,6 +2552,13 @@ function WishlistView({
           ⤒ {t.importButton}
           <input type="file" accept="application/json" onChange={onImport} hidden />
         </label>
+        <button
+          className={`toolbtn ${steamOpen ? 'active' : ''}`}
+          onClick={() => setSteamOpen((v) => !v)}
+          aria-expanded={steamOpen}
+        >
+          {t.steamImportButton} <span className="caret">{steamOpen ? '▾' : '▸'}</span>
+        </button>
         {items.length > 0 && (
           <label className="capture-global" title={t.captureHint} style={{ marginInlineStart: 'auto' }}>
             {t.captureGlobalLabel}
@@ -2550,6 +2582,45 @@ function WishlistView({
         )}
         {importMsg && <span className="meta">{importMsg}</span>}
       </div>
+
+      {/* Steam wishlist import. Placed with the tracked list rather than in
+          Settings because it is how the list gets its contents, not a
+          preference about it. */}
+      {steamOpen && (
+        <div className="steam-panel">
+          <h3 className="steam-panel-title">{t.steamImportTitle}</h3>
+          <p className="steam-panel-intro">{t.steamImportIntro}</p>
+          <div className="steam-row">
+            <input
+              className="steam-input"
+              type="text"
+              value={steamProfile}
+              placeholder={t.steamImportPlaceholder}
+              disabled={steamBusy}
+              onChange={(e) => setSteamProfile(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && runSteamImport()}
+            />
+            <button className="steam-go" onClick={runSteamImport} disabled={steamBusy || !steamProfile.trim()}>
+              {steamBusy ? t.steamImportWorking : t.steamImportGo}
+            </button>
+          </div>
+          {/* Progress, not a spinner: the wait is real and minutes long, and a
+              bar that cannot say how far along it is looks like a hang. */}
+          {steamStep && (
+            <div className="steam-progress">
+              <div className="steam-bar">
+                <span style={{ width: `${Math.round(((steamStep.done ?? 0) / Math.max(1, steamStep.total)) * 100)}%` }} />
+              </div>
+              <div className="steam-step">
+                {t.steamImportStep(steamStep.done ?? 0, steamStep.total)}
+                {steamStep.title && <span className="steam-step-title"> · {steamStep.title}</span>}
+              </div>
+            </div>
+          )}
+          {steamMsg && <p className="steam-msg">{steamMsg}</p>}
+          <p className="steam-note">{t.steamImportNote}</p>
+        </div>
+      )}
 
       {/* The alert rule, editable right where the tracked games are — the same
           setting the bell edits, so the two can never say different things. */}

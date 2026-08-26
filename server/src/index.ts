@@ -5,6 +5,12 @@ import { parseQuery, type Platform } from './search.ts';
 import { describeProduct, groupKey } from './normalize.ts';
 import type { GameHit, Offer, SourceAdapter } from './adapters/types.ts';
 import { asOffers } from './adapters/types.ts';
+import {
+  fetchWishlist,
+  importWishlist,
+  resolveProfile,
+  type ImportSink,
+} from './steamWishlist.ts';
 import { cheapshark } from './adapters/cheapshark.ts';
 import { steamRegional } from './adapters/steam.ts';
 import { epic } from './adapters/epic.ts';
@@ -625,6 +631,69 @@ app.get('/api/export.csv', (_req, res) => {
 /** Merge a shared tracking file into the local database (input is sanitised in importAll). */
 app.post('/api/import', (req, res) => {
   res.json(importAll(req.body));
+});
+
+/**
+ * Import a public Steam wishlist.
+ *
+ * Streamed, because it is genuinely slow and lying about that would be worse:
+ * Valve retired the bulk app-list endpoint, so every title costs its own small
+ * request and they are spaced on purpose (see steamWishlist.ts). The user
+ * watches it fill instead of staring at a spinner for three minutes.
+ *
+ * Nothing here logs in or scrapes. The wishlist endpoint is Valve's own, needs
+ * no key, and answers only for profiles their owner has left public.
+ */
+app.post('/api/import/steam', async (req, res) => {
+  const { profile } = (req.body ?? {}) as { profile?: string };
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+  const line = (obj: unknown) => res.write(JSON.stringify(obj) + '\n');
+
+  try {
+    const steamId = await resolveProfile(String(profile ?? ''));
+    if (!steamId) {
+      line({ type: 'error', reason: 'profile' });
+      return res.end();
+    }
+    const entries = await fetchWishlist(steamId);
+    if (entries.length === 0) {
+      // Valve answers 200 with nothing both for an empty wishlist and for a
+      // private one. We cannot tell them apart, so we do not guess.
+      line({ type: 'error', reason: 'empty' });
+      return res.end();
+    }
+
+    // The tracked list, read once: asking the database per app would be a query
+    // per game for a fact that cannot change mid-import.
+    const tracked = new Set<string>();
+    for (const row of listWishlist()) {
+      try {
+        for (const ref of JSON.parse(row.refs) as SourceRef[]) {
+          if (ref.sourceId === 'steam-regional') tracked.add(ref.sourceGameId);
+        }
+      } catch {
+        /* a malformed refs column must not stop an import */
+      }
+    }
+
+    const sink: ImportSink = {
+      has: (appId) => tracked.has(appId),
+      add: (row) => {
+        addToWishlist(row);
+        tracked.add(row.refs[0]!.sourceGameId);
+      },
+    };
+
+    line({ type: 'start', total: entries.length });
+    const outcome = await importWishlist(entries, sink, (p) => line({ type: 'progress', ...p }));
+    line({ type: 'done', ...outcome });
+  } catch (err) {
+    line({ type: 'error', reason: 'failed', message: err instanceof Error ? err.message : String(err) });
+  }
+  res.end();
 });
 
 /** Ticker of today's deals worth caring about — see ticker.ts for what it picks. */

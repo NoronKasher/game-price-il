@@ -487,6 +487,42 @@ body {
 }
 .notif-panel-title { margin: 0 0 10px; font-size: 15px; color: var(--amber); }
 
+/* Steam wishlist import. Same panel shape as the alert rule above it — this is
+   another thing you do to the tracked list, not a different kind of screen. */
+.steam-panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px; margin-bottom: 16px; max-width: 640px;
+}
+.steam-panel-title { margin: 0 0 6px; font-size: 15px; color: var(--amber); }
+.steam-panel-intro { margin: 0 0 10px; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+.steam-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.steam-input {
+  flex: 1 1 280px; min-width: 0; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+  font: inherit; font-size: 13px; direction: ltr; text-align: left;
+}
+.steam-input:disabled { opacity: 0.6; }
+.steam-go {
+  padding: 8px 18px; border: 0; border-radius: 8px; cursor: pointer;
+  background: var(--amber); color: #0d1117; font-weight: 600;
+}
+.steam-go:disabled { opacity: 0.5; cursor: default; }
+.steam-progress { margin-top: 10px; }
+/* A real bar rather than a spinner: the wait is minutes long and a spinner
+   that cannot say how far along it is reads as a hang. */
+.steam-bar {
+  height: 6px; border-radius: 999px; overflow: hidden;
+  background: color-mix(in srgb, var(--line) 70%, transparent);
+}
+.steam-bar span {
+  display: block; height: 100%; background: var(--down);
+  transition: width 0.25s ease;
+}
+.steam-step { margin-top: 5px; font-size: 11.5px; color: var(--muted); }
+.steam-step-title { opacity: 0.85; }
+.steam-msg { margin: 10px 0 0; font-size: 12.5px; line-height: 1.6; }
+.steam-note { margin: 10px 0 0; font-size: 11px; color: var(--muted); line-height: 1.6; }
+
 /* Alert popups. Fixed to the viewport corner and width-clamped, so a popup floats
    ABOVE the app instead of widening it — nothing may push the layout outward. */
 .toast-stack {

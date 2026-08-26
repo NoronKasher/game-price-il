@@ -306,3 +306,26 @@ export interface OffersProgress {
   lows?: HistoryLow[];
   includedIn?: Inclusion[];
 }
+
+/** One step of a Steam wishlist import. */
+export interface SteamImportProgress {
+  total: number;
+  done?: number;
+  title?: string;
+  added?: number;
+  skipped?: number;
+}
+
+/** What an import actually did, counted honestly. */
+export interface SteamImportOutcome {
+  added: number;
+  /** Already tracked before this run — a re-import costs nothing. */
+  skipped: number;
+  /** DLC, demos and soundtracks on the wishlist, which are not tracked as games. */
+  nonGames: number;
+  /** Wishlisted apps Steam would say nothing about (delisted, region-locked). */
+  unresolved: number;
+  titles: string[];
+}
+
+export type SteamImportResult = ({ ok: true } & SteamImportOutcome) | { ok: false; reason: string };

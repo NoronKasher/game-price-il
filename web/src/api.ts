@@ -1,25 +1,28 @@
 import type {
   AlertMode,
-  HealthReport,
-  HealthResponse,
-  PsnHashStatus,
   AlertRule,
   AlertScope,
   AppNotification,
   GameMeta,
+  HealthReport,
+  HealthResponse,
   HistoryPoint,
   KeysResponse,
   Offer,
+  OffersProgress,
+  OffersResponse,
+  PsnHashStatus,
+  SearchProgress,
   SearchResponse,
   SettingsResponse,
   SourceRef,
   SourceStatus,
+  SteamImportOutcome,
+  SteamImportProgress,
+  SteamImportResult,
   TickerDeal,
   TrackDetail,
   WishlistItem,
-  SearchProgress,
-  OffersProgress,
-  OffersResponse,
 } from './types';
 
 async function json<T>(res: Response): Promise<T> {
@@ -215,6 +218,58 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     }).then((r) => json<{ ok: boolean }>(r)),
+
+  /**
+   * Import a public Steam wishlist, reporting as it fills.
+   *
+   * Streamed for an honest reason rather than a cosmetic one: Valve retired the
+   * bulk app-list endpoint, so each title is its own small request and they are
+   * spaced deliberately. A wishlist of eighty takes minutes, and a spinner that
+   * hid that would look broken.
+   */
+  async importSteam(
+    profile: string,
+    onProgress: (p: SteamImportProgress) => void
+  ): Promise<SteamImportResult> {
+    const res = await fetch('/api/import/steam', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile }),
+    });
+    if (!res.ok || !res.body) return { ok: false, reason: 'failed' };
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let final: SteamImportResult = { ok: false, reason: 'failed' };
+
+    const handle = (raw: string) => {
+      const text = raw.trim();
+      if (!text) return;
+      let msg: { type?: string } & Record<string, unknown>;
+      try {
+        msg = JSON.parse(text);
+      } catch {
+        return;
+      }
+      if (msg.type === 'progress' || msg.type === 'start') onProgress(msg as unknown as SteamImportProgress);
+      else if (msg.type === 'done') final = { ok: true, ...(msg as unknown as SteamImportOutcome) };
+      else if (msg.type === 'error') final = { ok: false, reason: String(msg.reason ?? 'failed') };
+    };
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split(NEWLINE);
+        buffer = lines.pop() ?? '';
+        for (const l of lines) handle(l);
+      }
+      if (done) break;
+    }
+    handle(buffer);
+    return final;
+  },
 
   /**
    * The Settings log: every alert ever raised, including ones cleared from the
