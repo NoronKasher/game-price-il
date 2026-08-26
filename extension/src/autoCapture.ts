@@ -11,6 +11,7 @@ import { isCaptureDue } from '../../server/src/capture.ts';
 import { evaluateAlerts } from '../../server/src/notify.ts';
 import { offersFor } from '../../server/src/fanout.ts';
 import { refreshBadge } from './badge.ts';
+import { remindAboutStaleRows } from './staleReminder.ts';
 import type { SourceAdapter } from '../../server/src/adapters/types.ts';
 import type { Platform } from '../../server/src/search.ts';
 import type { SourceRef } from '../../server/src/fanout.ts';
@@ -87,7 +88,13 @@ export async function runAutoCapture(sources: SourceAdapter[]): Promise<{ checke
 
     const globalDays = getCaptureDaysGlobal();
     const due = items.filter((row) => isCaptureDue(lastCheckedAt(row.id), row.capture_days, globalDays));
-    if (due.length === 0) return { checked: 0, due: 0 };
+    if (due.length === 0) {
+      // Nothing to fetch does not mean nothing to say: a list made only of
+      // page-read rows never has anything due here, and that is exactly the list
+      // whose owner needs reminding.
+      await remindAboutStaleRows();
+      return { checked: 0, due: 0 };
+    }
 
     console.log(`auto-capture: ${due.length}/${items.length} tracked game(s) due…`);
     let checked = 0;
@@ -121,6 +128,10 @@ export async function runAutoCapture(sources: SourceAdapter[]): Promise<{ checke
       if (i < due.length - 1) await sleep(GAME_GAP_MS);
     }
     await flush();
+    // Rows nothing can re-check on its own get a reminder in the same bell,
+    // because the alternative — visiting the shop unattended — is the thing
+    // amazon.com/robots.txt names and refuses. See staleReminder.ts.
+    await remindAboutStaleRows();
     // Anything the alerts raised happened with nobody watching; put it on the
     // icon so it is visible without opening the app.
     refreshBadge();

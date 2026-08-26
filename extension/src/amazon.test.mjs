@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePrice, readAsin } from './amazon.ts';
+import { parsePrice, readAsin, parseDeliveryLine } from './amazon.ts';
 
 /**
  * Reading a price off a page we do not control.
@@ -63,4 +63,30 @@ test('a listing carries only the fees Amazon actually printed', () => {
   const printedNothing = { title: 'X', price: 100, currency: 'ILS', url: 'u', asin: 'A' };
   assert.equal(printedNothing.importFees, undefined);
   assert.equal(printedNothing.shipping, undefined);
+});
+
+test('the delivery sentence Amazon shows Israeli buyers is read whole', () => {
+  // Verbatim from a real product page. Both numbers are printed, so there is
+  // nothing to estimate — "No Import Charges" is Amazon stating zero, not us
+  // assuming it.
+  assert.deepEqual(parseDeliveryLine('No Import Charges & $15.66 Shipping to Israel'), {
+    importFees: 0,
+    shipping: 15.66,
+    currency: 'USD',
+  });
+});
+
+test('paid import charges and free shipping are both understood', () => {
+  assert.deepEqual(parseDeliveryLine('$12.30 Import Charges & FREE Shipping to Israel'), {
+    importFees: 12.3,
+    shipping: 0,
+    currency: 'USD',
+  });
+});
+
+test('a page that says nothing about delivery states nothing', () => {
+  // The distinction that matters: absent is "not stated", never "zero".
+  assert.deepEqual(parseDeliveryLine('In Stock'), {});
+  assert.deepEqual(parseDeliveryLine(''), {});
+  assert.equal(parseDeliveryLine('Delivery Thursday, September 24').shipping, undefined);
 });

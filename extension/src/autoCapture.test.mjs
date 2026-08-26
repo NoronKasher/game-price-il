@@ -44,6 +44,21 @@ globalThis.chrome = {
   },
   storage: {
     sync: { get: (_k, cb) => cb({}), set: (_v, cb) => cb(), remove: (_k, cb) => cb() },
+    // Promise-based, like the real one: staleReminder.ts awaits it to remember
+    // which rows it has already nagged about. A shim without `local` made every
+    // pass look like the first.
+    local: (() => {
+      const store = new Map();
+      return {
+        async get(key) {
+          return store.has(key) ? { [key]: store.get(key) } : {};
+        },
+        async set(values) {
+          for (const [k, v] of Object.entries(values)) store.set(k, v);
+        },
+        _reset: () => store.clear(),
+      };
+    })(),
     onChanged: { addListener() {} },
   },
 };
@@ -256,4 +271,69 @@ test('the created alarm looks soon and then repeats', () => {
   const { info } = created[0];
   assert.ok(info.delayInMinutes > 0 && info.delayInMinutes <= 5, 'a new install should not wait hours');
   assert.equal(info.periodInMinutes, 360);
+});
+
+/* ── Rows only a person can refresh ──────────────────────────────────────── */
+
+test('a stale page-read row is reminded about, not fetched', async () => {
+  const { remindAboutStaleRows } = await import('./staleReminder.ts');
+  chrome.storage.local._reset();
+  db.__setTables({});
+  const row = db.addToWishlist({
+    title: 'Some Amazon Thing',
+    platform: 'other',
+    refs: [{ sourceId: 'amazon-page', sourceGameId: 'B0TEST12345' }],
+  });
+  db.recordOffers(
+    row.id,
+    [{ store: 'Amazon', region: null, kind: 'physical', price: 40, currency: 'USD', priceILS: 160 }],
+    ago(30)
+  );
+
+  const raised = await remindAboutStaleRows();
+  assert.equal(raised, 1, 'a month-old page-read row should be reminded about');
+  const notes = db.listNotifications();
+  assert.equal(notes[0].kind, 'stale');
+  assert.match(notes[0].message, /amazon\.com\/dp\/B0TEST12345/, 'the reminder has to be actionable');
+});
+
+test('the same staleness is not reminded about twice', async () => {
+  // A nag every six hours is how a bell gets ignored.
+  const { remindAboutStaleRows } = await import('./staleReminder.ts');
+  chrome.storage.local._reset();
+  db.__setTables({});
+  const row = db.addToWishlist({
+    title: 'Some Amazon Thing',
+    platform: 'other',
+    refs: [{ sourceId: 'amazon-page', sourceGameId: 'B0TEST12345' }],
+  });
+  db.recordOffers(
+    row.id,
+    [{ store: 'Amazon', region: null, kind: 'physical', price: 40, currency: 'USD', priceILS: 160 }],
+    ago(30)
+  );
+  assert.equal(await remindAboutStaleRows(), 1);
+  assert.equal(await remindAboutStaleRows(), 0, 'the second pass should stay quiet');
+});
+
+test('a game that other sources can refresh is never reminded about', async () => {
+  // Only rows whose EVERY source is unreachable. A game also on Steam gets
+  // re-priced by the ordinary capture and needs no nagging.
+  const { remindAboutStaleRows } = await import('./staleReminder.ts');
+  chrome.storage.local._reset();
+  db.__setTables({});
+  const row = db.addToWishlist({
+    title: 'Normal Game',
+    platform: 'pc',
+    refs: [
+      { sourceId: 'amazon-page', sourceGameId: 'B0TEST12345' },
+      { sourceId: 'steam-regional', sourceGameId: '1245620' },
+    ],
+  });
+  db.recordOffers(
+    row.id,
+    [{ store: 'Steam', region: 'IL', kind: 'digital', price: 40, currency: 'ILS', priceILS: 40 }],
+    ago(30)
+  );
+  assert.equal(await remindAboutStaleRows(), 0);
 });

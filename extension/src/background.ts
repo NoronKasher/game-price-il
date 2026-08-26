@@ -4,7 +4,7 @@ import { makeHandlers, type Handler } from './handlers.ts';
 import { setChangeListener } from './db.browser.ts';
 import { scheduleSyncPush, startSyncMirror } from './syncMirror.ts';
 import { startAutoCapture } from './autoCapture.ts';
-import { trackAmazonListing } from './amazonTrack.ts';
+import { trackAmazonListing, untrackAmazonListing, recordAmazonVisit } from './amazonTrack.ts';
 import type { SourceAdapter } from '../../server/src/adapters/types.ts';
 
 import { cheapshark } from '../../server/src/adapters/cheapshark.ts';
@@ -127,8 +127,10 @@ chrome.runtime.onConnect.addListener((port) => {
  * this extension never fetches Amazon itself. See src/amazon.ts for why that
  * line is where it is.
  */
+const AMAZON_ACTIONS = new Set(['amazon-track', 'amazon-untrack', 'amazon-seen']);
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg?.__vgpt !== 'amazon-track') return;
+  if (!AMAZON_ACTIONS.has(msg?.__vgpt)) return;
   // Only from a page we actually injected into. A message claiming to be from
   // Amazon is not the same as one that came from there.
   const from = sender.origin ?? sender.url ?? '';
@@ -136,8 +138,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: false, error: 'unexpected sender' });
     return;
   }
-  void trackAmazonListing(msg.listing)
-    .then(() => sendResponse({ ok: true }))
+  const run = async () => {
+    if (msg.__vgpt === 'amazon-untrack') {
+      return { ok: await untrackAmazonListing(msg.asin) };
+    }
+    if (msg.__vgpt === 'amazon-seen') {
+      // Opening a page you already track IS the check — see recordAmazonVisit.
+      return { ok: true, ...(await recordAmazonVisit(msg.listing)) };
+    }
+    await trackAmazonListing(msg.listing);
+    return { ok: true, tracked: true };
+  };
+  void run()
+    .then(sendResponse)
     .catch((err) => sendResponse({ ok: false, error: err instanceof Error ? err.message : 'failed' }));
   return true; // keep the channel open for the async reply
 });

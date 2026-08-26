@@ -54,33 +54,39 @@ function rememberDismissed(): void {
   }
 }
 
-/** Ask the worker to track it. Resolves to a human-readable outcome. */
-function track(listing: AmazonListing): Promise<string> {
+interface WorkerReply {
+  ok?: boolean;
+  tracked?: boolean;
+  recorded?: boolean;
+  error?: string;
+}
+
+/** One round trip to the worker. Never hangs: a dead worker resolves as a failure. */
+function ask(message: Record<string, unknown>): Promise<WorkerReply> {
   return new Promise((resolve) => {
     let settled = false;
-    const done = (msg: string) => {
+    const done = (reply: WorkerReply) => {
       if (!settled) {
         settled = true;
-        resolve(msg);
+        resolve(reply);
       }
     };
-    // A worker that is asleep takes a moment; one that is broken must not leave
-    // the button saying "saving…" for ever.
-    const timer = setTimeout(() => done('לא הצלחנו לשמור — נסו שוב'), 15000);
+    // A sleeping worker takes a moment; a broken one must not leave a button
+    // saying "saving…" for ever.
+    const timer = setTimeout(() => done({ ok: false, error: 'timeout' }), 15000);
     try {
-      chrome.runtime.sendMessage({ __vgpt: 'amazon-track', listing }, (reply) => {
+      chrome.runtime.sendMessage(message, (reply) => {
         clearTimeout(timer);
-        if (chrome.runtime.lastError) return done('לא הצלחנו לשמור — נסו שוב');
-        done(reply?.ok ? 'נוסף למעקב ✓' : (reply?.error ?? 'לא הצלחנו לשמור'));
+        done(chrome.runtime.lastError ? { ok: false, error: 'disconnected' } : (reply ?? {}));
       });
     } catch {
       clearTimeout(timer);
-      done('לא הצלחנו לשמור — נסו שוב');
+      done({ ok: false, error: 'failed' });
     }
   });
 }
 
-export function mountAmazonPanel(): void {
+export async function mountAmazonPanel(): Promise<void> {
   if (document.getElementById(PANEL_ID)) return;
   if (dismissedThisSession()) return;
 
@@ -88,6 +94,13 @@ export function mountAmazonPanel(): void {
   // No price read means no card. Guessing that a page is a product, or showing
   // an empty offer to track "something", is worse than staying out of the way.
   if (!listing) return;
+
+  // Tell the worker we are looking at this listing BEFORE drawing anything. If
+  // it is already tracked, that visit is itself the price check — the user asked
+  // for this price to be followed, and making them press a button to save a
+  // number they are already looking at would throw readings away for nothing.
+  const seen = await ask({ __vgpt: 'amazon-seen', listing });
+  let tracked = seen.tracked === true;
 
   const panel = el('div', PANEL_CSS);
   panel.id = PANEL_ID;
@@ -115,32 +128,78 @@ export function mountAmazonPanel(): void {
     'font-weight:600;margin-bottom:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;',
     listing.title
   );
+  // The delivered cost when Amazon printed the parts, the item price when it did
+  // not — and the line underneath says which of the two this is.
+  const extras = (listing.importFees ?? 0) + (listing.shipping ?? 0);
+  const stated = listing.importFees !== undefined || listing.shipping !== undefined;
+  const total = listing.price + extras;
+
   const price = el(
     'div',
-    'font-family:ui-monospace,monospace;font-size:16px;color:#ffcc55;margin-bottom:9px;direction:ltr;text-align:right;',
-    `${listing.price.toLocaleString()} ${listing.currency}`
+    'font-family:ui-monospace,monospace;font-size:16px;color:#ffcc55;direction:ltr;text-align:right;',
+    `${total.toLocaleString()} ${listing.currency}`
+  );
+  const breakdown = el(
+    'div',
+    'color:#9099a8;font-size:11px;margin-bottom:9px;direction:ltr;text-align:right;',
+    stated
+      ? `${listing.price.toLocaleString()} + ${extras.toLocaleString()} משלוח ומיסים`
+      : 'מחיר הפריט בלבד — הדף לא ציין משלוח ומיסים'
   );
 
-  const button = el('button', `
+  const TRACK_CSS = `
     width:100%;padding:8px 0;border:0;border-radius:8px;cursor:pointer;
     background:#ffcc55;color:#0d1117;font:600 13px/1 "Segoe UI",system-ui,sans-serif;
-  `, 'עקבו אחרי המחיר הזה');
+  `;
+  const UNTRACK_CSS = `
+    width:100%;padding:8px 0;border:1px solid #2f3a4d;border-radius:8px;cursor:pointer;
+    background:none;color:#9099a8;font:600 13px/1 "Segoe UI",system-ui,sans-serif;
+  `;
 
-  const note = el(
-    'div',
-    'margin-top:8px;color:#9099a8;font-size:11px;line-height:1.5;',
-    'המחיר נקרא מהעמוד הזה בלבד ונשמר אצלכם במחשב. הוא יתעדכן בפעם הבאה שתפתחו את העמוד — הכלי לא סורק את אמזון.'
-  );
+  const button = el('button', TRACK_CSS);
+  const note = el('div', 'margin-top:8px;color:#9099a8;font-size:11px;line-height:1.5;');
+
+  /**
+   * Reflects what is actually stored, so reopening the page cannot offer to add
+   * a listing that is already tracked — which it did, producing a duplicate row
+   * on every reload.
+   */
+  const paint = () => {
+    if (tracked) {
+      button.style.cssText = UNTRACK_CSS;
+      button.textContent = 'הסירו מהמעקב';
+      note.textContent = seen.recorded
+        ? 'הפריט במעקב, והמחיר שבעמוד הזה נרשם עכשיו. כל פתיחה של העמוד מעדכנת אותו — הכלי לא סורק את אמזון בעצמו.'
+        : 'הפריט כבר במעקב. כל פתיחה של העמוד מעדכנת את המחיר — הכלי לא סורק את אמזון בעצמו.';
+    } else {
+      button.style.cssText = TRACK_CSS;
+      button.textContent = 'עקבו אחרי המחיר הזה';
+      note.textContent =
+        'המחיר נקרא מהעמוד הזה בלבד ונשמר אצלכם במחשב. הוא יתעדכן בכל פעם שתפתחו את העמוד — הכלי לא סורק את אמזון.';
+    }
+  };
+  paint();
 
   button.addEventListener('click', async () => {
+    const wasTracked = tracked;
     button.disabled = true;
     button.style.opacity = '0.75';
-    button.textContent = 'שומר…';
-    const outcome = await track(listing);
-    button.textContent = outcome;
+    button.textContent = wasTracked ? 'מסיר…' : 'שומר…';
+
+    const reply = wasTracked
+      ? await ask({ __vgpt: 'amazon-untrack', asin: listing.asin })
+      : await ask({ __vgpt: 'amazon-track', listing });
+
+    button.disabled = false;
     button.style.opacity = '1';
+    if (reply.ok) {
+      tracked = !wasTracked;
+      paint();
+    } else {
+      button.textContent = 'לא הצלחנו — נסו שוב';
+    }
   });
 
-  panel.append(head, name, price, button, note);
+  panel.append(head, name, price, breakdown, button, note);
   document.body.append(panel);
 }

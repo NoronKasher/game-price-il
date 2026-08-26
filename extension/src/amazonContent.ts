@@ -14,7 +14,7 @@ const remount = () => {
   document.getElementById('vgpt-amazon-panel')?.remove();
   // Amazon fills the price block in after the shell renders; a single immediate
   // read finds an empty container and shows nothing.
-  setTimeout(() => mountAmazonPanel(), 600);
+  setTimeout(() => void mountAmazonPanel(), 600);
 };
 
 if (document.readyState === 'loading') {

@@ -37,28 +37,66 @@ const PRICE_SELECTORS = [
 const TITLE_SELECTORS = ['#productTitle', '#title span', 'h1 span.a-text-normal'];
 
 /**
- * What Amazon PRINTS on the page beyond the item price: the import fees deposit
- * it collects for Israeli delivery, and the shipping charge.
+ * What Amazon PRINTS about delivery, on the page, in one sentence.
  *
- * READ, NEVER COMPUTED. This project already learned that lesson on Eilat
- * pricing (see server/src/adapters/../../web/src/eilat.ts): an earlier version
- * derived a VAT-free price by arithmetic and was wrong in both directions,
- * inventing discounts nobody could get. Israeli import fees are not a flat
- * percentage either — they depend on the category and the declared value, and
- * Amazon has already done that calculation on the page. So we take their number
- * or we take none, and a listing that prints no fee simply shows the item price
- * with a note that the total is not known.
+ * For an Israeli address the product page states both facts outright:
+ *
+ *     "No Import Charges & $15.66 Shipping to Israel"
+ *
+ * So there is nothing to estimate and no percentage to apply. Both numbers are
+ * published, and "No Import Charges" is itself a statement — zero because Amazon
+ * says zero, not because we assumed it. Where the sentence is absent we record
+ * the item price alone and say the delivered cost is unknown; we never fill the
+ * gap with arithmetic.
  */
-const FEE_SELECTORS = [
-  '#import-fees-deposit .a-color-price',
-  '#amazonGlobal_feature_div .a-color-price',
-  '[data-csa-c-slot-id="odf-feature"] .a-color-price',
+const DELIVERY_SELECTORS = [
+  '#amazonGlobal_feature_div',
+  '#globalStoreBadgePopoverInsideBuybox_feature_div',
+  '#priceBadging_feature_div',
+  '#deliveryBlockMessage',
+  '#mir-layout-DELIVERY_BLOCK',
 ];
-const SHIPPING_SELECTORS = [
-  '#deliveryBlockMessage .a-color-secondary .a-color-price',
-  '#priceBadging_feature_div .a-color-price',
-  '#mir-layout-DELIVERY_BLOCK .a-color-price',
-];
+
+export interface DeliveryCosts {
+  /** Import charges as stated. 0 when the page says "No Import Charges". */
+  importFees?: number;
+  /** Shipping as stated. 0 when the page says FREE. */
+  shipping?: number;
+  currency?: string;
+}
+
+/**
+ * Read the delivery sentence. Anything it does not state stays undefined —
+ * absent is "the page did not say", which is not the same as zero.
+ */
+export function parseDeliveryLine(text: string): DeliveryCosts {
+  const flat = text.replace(/\s+/g, ' ');
+  if (!/shipping to/i.test(flat)) return {};
+  const out: DeliveryCosts = {};
+
+  const importMatch = flat.match(/(?:No|Free)\s+Import\s+(?:Charges|Fees)/i);
+  if (importMatch) out.importFees = 0;
+  else {
+    const paid = flat.match(/([₪$£€]\s?[\d.,]+)\s*(?:Import\s+(?:Charges|Fees)|Import\s+Fees\s+Deposit)/i);
+    const parsed = paid ? parsePrice(paid[1]!) : null;
+    if (parsed) {
+      out.importFees = parsed.price;
+      out.currency = parsed.currency;
+    }
+  }
+
+  const freeShip = /(?:&|and)\s*FREE\s+Shipping/i.test(flat);
+  if (freeShip) out.shipping = 0;
+  else {
+    const ship = flat.match(/([₪$£€]\s?[\d.,]+)\s*Shipping\s+to/i);
+    const parsed = ship ? parsePrice(ship[1]!) : null;
+    if (parsed) {
+      out.shipping = parsed.price;
+      out.currency ??= parsed.currency;
+    }
+  }
+  return out;
+}
 
 export interface AmazonListing {
   title: string;
@@ -68,8 +106,8 @@ export interface AmazonListing {
   /** The ASIN, so re-visiting the same product updates one row rather than adding one. */
   asin: string;
   /**
-   * Import fees and shipping AS PRINTED by Amazon, when it prints them. Absent
-   * means the page did not say — never that they are zero.
+   * Import charges and shipping AS PRINTED by Amazon. Absent means the page did
+   * not say — never that they are zero. Zero means the page said zero.
    */
   importFees?: number;
   shipping?: number;
@@ -143,14 +181,22 @@ export function readListing(): AmazonListing | null {
   if (!priceText) return null;
   const parsed = parsePrice(priceText);
   if (!parsed) return null;
-  // Extras only count when they are in the SAME currency as the item; a figure
-  // read in another currency added to the price would be a fabricated total.
-  const extra = (selectors: string[]): number | undefined => {
-    const text = firstText(selectors);
-    if (!text) return undefined;
-    const found = parsePrice(text);
-    return found && found.currency === parsed.currency ? found.price : undefined;
-  };
+  // The delivery sentence, from its usual containers or — since Amazon moves it
+  // between layouts — from the page text as a last resort. The pattern is
+  // specific enough ("Import Charges" next to "Shipping to") that a false match
+  // is not a realistic worry.
+  let delivery = parseDeliveryLine(firstText(DELIVERY_SELECTORS) ?? '');
+  if (delivery.shipping === undefined && delivery.importFees === undefined) {
+    // Split into lines rather than writing a newline into a pattern: the
+    // sentence always lives on one line, and a line-by-line scan says so
+    // plainly.
+    const lines = (document.body?.innerText ?? '').split('\n');
+    const line = lines.find((l) => /Import\s+(?:Charges|Fees)/i.test(l) && /Shipping\s+to/i.test(l));
+    if (line) delivery = parseDeliveryLine(line);
+  }
+  // A figure quoted in another currency is dropped rather than added: a total
+  // mixing two currencies would be a number that exists nowhere.
+  if (delivery.currency && delivery.currency !== parsed.currency) delivery = {};
 
   return {
     title,
@@ -159,7 +205,7 @@ export function readListing(): AmazonListing | null {
     // Canonical, without the tracking and session junk Amazon appends.
     url: `${location.origin}/dp/${asin}`,
     asin,
-    importFees: extra(FEE_SELECTORS),
-    shipping: extra(SHIPPING_SELECTORS),
+    importFees: delivery.importFees,
+    shipping: delivery.shipping,
   };
 }
