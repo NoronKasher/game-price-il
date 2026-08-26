@@ -1,4 +1,5 @@
 import type { Platform } from '../search.ts';
+import type { Inclusion } from './gamepass.ts';
 
 /** Where the seller operates from, for the "local vs import" filter. */
 export type SellerLocation = 'israel' | 'international';
@@ -102,7 +103,16 @@ export interface SourceOffers {
   offers: Offer[];
   /** Lowest-ever and shorter windows, when the source publishes them. */
   lows?: HistoryLow[];
+  /**
+   * Subscriptions whose catalogue already carries this game. Deliberately not
+   * an Offer: it is not a price, and a "0" row among real prices would say
+   * something false about what the buyer pays.
+   */
+  includedIn?: Inclusion[];
 }
+
+/** Re-exported so adapters and the fan-out share one definition. */
+export type { Inclusion } from './gamepass.ts';
 
 /** Both return shapes, flattened. Every call site goes through this. */
 export function asOffers(result: Offer[] | SourceOffers): Offer[] {
@@ -112,6 +122,11 @@ export function asOffers(result: Offer[] | SourceOffers): Offer[] {
 /** The extra facts, if the source returned any. */
 export function lowsOf(result: Offer[] | SourceOffers): HistoryLow[] {
   return Array.isArray(result) ? [] : (result.lows ?? []);
+}
+
+/** Subscriptions the source says already carry the game. */
+export function inclusionsOf(result: Offer[] | SourceOffers): Inclusion[] {
+  return Array.isArray(result) ? [] : (result.includedIn ?? []);
 }
 
 /**

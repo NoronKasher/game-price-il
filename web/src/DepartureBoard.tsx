@@ -10,7 +10,7 @@ import { boardHasEilatPrices, eilatPrice, eilatSaving } from './eilat';
 import { safeUrl } from './url';
 import { SearchProgressBar, type ProgressState } from './SearchProgressBar';
 import { loadProgressBar, loadProgressBlink } from './progressPrefs';
-import type { GameMeta, HistoryLow, Offer, Platform, SourceRef } from './types';
+import type { GameMeta, HistoryLow, Inclusion, Offer, Platform, SourceRef } from './types';
 
 /**
  * The in-page detail "tab" a search card opens into.
@@ -129,6 +129,8 @@ export function DepartureBoard({
   const [priceProgress, setPriceProgress] = useState<ProgressState | null>(null);
   /** What price trackers have on record for this game, when a source keeps one. */
   const [lows, setLows] = useState<HistoryLow[]>([]);
+  /** Subscriptions that already carry this game in Israel. */
+  const [includedIn, setIncludedIn] = useState<Inclusion[]>([]);
 
   const refsKey = refs.map((r) => `${r.sourceId}:${r.sourceGameId}`).join('|');
 
@@ -149,6 +151,7 @@ export function DepartureBoard({
     setNoticeDismissedNow(false);
     setEilat(false);
     setLows([]);
+    setIncludedIn([]);
     if (refs.length === 0) {
       setOffers([]);
       setMeta(null);
@@ -165,6 +168,7 @@ export function DepartureBoard({
         if (!live) return;
         landed.push(...p.offers);
         if (p.lows?.length) setLows(p.lows);
+        if (p.includedIn?.length) setIncludedIn(p.includedIn);
         if (p.status.ok) answered++;
         setPriceProgress({ total: p.total, done: p.done, answered });
         // Cheapest first while it fills, so the top row is meaningful from the
@@ -175,6 +179,7 @@ export function DepartureBoard({
         if (!live) return;
         setOffers(r.offers);
         if (r.lows?.length) setLows(r.lows);
+        if (r.includedIn?.length) setIncludedIn(r.includedIn);
       })
       .catch(() => live && setError(true));
     api.meta(refs).then((r) => live && setMeta(r.meta)).catch(() => live && setMeta(null));
@@ -349,6 +354,23 @@ export function DepartureBoard({
                   {platformNames[p]}
                 </button>
               ))}
+            </div>
+          )}
+          {includedIn.length > 0 && (
+            /* The loudest thing this board can say. Placed above the genres and
+               the price summary because it can make the whole table moot: the
+               cheapest price for a game you already have access to is none. */
+            <div className="dt-included" title={t.includedTitle}>
+              <span className="dt-included-mark" aria-hidden="true">✓</span>
+              <div>
+                <div className="dt-included-head">{t.includedHead}</div>
+                <ul className="dt-included-list">
+                  {includedIn.map((inc) => (
+                    <li key={inc.id}>{inc.name}</li>
+                  ))}
+                </ul>
+                <div className="dt-included-note">{t.includedNote}</div>
+              </div>
             </div>
           )}
           {meta === undefined ? (

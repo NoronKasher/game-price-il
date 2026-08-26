@@ -1,4 +1,5 @@
-import type { GameHit, Offer, SourceAdapter } from './types.ts';
+import type { GameHit, Offer, SourceAdapter, SourceOffers } from './types.ts';
+import { inclusionsFor } from './gamepass.ts';
 import { toILS, canConvert } from '../rates.ts';
 import { REGIONS } from '../regions.ts';
 import { describeProduct } from '../normalize.ts';
@@ -106,7 +107,10 @@ export const xbox: SourceAdapter = {
   },
 
   /** Returns one offer per region (price board), cheapest ₪ first, pinned regions flagged. */
-  async getOffers(sourceGameId: string): Promise<Offer[]> {
+  async getOffers(sourceGameId: string): Promise<SourceOffers> {
+    // Asked alongside the regional prices, not after them: it is one cached
+    // set lookup and must never add a step to how long the board takes.
+    const included = inclusionsFor(sourceGameId);
     const results = await Promise.all(
       REGIONS.map(async (region) => {
         const price = await fetchMarketPrice(sourceGameId, region.market);
@@ -136,6 +140,6 @@ export const xbox: SourceAdapter = {
 
     const offers = results.filter((o): o is Offer => o !== null);
     offers.sort((a, b) => a.priceILS - b.priceILS);
-    return offers;
+    return { offers, includedIn: await included };
   },
 };

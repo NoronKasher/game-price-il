@@ -273,6 +273,19 @@ export interface HistoryLow {
   source: string;
 }
 
+/**
+ * A subscription whose catalogue already carries a game.
+ *
+ * Carries the market it was read for, because that is the entire caveat: a
+ * title in the American catalogue is not necessarily in the Israeli one, and
+ * saying otherwise would tell someone not to buy something they cannot play.
+ */
+export interface Inclusion {
+  id: string;
+  name: string;
+  market: string;
+}
+
 /** What `api.offers` answers with. */
 export interface OffersResponse {
   offers: Offer[];
@@ -280,6 +293,8 @@ export interface OffersResponse {
   sources?: SourceStatus[];
   /** Widest window first; absent when no source keeps a record for this game. */
   lows?: HistoryLow[];
+  /** Subscriptions that already carry this game. Never a price. */
+  includedIn?: Inclusion[];
 }
 
 /** One step of a streamed price lookup: a single store has quoted. */
@@ -289,4 +304,5 @@ export interface OffersProgress {
   status: SourceStatus;
   offers: Offer[];
   lows?: HistoryLow[];
+  includedIn?: Inclusion[];
 }

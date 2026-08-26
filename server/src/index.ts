@@ -228,7 +228,7 @@ app.post('/api/offers/stream', async (req, res) => {
   }
   try {
     const result = await offersFor(sources, refs, platform, (p) => {
-      line({ type: 'source', total: p.total, done: p.done, status: p.status, offers: p.offers, lows: p.lows });
+      line({ type: 'source', total: p.total, done: p.done, status: p.status, offers: p.offers, lows: p.lows, includedIn: p.includedIn });
     });
     line({ type: 'done', ...result });
   } catch (err) {

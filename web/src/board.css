@@ -788,6 +788,20 @@ body {
 .pstat-israel-over { color: var(--up); font-size: 11.5px; }
 .pstat-israel-best { color: var(--down); font-size: 11.5px; }
 
+/* The one thing on this panel that can make the price table irrelevant, so it
+   is the one thing allowed to be loud. */
+.dt-included {
+  margin: 10px 0 2px; padding: 9px 11px; border-radius: 9px;
+  display: flex; gap: 9px; align-items: flex-start;
+  background: color-mix(in srgb, var(--down) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--down) 42%, var(--line));
+  cursor: help;
+}
+.dt-included-mark { color: var(--down); font-weight: 700; line-height: 1.35; }
+.dt-included-head { font-size: 12.5px; font-weight: 600; }
+.dt-included-list { margin: 2px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--down); }
+.dt-included-note { margin-top: 4px; font-size: 10.5px; color: var(--muted); line-height: 1.45; }
+
 /* Somebody else's record, deliberately quieter than the board's own numbers:
    it is a yardstick, not a price anyone can buy at right now. */
 .pstat-ever {

@@ -218,6 +218,13 @@ export const t = {
       'הסכום בשקלים הוא המרה לפי שער היום של מחיר שנרשם בעבר, ולא מה ששילמו עליו אז.',
       ...(others.length ? [`שפל בחלונות קצרים יותר — ${others.join(' · ')}`] : []),
     ].join('\n'),
+  // Already covered by a subscription. Phrased as a fact about the catalogue,
+  // never as a claim about this buyer's cost: they may not subscribe, and the
+  // subscription is not free even when the game is.
+  includedHead: 'המשחק כלול במנוי',
+  includedNote: 'לפי הקטלוג הישראלי הנוכחי. משחקים נכנסים ויוצאים מהמנויים — בדקו לפני שאתם מוותרים על רכישה.',
+  includedTitle:
+    'רשימות המנויים נקראות ישירות מהקטלוג הרשמי של מיקרוסופט, עבור השוק הישראלי בלבד.\nזה לא אומר שהמשחק חינם — הוא כלול במנוי בתשלום, ורק אם יש לכם אותו.',
   // Every row goes somewhere — a comparison that cannot be acted on is trivia.
   depColGo: 'לרכישה',
   depGoAria: (store: string, price: string) => `פתיחת ההצעה ב${store} — ${price} (נפתח בלשונית חדשה)`,

@@ -1,5 +1,5 @@
-import type { GameHit, HistoryLow, Offer, SourceAdapter } from './adapters/types.ts';
-import { asOffers, lowsOf } from './adapters/types.ts';
+import type { GameHit, HistoryLow, Inclusion, Offer, SourceAdapter } from './adapters/types.ts';
+import { asOffers, inclusionsOf, lowsOf } from './adapters/types.ts';
 import type { Platform } from './search.ts';
 
 /** Which source a game came from, and its id there. */
@@ -235,6 +235,11 @@ export interface OffersResult {
    * to tell a real discount from a sticker.
    */
   lows?: HistoryLow[];
+  /**
+   * Subscriptions whose catalogue already carries this game. Not a price and
+   * never sorted among them — the point is that this buyer may not need one.
+   */
+  includedIn?: Inclusion[];
 }
 
 /** Every price for one game on one platform, cheapest first. */
@@ -245,6 +250,7 @@ export interface OffersProgress {
   offers: Offer[];
   /** Carried on the step that produced them, so the summary fills in mid-stream. */
   lows?: HistoryLow[];
+  includedIn?: Inclusion[];
 }
 
 /**
@@ -254,6 +260,13 @@ export interface OffersProgress {
  * stays correct when a second one starts: the lowest a game has EVER been is
  * the lowest anybody saw, not the lowest the last responder happened to see.
  */
+/** One badge per subscription, however many sources happen to report it. */
+function dedupeInclusions(all: Inclusion[]): Inclusion[] {
+  const byId = new Map<string, Inclusion>();
+  for (const inc of all) if (!byId.has(inc.id)) byId.set(inc.id, inc);
+  return [...byId.values()];
+}
+
 export function bestLows(all: HistoryLow[]): HistoryLow[] {
   const byWindow = new Map<string, HistoryLow>();
   for (const low of all) {
@@ -273,6 +286,7 @@ export async function offersFor(
   const offers: Offer[] = [];
   const status: SourceStatus[] = [];
   const lows: HistoryLow[] = [];
+  const includedIn: Inclusion[] = [];
   // Refs naming a source we do not have (or one switched off) are skipped, so
   // the total has to be the count that will actually be ASKED — otherwise a bar
   // built from it stalls short of the end forever.
@@ -283,13 +297,16 @@ export async function offersFor(
       const source = sources.find((s) => s.id === ref.sourceId)!;
       let got: Offer[] = [];
       let gotLows: HistoryLow[] = [];
+      let gotIncluded: Inclusion[] = [];
       let outcome: SourceStatus;
       try {
         const raw = await source.getOffers(ref.sourceGameId, platform);
         got = asOffers(raw);
         gotLows = lowsOf(raw);
+        gotIncluded = inclusionsOf(raw);
         offers.push(...got);
         lows.push(...gotLows);
+        includedIn.push(...gotIncluded);
         outcome = { id: source.id, name: source.nameHe, ok: true, count: got.length };
       } catch (err) {
         outcome = statusFor(source, err);
@@ -303,6 +320,7 @@ export async function offersFor(
           status: outcome,
           offers: got,
           lows: gotLows.length ? gotLows : undefined,
+          includedIn: gotIncluded.length ? gotIncluded : undefined,
         });
       } catch (err) {
         console.error('offers progress listener failed:', err);
@@ -326,5 +344,6 @@ export async function offersFor(
     partial: status.some((s) => !s.ok),
     sources: status,
     lows: lows.length ? bestLows(lows) : undefined,
+    includedIn: includedIn.length ? dedupeInclusions(includedIn) : undefined,
   };
 }
