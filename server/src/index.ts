@@ -46,6 +46,8 @@ import {
   unreadNotificationCount,
   markNotificationsRead,
   clearNotifications,
+  listAllNotifications,
+  purgeNotifications,
   getCaptureDaysGlobal,
   setCaptureDaysGlobal,
   getDisplayCurrency,
@@ -496,6 +498,18 @@ app.post('/api/notifications/read', (_req, res) => {
   markNotificationsRead();
   res.json({ ok: true });
 });
+/**
+ * The Settings log: every alert ever raised, including ones dismissed from the
+ * bell. DELETE here is the real thing and is guarded in the UI by a hold.
+ */
+app.get('/api/notifications/log', (_req, res) => {
+  res.json({ items: listAllNotifications() });
+});
+app.delete('/api/notifications/log', (_req, res) => {
+  purgeNotifications();
+  res.json({ ok: true });
+});
+
 app.delete('/api/notifications', (_req, res) => {
   clearNotifications();
   res.json({ ok: true });

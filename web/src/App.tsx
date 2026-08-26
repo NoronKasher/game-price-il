@@ -821,9 +821,11 @@ function normWords(q: string): string[] {
 function NotificationLog() {
   const [items, setItems] = useState<AppNotification[] | null>(null);
 
+  // The LOG, not the bell: clearing the bell must leave this untouched, which
+  // was the whole complaint — tidying the bell threw away the only record.
   const load = () =>
     api
-      .getNotifications()
+      .getNotificationLog()
       .then((r) => setItems(r.items))
       .catch(() => setItems([]));
 
@@ -832,7 +834,7 @@ function NotificationLog() {
   }, []);
 
   const clear = async () => {
-    await api.clearNotifications();
+    await api.purgeNotifications();
     await load();
   };
 

@@ -55,6 +55,8 @@ export interface NotificationRow {
   platform: string | null;
   scope: string | null;
   read: number;
+  /** Dismissed from the bell but still in the Settings log. */
+  bell_cleared?: number;
   created_at: string;
 }
 
@@ -339,12 +341,18 @@ export function addNotification(n: {
   save();
 }
 
+/** What the BELL shows: anything not dismissed from it. */
 export function listNotifications(limit = 50): NotificationRow[] {
+  return [...tables.notifications].filter((n) => !n.bell_cleared).sort(byNewest).slice(0, limit);
+}
+
+/** What the SETTINGS LOG shows: everything, dismissed or not. */
+export function listAllNotifications(limit = 500): NotificationRow[] {
   return [...tables.notifications].sort(byNewest).slice(0, limit);
 }
 
 export function unreadNotificationCount(): number {
-  return tables.notifications.filter((n) => !n.read).length;
+  return tables.notifications.filter((n) => !n.read && !n.bell_cleared).length;
 }
 
 export function markNotificationsRead(): void {
@@ -352,7 +360,21 @@ export function markNotificationsRead(): void {
   save();
 }
 
+/**
+ * Empty the bell without destroying the record — the Settings log keeps it.
+ * Clearing the bell used to delete outright, so tidying it threw away the only
+ * evidence that a price had ever moved.
+ */
 export function clearNotifications(): void {
+  for (const n of tables.notifications) {
+    n.bell_cleared = 1;
+    n.read = 1;
+  }
+  save();
+}
+
+/** The log's own clear — this one really does destroy the record. */
+export function purgeNotifications(): void {
   tables.notifications = [];
   save();
 }

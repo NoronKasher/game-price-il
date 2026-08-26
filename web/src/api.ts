@@ -216,6 +216,18 @@ export const api = {
       body: JSON.stringify(patch),
     }).then((r) => json<{ ok: boolean }>(r)),
 
+  /**
+   * The Settings log: every alert ever raised, including ones cleared from the
+   * bell. `clearNotifications` empties the BELL; this list survives it, and
+   * `purgeNotifications` is the only thing that destroys the record.
+   */
+  getNotificationLog: () =>
+    fetch('/api/notifications/log').then((r) => json<{ items: AppNotification[] }>(r)),
+  // Returns nothing on purpose: the other two shells cannot produce a Response,
+  // and a contract only one implementation can satisfy is not a contract.
+  purgeNotifications: (): Promise<void> =>
+    fetch('/api/notifications/log', { method: 'DELETE' }).then(() => undefined),
+
   /** Sale-alert notifications (in-app bell). */
   getNotifications: () =>
     fetch('/api/notifications').then((r) => json<{ items: AppNotification[]; unread: number }>(r)),

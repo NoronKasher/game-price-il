@@ -96,6 +96,11 @@ db.exec(`
     platform TEXT,                   -- the tracked game's platform (same title, two consoles)
     scope TEXT,                      -- which price it was: official / physical / cdkey / any
     read INTEGER NOT NULL DEFAULT 0,
+    -- Dismissed from the BELL, but still in the Settings log. Clearing the bell
+    -- used to DELETE, which meant tidying the bell destroyed the only record
+    -- that a price had ever dropped. The log is now the durable copy and the
+    -- bell is a view onto it.
+    bell_cleared INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
@@ -113,8 +118,9 @@ db.exec(`
  * Also update the baseline CREATE above so fresh installs get the new shape.
  * Each step runs exactly once, in order.
  */
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 const MIGRATIONS: Record<number, string[]> = {
+  8: ['ALTER TABLE notifications ADD COLUMN bell_cleared INTEGER NOT NULL DEFAULT 0'],
   4: [
     'ALTER TABLE wishlist ADD COLUMN capture_days INTEGER',
     'CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
@@ -193,7 +199,7 @@ const EXPECTED_COLUMNS: Record<string, Record<string, string>> = {
     alert_price_ccy: 'TEXT',
     alert_scope: 'TEXT',
   },
-  notifications: { platform: 'TEXT', scope: 'TEXT' },
+  notifications: { platform: 'TEXT', scope: 'TEXT', bell_cleared: 'INTEGER NOT NULL DEFAULT 0' },
 };
 
 /** Add any expected column this database is missing. Returns the ones it added. */
@@ -404,14 +410,31 @@ export function addNotification(n: {
   ).run(MAX_NOTIFICATIONS);
 }
 
+/** What the BELL shows: anything not dismissed from it. */
 export function listNotifications(limit = 50): NotificationRow[] {
+  return db
+    .prepare(
+      `SELECT * FROM notifications WHERE bell_cleared = 0 ORDER BY created_at DESC, id DESC LIMIT ?`
+    )
+    .all(limit) as unknown as NotificationRow[];
+}
+
+/**
+ * What the SETTINGS LOG shows: everything, dismissed or not.
+ *
+ * The whole point of the log is to survive a bell that was cleared by reflex, so
+ * it deliberately ignores bell_cleared.
+ */
+export function listAllNotifications(limit = 500): NotificationRow[] {
   return db
     .prepare(`SELECT * FROM notifications ORDER BY created_at DESC, id DESC LIMIT ?`)
     .all(limit) as unknown as NotificationRow[];
 }
 
 export function unreadNotificationCount(): number {
-  const r = db.prepare(`SELECT COUNT(*) AS n FROM notifications WHERE read = 0`).get() as { n: number };
+  const r = db
+    .prepare(`SELECT COUNT(*) AS n FROM notifications WHERE read = 0 AND bell_cleared = 0`)
+    .get() as { n: number };
   return r.n;
 }
 
@@ -419,7 +442,16 @@ export function markNotificationsRead(): void {
   db.prepare(`UPDATE notifications SET read = 1 WHERE read = 0`).run();
 }
 
+/**
+ * Empty the bell. Deliberately NOT a delete: the alert stays in the Settings log,
+ * which is the only record that a price ever moved.
+ */
 export function clearNotifications(): void {
+  db.prepare(`UPDATE notifications SET bell_cleared = 1, read = 1 WHERE bell_cleared = 0`).run();
+}
+
+/** The log's own clear — this one really does destroy the record. */
+export function purgeNotifications(): void {
   db.prepare(`DELETE FROM notifications`).run();
 }
 

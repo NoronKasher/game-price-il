@@ -95,6 +95,10 @@ export const api: typeof LiveApi = {
   setTrackSetting: (id, patch) => call('setTrackSetting', id, patch),
 
   getNotifications: () => call('getNotifications'),
+  getNotificationLog: () => call('getNotificationLog'),
+  purgeNotifications: async () => {
+    await call('purgeNotifications');
+  },
   markNotificationsRead: async () => {
     await call('markNotificationsRead');
     return new Response(null, { status: 200 });

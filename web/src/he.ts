@@ -173,7 +173,12 @@ export const t = {
   depEilatNone: 'אין מחיר אילת',
   depEilatSaving: (pct: number) => `${pct}% פחות מהמחיר הארצי`,
   depOnlyBuyable: 'רק מה שאפשר לקנות מכאן',
-  depOnlyBuyableHint: 'מסתיר שורות שדורשות חשבון זר או מפתח אזורי — אפשר להחזיר אותן בכל רגע',
+  // Names the region, because "from here" is meaningless until you know which
+  // "here" — and it is the country picked in Settings, not the browser's locale.
+  depOnlyBuyableHint: (region: string) =>
+    `מסתיר שורות שלא באמת אפשר לקנות מהאזור שלכם: חנות שדורשת חשבון ואמצעי תשלום זרים, או מפתח שנעול לאזור אחר. ` +
+    `"האזור שלכם" הוא ${region} — המדינה שבחרתם בהגדרות, תחת "מדינה מועדפת כברירת מחדל". ` +
+    `שינוי המדינה שם משנה גם את מה שהכפתור הזה מסתיר. אפשר לכבות אותו בכל רגע והשורות חוזרות.`,
   // Board layout
   depMoreRegions: (n: number) => `עוד ${n} אזורים`,
   depFewerRegions: 'הסתר אזורים',

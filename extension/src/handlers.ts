@@ -30,6 +30,8 @@ import {
   setAlertMode,
   setAlertScope,
   listNotifications,
+  listAllNotifications,
+  purgeNotifications,
   unreadNotificationCount,
   markNotificationsRead,
   clearNotifications,
@@ -286,6 +288,13 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
       await flush();
       // The toolbar badge is the only sign a background capture leaves; reading
       // the bell is what makes it stale.
+      refreshBadge();
+      return { ok: true };
+    }),
+    getNotificationLog: withDb(() => ({ items: listAllNotifications() })),
+    purgeNotifications: withDb(async () => {
+      purgeNotifications();
+      await flush();
       refreshBadge();
       return { ok: true };
     }),

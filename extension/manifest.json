@@ -57,6 +57,29 @@
         "bridge.js"
       ],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.amazon.com/*",
+        "https://www.amazon.co.uk/*",
+        "https://www.amazon.de/*",
+        "https://www.amazon.fr/*",
+        "https://www.amazon.es/*",
+        "https://www.amazon.it/*",
+        "https://www.amazon.ca/*",
+        "https://www.amazon.com.au/*",
+        "https://www.amazon.co.jp/*",
+        "https://www.amazon.pl/*",
+        "https://www.amazon.se/*",
+        "https://www.amazon.nl/*",
+        "https://www.amazon.ae/*",
+        "https://www.amazon.sa/*",
+        "https://www.amazon.sg/*"
+      ],
+      "js": [
+        "amazon.js"
+      ],
+      "run_at": "document_idle"
     }
   ]
 }

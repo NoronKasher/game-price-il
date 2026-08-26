@@ -14,7 +14,7 @@
     "demo:capture": "node web/demo/capture.mjs",
     "start": "npm run start -w server",
     "test": "npm run test -w server && npm run test:ext",
-    "build:ext": "npm run changelog && npm run build:ext -w web && vite build -c extension/vite.config.ts && vite build -c extension/vite.bridge.config.ts && node extension/pack.mjs",
+    "build:ext": "npm run build:ext -w web && vite build -c extension/vite.config.ts && vite build -c extension/vite.bridge.config.ts && vite build -c extension/vite.amazon.config.ts && node extension/pack.mjs",
     "demo:verify": "node web/demo/verify.mjs",
     "build:server": "vite build -c server/vite.config.ts",
     "build:desktop": "npm run changelog && npm run build && npm run build:server && node desktop/make-icon.mjs",

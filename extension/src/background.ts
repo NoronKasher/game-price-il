@@ -4,6 +4,7 @@ import { makeHandlers, type Handler } from './handlers.ts';
 import { setChangeListener } from './db.browser.ts';
 import { scheduleSyncPush, startSyncMirror } from './syncMirror.ts';
 import { startAutoCapture } from './autoCapture.ts';
+import { trackAmazonListing } from './amazonTrack.ts';
 import type { SourceAdapter } from '../../server/src/adapters/types.ts';
 
 import { cheapshark } from '../../server/src/adapters/cheapshark.ts';
@@ -117,6 +118,28 @@ chrome.runtime.onConnect.addListener((port) => {
       port.postMessage({ id: msg.id, error: err instanceof Error ? err.message : String(err) });
     }
   });
+});
+
+/**
+ * The Amazon card asking us to remember a listing.
+ *
+ * Read from the page the user opened, in their browser, and stored locally —
+ * this extension never fetches Amazon itself. See src/amazon.ts for why that
+ * line is where it is.
+ */
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.__vgpt !== 'amazon-track') return;
+  // Only from a page we actually injected into. A message claiming to be from
+  // Amazon is not the same as one that came from there.
+  const from = sender.origin ?? sender.url ?? '';
+  if (!/^https:\/\/www\.amazon\./.test(from)) {
+    sendResponse({ ok: false, error: 'unexpected sender' });
+    return;
+  }
+  void trackAmazonListing(msg.listing)
+    .then(() => sendResponse({ ok: true }))
+    .catch((err) => sendResponse({ ok: false, error: err instanceof Error ? err.message : 'failed' }));
+  return true; // keep the channel open for the async reply
 });
 
 // Opening the toolbar button opens the app in a tab. A popup is the wrong shape

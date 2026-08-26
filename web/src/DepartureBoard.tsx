@@ -421,9 +421,21 @@ export function DepartureBoard({
                 className={`dt-ftoggle ${onlyBuyable ? 'on' : ''}`}
                 aria-pressed={onlyBuyable}
                 onClick={() => setOnlyBuyable((v) => !v)}
-                title={t.depOnlyBuyableHint}
+                title={t.depOnlyBuyableHint(regionLabel(preferred) ?? preferred)}
               >
                 {t.depOnlyBuyable}
+                {/* The name alone does not say WHICH "here" it means. The mark
+                    carries the full explanation, including that "here" is the
+                    country chosen in Settings — the one thing that changes what
+                    this button does. */}
+                <span
+                  className="dt-help"
+                  role="img"
+                  aria-label={t.depOnlyBuyableHint(regionLabel(preferred) ?? preferred)}
+                  title={t.depOnlyBuyableHint(regionLabel(preferred) ?? preferred)}
+                >
+                  ?
+                </span>
               </button>
             )}
             {anyEilat && (
