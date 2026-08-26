@@ -105,10 +105,14 @@ export async function searchGames(
         // Stores answer a search for a game with its add-ons too, so a search
         // for Far Cry 6 came back with cards for its Season Pass and credit
         // packs. Filtered centrally: every source has the same problem.
-        found = (await s.search(parsed.title, wanted))
-          .map((h) => ({ ...h, dlc: describeProduct(h.title).dlc }))
-          .filter((h) => includeDlc || !h.dlc);
+        // The source's OWN classification is kept when it has one: a store that
+        // says a product is an add-on knows better than our reading of its name.
+        found = (await s.search(parsed.title, wanted)).map((h) => ({
+          ...h,
+          dlc: h.dlc || describeProduct(h.title).dlc,
+        }));
         hits.push(...found);
+        found = found.filter((h) => includeDlc || !h.dlc);
         outcome = { id: s.id, name: s.nameHe, ok: true, count: found.length };
       } catch (err) {
         outcome = statusFor(s, err);
@@ -129,9 +133,15 @@ export async function searchGames(
   // Returns the renames so the exact-match key can follow them: someone who
   // typed "jedi fallen order" still gets that game opened, even though its group
   // is now filed under the fuller "star wars jedi fallen order".
+  // Believe any source that recognised an add-on, across all of them, and only
+  // then decide what to hide. Doing this before the merge would miss groups that
+  // are about to be renamed into one another.
+  markKnownAddOns(hits);
   const renamed = mergeTruncatedTitles(hits);
   const typedKey = groupKey(parsed.title);
   const canonicalKey = renamed.get(typedKey) ?? typedKey;
+
+  const visible = includeDlc ? hits : hits.filter((h) => !h.dlc);
 
   // Which of the wanted platforms have any active source (for "coming soon" chips).
   const platformStatus = Object.fromEntries(
@@ -140,7 +150,31 @@ export async function searchGames(
 
   // The grouping key for what was actually typed, so the client never has to
   // reimplement the normalisation and drift from it.
-  return { query: parsed, queryKey: canonicalKey, games: hits, platformStatus, sources: status };
+  return { query: parsed, queryKey: canonicalKey, games: visible, platformStatus, sources: status };
+}
+
+/**
+ * Let one store's knowledge cover for the others.
+ *
+ * Some add-ons have no textual tell at all. "Cyberpunk 2077: Phantom Liberty"
+ * looks exactly like a sequel subtitle — the module doc in normalize.ts says as
+ * much, and warns that guessing from the name would swallow every sequel.
+ *
+ * But we are not limited to the name. GOG returns productType "dlc" for it;
+ * PlayStation and CheapShark sell the same product as an ordinary listing. So
+ * rather than invent a rule, the flag is shared: a group that ANY source
+ * classified as an add-on is an add-on everywhere. One store's metadata fixes
+ * the stores that have none, and this gets better as sources are added rather
+ * than needing a list of known expansions that nobody will maintain.
+ *
+ * Only ever turns the flag ON. A source that omits it is silent, not a vote
+ * against — plenty of them have no notion of add-ons to report.
+ */
+function markKnownAddOns(hits: GameHit[]): void {
+  const addOnKeys = new Set<string>();
+  for (const h of hits) if (h.dlc) addOnKeys.add(h.groupKey);
+  if (addOnKeys.size === 0) return;
+  for (const h of hits) if (addOnKeys.has(h.groupKey)) h.dlc = true;
 }
 
 /**

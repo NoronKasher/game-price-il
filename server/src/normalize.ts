@@ -81,6 +81,11 @@ const DLC_EN = new RegExp(
       // Anchored to the edition words rather than matching "upgrade" alone,
       // which would swallow a game actually called "Upgrade" — and there is one.
       '(?:deluxe|digital|standard|ultimate|premium|gold|complete|collector\'?s)\\s+(?:\\w+\\s+)?upgrade',
+      // Language and voiceover downloads. Switch cartridges are small, so
+      // Nintendo ships each dub as its own free "product" — nine of them turned
+      // up as games in a search for Cyberpunk 2077. Nobody shops for these.
+      '(?:voice[\\s-]?over|voice|language|audio|subtitle|text|dub)\\s*pack',
+      'pre[\\s-]?order\\s*bonus',
       'map\\s*pack',
       'character\\s*pack',
       'skin\\s*pack',

@@ -21,10 +21,21 @@ import { REGIONS } from '../regions.ts';
  * with a small concurrency cap rather than politeFetch, which exists to protect
  * small shops whose HTML we parse.
  *
- * GOG BILLS IN DOLLARS EVERYWHERE. Unlike Steam, the regional price is still
- * denominated in USD — Turkey is not TRY, it is simply fewer dollars. The
- * response says so and this reads the currency off it rather than assuming the
- * region's nominal one, so the conversion to shekels stays honest.
+ * THE CATALOG QUOTES USD FOR EVERY REGION. Turkey is not cheaper lira, it is
+ * fewer dollars: base $44.99 there against $59.99 in Israel. Confirmed against a
+ * second, independent endpoint (api.gog.com/products/{id}/prices), which returns
+ * the same figures — and which also shows the fuller picture: some markets carry
+ * a local-currency price ALONGSIDE the dollar one (South Africa quotes both
+ * $82.39 and R799). They are the same money, so reading the dollar figure gives
+ * the right shekel amount either way. The currency is still read off the response
+ * rather than assumed from the region, because that assumption is the one that
+ * would silently misconvert a whole market.
+ *
+ * WHAT THE CHEAP ROW DOES NOT MEAN: that an Israeli can pay it. GOG prices by
+ * the account's country, so the Ukrainian figure needs a Ukrainian account and
+ * payment method. Rows carry the board's "חשבון זר" badge for exactly this — see
+ * web/src/regionRisk.ts — which is what keeps a real price from being a false
+ * promise.
  */
 
 const CATALOG = 'https://catalog.gog.com/v1/catalog';
@@ -66,7 +77,7 @@ const cache = new Map<string, { products: CatalogProduct[]; at: number }>();
 async function catalog(query: string, country: string): Promise<CatalogProduct[]> {
   const url =
     `${CATALOG}?limit=${SEARCH_LIMIT}&query=${encodeURIComponent(`like:${query}`)}` +
-    `&order=desc%3Ascore&productType=in%3Agame%2Cpack&page=1&countryCode=${country}&locale=en-US`;
+    `&order=desc%3Ascore&productType=in%3Agame%2Cpack%2Cdlc&page=1&countryCode=${country}&locale=en-US`;
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < CACHE_TTL) return hit.products;
   try {
@@ -131,6 +142,11 @@ export const gog: SourceAdapter = {
 
   async search(title: string, platforms: Platform[]): Promise<GameHit[]> {
     if (platforms.length && !platforms.includes('pc')) return [];
+    // Add-ons are requested deliberately even though the fan-out will usually
+    // filter them out. GOG is one of the few sources that CLASSIFIES them, and
+    // that label is worth more than the listing: it is what lets the fan-out
+    // recognise "Cyberpunk 2077: Phantom Liberty" as an add-on in the stores
+    // that sell it as an ordinary product. See markKnownAddOns in fanout.ts.
     // One neutral region for discovery; prices come later, per region.
     const products = await catalog(title, 'IL');
 

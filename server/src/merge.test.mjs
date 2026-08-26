@@ -117,3 +117,50 @@ test('the exact-match key follows the merge, so the game still auto-opens', asyn
     'the exact-match key must name a group that exists'
   );
 });
+
+test("one store's add-on label covers the stores that have none", async () => {
+  // "Phantom Liberty" reads exactly like a sequel subtitle, and normalize.ts
+  // deliberately refuses to guess that from a name. GOG classifies it; PSN and
+  // CheapShark sell it as an ordinary listing. The flag is shared rather than
+  // guessed.
+  const labelled = {
+    ...fakeSource('gog', ['Cyberpunk 2077: Phantom Liberty']),
+    async search() {
+      return [
+        {
+          sourceId: 'gog',
+          sourceGameId: 'g1',
+          title: 'Cyberpunk 2077: Phantom Liberty',
+          groupKey: groupKey('Cyberpunk 2077: Phantom Liberty'),
+          edition: null,
+          platform: 'pc',
+          dlc: true, // the store said so
+        },
+      ];
+    },
+  };
+  const unlabelled = fakeSource('psn', ['Cyberpunk 2077: Phantom Liberty', 'Cyberpunk 2077']);
+
+  const result = await searchGames([labelled, unlabelled], 'cyberpunk 2077');
+  const titles = result.games.map((g) => g.title);
+  assert.ok(titles.includes('Cyberpunk 2077'), 'the base game must survive');
+  assert.ok(
+    !titles.some((t) => t.includes('Phantom Liberty')),
+    `the expansion should be hidden everywhere, got: ${titles.join(' | ')}`
+  );
+
+  const withDlc = await searchGames([labelled, unlabelled], 'cyberpunk 2077', true);
+  assert.equal(
+    withDlc.games.filter((g) => g.title.includes('Phantom Liberty')).every((g) => g.dlc),
+    true,
+    'and be labelled as an add-on when the user asks to see add-ons'
+  );
+});
+
+test('a source that says nothing is not a vote against', async () => {
+  // Most sources have no notion of add-ons; silence must not un-flag anything.
+  const quiet = fakeSource('a', ['Some Game']);
+  const result = await searchGames([quiet], 'some game');
+  assert.equal(result.games.length, 1);
+  assert.equal(result.games[0].dlc, false);
+});
