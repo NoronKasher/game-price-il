@@ -22,7 +22,7 @@ export const t = {
   // The shared "when to notify" rule — edited from the bell and from the tracking list
   notifRuleTitle: 'מתי להתריע',
   notifRuleIntro:
-    'הכלל הזה חל על כל המשחקים ברשימת המעקב. לכל משחק אפשר לקבוע כלל משלו (או להשתיק אותו) מתוך הפאנל שנפתח בלחיצה על שם המשחק.',
+    'זוהי ברירת המחדל לכל המשחקים ברשימת המעקב. לכל משחק אפשר לקבוע התראות ספציפיות (או להשתיק אותו) מתוך הפאנל שנפתח בלחיצה על שם המשחק.',
   notifAnyDropLabel: 'על כל ירידת מחיר',
   notifAnyDropHint: 'התראה בכל פעם שהמחיר נמוך מהבדיקה הקודמת, גם אם מעט.',
   notifPctLabel: 'כשיש הנחה של לפחות',
@@ -43,17 +43,17 @@ export const t = {
   // Per-game override (inside the expanded tracking panel)
   alertTitle: 'התראות למשחק זה',
   alertModeLabel: 'התראות',
-  alertModeGlobal: 'לפי הכלל הכללי',
-  alertModeCustom: 'כלל משלו',
+  alertModeGlobal: 'לפי ברירת מחדל',
+  alertModeCustom: 'ספציפיות למשחק זה',
   alertModeOff: 'כבוי (לא להתריע)',
-  alertScopeUseGlobal: (name: string) => `כמו בכלל הכללי (${name})`,
+  alertScopeUseGlobal: (name: string) => `לפי ברירת מחדל (${name})`,
   alertPctLabel: 'כשיש הנחה של',
   alertPriceLabel: 'או כשהמחיר יורד ל־',
   alertNote:
     'נבדק עם כל עדכון מחיר, ומתריע רק כשהמחיר חוצה את הסף מחדש — כדי שמשחק שנשאר במבצע לא יציק בכל בדיקה.',
-  alertGlobalSummary: (rule: string) => `הכלל הכללי כרגע: ${rule}`,
+  alertGlobalSummary: (rule: string) => `ברירת המחדל כרגע: ${rule}`,
   alertOffNote: 'המשחק הזה מושתק — לא יישלחו עליו התראות.',
-  alertRowCustom: 'כלל התראה משלו',
+  alertRowCustom: 'התראות ספציפיות למשחק זה',
   alertRowOff: 'התראות כבויות',
   // A rule written out in words ("על כל ירידת מחיר · הנחה של 20%+")
   ruleSummary: (parts: string[]) => (parts.length ? parts.join(' · ') : 'אין התראות פעילות'),
