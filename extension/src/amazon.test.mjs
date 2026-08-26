@@ -54,3 +54,13 @@ test('a page that is not a product yields no ASIN', () => {
   assert.equal(readAsin('https://www.amazon.com/s?k=elden+ring', emptyDom), null);
   assert.equal(readAsin('https://www.amazon.com/', emptyDom), null);
 });
+
+test('a listing carries only the fees Amazon actually printed', () => {
+  // The shape of AmazonListing makes the distinction explicit: absent means the
+  // page did not say, never that the fee is zero. Israeli import fees are not a
+  // flat percentage — they depend on category and declared value — so computing
+  // one would be inventing a total, the same mistake the Eilat pricing made once.
+  const printedNothing = { title: 'X', price: 100, currency: 'ILS', url: 'u', asin: 'A' };
+  assert.equal(printedNothing.importFees, undefined);
+  assert.equal(printedNothing.shipping, undefined);
+});

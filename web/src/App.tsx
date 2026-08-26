@@ -276,7 +276,8 @@ function PriceLine({
 }: {
   /** Which bucket this price is — also picks the dot colour, matching the graph. */
   tone: 'official' | 'disc' | 'keys';
-  kind: string;
+  /** Omitted when the row has a single price — there is nothing to distinguish. */
+  kind?: string;
   priceILS: number;
   store: string;
   region?: string | null;
@@ -291,7 +292,7 @@ function PriceLine({
           platforms (Windows shows flag emoji as bare letters), and these dots
           reuse the graph's series colours so the two views agree. */}
       <span className={`price-dot ${tone}`} aria-hidden="true" />
-      <span className="price-type">{kind}</span>
+      {kind && <span className="price-type">{kind}</span>}
       {/* Amount and its movement travel together — with the delta as a separate
           flex child it drifted to the far edge, away from the price it describes. */}
       <span className="price-amount">
@@ -2580,6 +2581,81 @@ function WishlistView({
             {items.map((it) => {
               const delta =
                 it.current && it.previous ? it.current.price_ils - it.previous.price_ils : null;
+
+              /**
+               * The three price buckets, with repeats removed.
+               *
+               * `current`, `physical` and `cdkeys` are three QUESTIONS about a
+               * game, and one offer can be the answer to more than one of them.
+               * A row whose only source is an Amazon listing filled the first
+               * two, so the same ₪133.27 appeared twice — once labelled "חנות
+               * רשמית" and once "דיסק", two claims about a listing we cannot
+               * classify at all.
+               *
+               * Same store and same price means the same offer, so it is listed
+               * once. And when everything collapses to one line the bucket
+               * labels go too: they exist to tell three prices apart, and there
+               * is nothing to tell apart.
+               */
+              const priceLines: {
+                key: string;
+                tone: 'official' | 'disc' | 'keys';
+                kind: string;
+                title: string;
+                priceILS: number;
+                store: string;
+                region?: string | null;
+                official?: boolean;
+                delta?: { amountILS: number; prevILS: number } | null;
+              }[] = [];
+              const seenLines = new Set<string>();
+              const addLine = (line: (typeof priceLines)[number]) => {
+                const id = `${line.store}|${line.priceILS.toFixed(2)}`;
+                if (seenLines.has(id)) return;
+                seenLines.add(id);
+                priceLines.push(line);
+              };
+              if (it.current) {
+                addLine({
+                  key: 'current',
+                  tone: 'official',
+                  kind: t.kindDigitalShort,
+                  official: true,
+                  delta:
+                    delta != null && it.previous
+                      ? { amountILS: delta, prevILS: it.previous.price_ils }
+                      : null,
+                  priceILS: it.current.price_ils,
+                  store: it.current.store,
+                  region: it.current.region,
+                  title:
+                    it.current.region && regionByMarket.get(it.current.region)
+                      ? it.preferred_region && it.current.region !== it.preferred_region
+                        ? t.bestPriceFallback(regionByMarket.get(it.current.region)!.nameHe)
+                        : t.forRegionNote(regionByMarket.get(it.current.region)!.nameHe)
+                      : t.kindDigital,
+                });
+              }
+              if (it.physical) {
+                addLine({
+                  key: 'physical',
+                  tone: 'disc',
+                  kind: t.kindDiscShort,
+                  priceILS: it.physical.price_ils,
+                  store: it.physical.store,
+                  title: t.kindDisc,
+                });
+              }
+              if (it.cdkeys) {
+                addLine({
+                  key: 'cdkeys',
+                  tone: 'keys',
+                  kind: t.kindKeyshopShort,
+                  priceILS: it.cdkeys.price_ils,
+                  store: it.cdkeys.store,
+                  title: t.kindKeyshop,
+                });
+              }
               const open = expandedId === it.id;
               return (
                 <Fragment key={it.id}>
@@ -2629,47 +2705,24 @@ function WishlistView({
                       </select>
                     </td>
                     <td className="prices-cell">
-                      {it.current ? (
-                        <PriceLine
-                          tone="official"
-                          kind={t.kindDigitalShort}
-                          official
-                          delta={
-                            delta != null && it.previous
-                              ? { amountILS: delta, prevILS: it.previous.price_ils }
-                              : null
-                          }
-                          priceILS={it.current.price_ils}
-                          store={it.current.store}
-                          region={it.current.region}
-                          title={
-                            it.current.region && regionByMarket.get(it.current.region)
-                              ? it.preferred_region && it.current.region !== it.preferred_region
-                                ? t.bestPriceFallback(regionByMarket.get(it.current.region)!.nameHe)
-                                : t.forRegionNote(regionByMarket.get(it.current.region)!.nameHe)
-                              : t.kindDigital
-                          }
-                        />
-                      ) : (
+                      {priceLines.length === 0 ? (
                         <span className="meta">{t.neverChecked}</span>
-                      )}
-                      {it.physical && (
-                        <PriceLine
-                          tone="disc"
-                          kind={t.kindDiscShort}
-                          priceILS={it.physical.price_ils}
-                          store={it.physical.store}
-                          title={t.kindDisc}
-                        />
-                      )}
-                      {it.cdkeys && (
-                        <PriceLine
-                          tone="keys"
-                          kind={t.kindKeyshopShort}
-                          priceILS={it.cdkeys.price_ils}
-                          store={it.cdkeys.store}
-                          title={t.kindKeyshop}
-                        />
+                      ) : (
+                        priceLines.map((line) => (
+                          <PriceLine
+                            key={line.key}
+                            tone={line.tone}
+                            // With a single line there is nothing to tell apart,
+                            // so the bucket label is dropped — see priceLines.
+                            kind={priceLines.length > 1 ? line.kind : undefined}
+                            official={line.official}
+                            delta={line.delta}
+                            priceILS={line.priceILS}
+                            store={line.store}
+                            region={line.region}
+                            title={priceLines.length > 1 ? line.title : line.store}
+                          />
+                        ))
                       )}
                     </td>
                     <td className="meta">

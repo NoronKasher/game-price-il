@@ -36,6 +36,30 @@ const PRICE_SELECTORS = [
 
 const TITLE_SELECTORS = ['#productTitle', '#title span', 'h1 span.a-text-normal'];
 
+/**
+ * What Amazon PRINTS on the page beyond the item price: the import fees deposit
+ * it collects for Israeli delivery, and the shipping charge.
+ *
+ * READ, NEVER COMPUTED. This project already learned that lesson on Eilat
+ * pricing (see server/src/adapters/../../web/src/eilat.ts): an earlier version
+ * derived a VAT-free price by arithmetic and was wrong in both directions,
+ * inventing discounts nobody could get. Israeli import fees are not a flat
+ * percentage either — they depend on the category and the declared value, and
+ * Amazon has already done that calculation on the page. So we take their number
+ * or we take none, and a listing that prints no fee simply shows the item price
+ * with a note that the total is not known.
+ */
+const FEE_SELECTORS = [
+  '#import-fees-deposit .a-color-price',
+  '#amazonGlobal_feature_div .a-color-price',
+  '[data-csa-c-slot-id="odf-feature"] .a-color-price',
+];
+const SHIPPING_SELECTORS = [
+  '#deliveryBlockMessage .a-color-secondary .a-color-price',
+  '#priceBadging_feature_div .a-color-price',
+  '#mir-layout-DELIVERY_BLOCK .a-color-price',
+];
+
 export interface AmazonListing {
   title: string;
   price: number;
@@ -43,6 +67,12 @@ export interface AmazonListing {
   url: string;
   /** The ASIN, so re-visiting the same product updates one row rather than adding one. */
   asin: string;
+  /**
+   * Import fees and shipping AS PRINTED by Amazon, when it prints them. Absent
+   * means the page did not say — never that they are zero.
+   */
+  importFees?: number;
+  shipping?: number;
 }
 
 /**
@@ -113,6 +143,15 @@ export function readListing(): AmazonListing | null {
   if (!priceText) return null;
   const parsed = parsePrice(priceText);
   if (!parsed) return null;
+  // Extras only count when they are in the SAME currency as the item; a figure
+  // read in another currency added to the price would be a fabricated total.
+  const extra = (selectors: string[]): number | undefined => {
+    const text = firstText(selectors);
+    if (!text) return undefined;
+    const found = parsePrice(text);
+    return found && found.currency === parsed.currency ? found.price : undefined;
+  };
+
   return {
     title,
     price: parsed.price,
@@ -120,5 +159,7 @@ export function readListing(): AmazonListing | null {
     // Canonical, without the tracking and session junk Amazon appends.
     url: `${location.origin}/dp/${asin}`,
     asin,
+    importFees: extra(FEE_SELECTORS),
+    shipping: extra(SHIPPING_SELECTORS),
   };
 }

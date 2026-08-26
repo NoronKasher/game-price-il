@@ -27,7 +27,12 @@ export async function trackAmazonListing(listing: AmazonListing): Promise<void> 
   if (!(await canConvert(listing.currency))) {
     throw new Error(`no exchange rate for ${listing.currency}`);
   }
-  const priceILS = await toILS(listing.price, listing.currency);
+  // The delivered cost, but ONLY from figures Amazon printed. A page that named
+  // neither is recorded at the item price, which is the honest number we have —
+  // not an item price dressed up as a total.
+  const extras = (listing.importFees ?? 0) + (listing.shipping ?? 0);
+  const total = listing.price + extras;
+  const priceILS = await toILS(total, listing.currency);
 
   // 'other', not 'pc'. An Amazon listing rarely says which platform it is for in
   // a way worth parsing, and filing it under a console we guessed would be the
@@ -42,10 +47,12 @@ export async function trackAmazonListing(listing: AmazonListing): Promise<void> 
 
   recordOffers(row.id, [
     {
-      store: 'Amazon',
+      // The store name carries whether the number is the delivered cost, because
+      // the two are not comparable and the row shows only one line.
+      store: extras > 0 ? 'Amazon (כולל משלוח ומיסים)' : 'Amazon',
       region: null,
       kind: 'physical',
-      price: listing.price,
+      price: total,
       currency: listing.currency,
       priceILS,
     },
