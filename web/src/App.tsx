@@ -1189,6 +1189,18 @@ function SearchView({
       />
       {result && <SourceNotice sources={result.sources} />}
 
+      {/* A Hebrew query was translated before the stores were asked. Said out
+          loud, with the words we could not translate named — a rewrite the user
+          cannot see is one they cannot correct. */}
+      {result?.searchedAs && (
+        <p className="searched-as">
+          {t.searchedAs(result.searchedAs.query)}
+          {result.searchedAs.dropped.length > 0 && (
+            <span className="searched-as-dropped"> · {t.searchedAsDropped(result.searchedAs.dropped)}</span>
+          )}
+        </p>
+      )}
+
       {result && groups.length === 0 && (
         <div className="empty">
           {result.query.platforms.length > 0 &&

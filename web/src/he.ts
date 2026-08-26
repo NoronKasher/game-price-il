@@ -218,6 +218,14 @@ export const t = {
       'הסכום בשקלים הוא המרה לפי שער היום של מחיר שנרשם בעבר, ולא מה ששילמו עליו אז.',
       ...(others.length ? [`שפל בחלונות קצרים יותר — ${others.join(' · ')}`] : []),
     ].join('\n'),
+  // A Hebrew query, translated before the stores were asked. Never silent: the
+  // catalogues are all English, so the tool searched for something other than
+  // what was typed, and the user has to be able to see and correct that.
+  searchedAs: (query: string) => `חיפשנו באנגלית: ${query}`,
+  searchedAsDropped: (words: string[]) =>
+    words.length === 1
+      ? `המילה "${words[0]}" לא מוכרת לנו ולכן הושמטה`
+      : `המילים ${words.map((w) => `"${w}"`).join(', ')} לא מוכרות לנו ולכן הושמטו`,
   // Steam wishlist import. The wait is real (Valve retired the bulk app list,
   // so every title is its own spaced request), so the copy says so rather than
   // letting a three-minute spinner look like a hang.

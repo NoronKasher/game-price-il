@@ -487,6 +487,12 @@ body {
 }
 .notif-panel-title { margin: 0 0 10px; font-size: 15px; color: var(--amber); }
 
+/* "We searched for X instead" — quiet, but never hidden. */
+.searched-as {
+  margin: 6px 0 0; font-size: 12px; color: var(--muted);
+}
+.searched-as-dropped { opacity: 0.85; }
+
 /* Steam wishlist import. Same panel shape as the alert rule above it — this is
    another thing you do to the tracked list, not a different kind of screen. */
 .steam-panel {

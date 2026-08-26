@@ -76,6 +76,12 @@ export interface SearchResponse {
   games: GameHit[];
   platformStatus?: Record<string, boolean>;
   sources?: SourceStatus[];
+  /**
+   * Set when a Hebrew query was rewritten before the stores were asked. Shown
+   * to the user, always: quietly searching for something other than what
+   * somebody typed is how a tool loses their trust the first time it is wrong.
+   */
+  searchedAs?: { original: string; query: string; dropped: string[] };
 }
 
 /**

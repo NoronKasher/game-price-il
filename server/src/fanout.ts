@@ -19,6 +19,7 @@ export interface SourceStatus {
 import { RateLimitedError } from './adapters/politeFetch.ts';
 import { describeProduct, groupKey } from './normalize.ts';
 import { parseQuery } from './search.ts';
+import { toLatinQuery } from './hebrewTitles.ts';
 
 /**
  * The fan-out across stores, with no host in sight.
@@ -60,6 +61,13 @@ export interface SearchResult {
   games: GameHit[];
   platformStatus: Record<string, boolean>;
   sources: SourceStatus[];
+  /**
+   * Present only when a Hebrew query was rewritten before being sent to the
+   * stores. The UI is expected to show it: silently searching for something
+   * other than what somebody typed is how a tool loses their trust the first
+   * time it guesses wrong.
+   */
+  searchedAs?: { original: string; query: string; dropped: string[] };
 }
 
 /**
@@ -94,6 +102,17 @@ export async function searchGames(
   const parsed = parseQuery(raw.trim());
   const wanted = parsed.platforms.length ? parsed.platforms : ALL_PLATFORMS;
 
+  // Hebrew in, English out. Every store's catalogue is English, so a Hebrew
+  // title reaches all sixteen of them and comes back empty — see hebrewTitles.ts
+  // for why this is a dictionary and not a transliterator. Platform words were
+  // already taken out above, so only the title itself is translated.
+  const hebrew = toLatinQuery(parsed.title);
+  const searchTitle = hebrew && hebrew.query ? hebrew.query : parsed.title;
+  const searchedAs =
+    hebrew && hebrew.query && hebrew.query !== parsed.title
+      ? { original: parsed.title, query: hebrew.query, dropped: hebrew.dropped }
+      : undefined;
+
   const hits: GameHit[] = [];
   const status: SourceStatus[] = [];
   const active = sources.filter((s) => s.enabled && s.platforms.some((p) => wanted.includes(p)));
@@ -108,7 +127,7 @@ export async function searchGames(
         // packs. Filtered centrally: every source has the same problem.
         // The source's OWN classification is kept when it has one: a store that
         // says a product is an add-on knows better than our reading of its name.
-        found = (await s.search(parsed.title, wanted)).map((h) => ({
+        found = (await s.search(searchTitle, wanted)).map((h) => ({
           ...h,
           dlc: h.dlc || describeProduct(h.title).dlc,
         }));
@@ -139,7 +158,9 @@ export async function searchGames(
   // are about to be renamed into one another.
   markKnownAddOns(hits);
   const renamed = mergeTruncatedTitles(hits);
-  const typedKey = groupKey(parsed.title);
+  // Keyed on what was SEARCHED, not what was typed: a Hebrew query's grouping
+  // key would match none of the English titles that came back.
+  const typedKey = groupKey(searchTitle);
   const canonicalKey = renamed.get(typedKey) ?? typedKey;
 
   const visible = includeDlc ? hits : hits.filter((h) => !h.dlc);
@@ -151,7 +172,7 @@ export async function searchGames(
 
   // The grouping key for what was actually typed, so the client never has to
   // reimplement the normalisation and drift from it.
-  return { query: parsed, queryKey: canonicalKey, games: visible, platformStatus, sources: status };
+  return { query: parsed, queryKey: canonicalKey, games: visible, platformStatus, sources: status, searchedAs };
 }
 
 /**
