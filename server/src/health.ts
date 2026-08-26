@@ -1,5 +1,6 @@
 import type { Platform } from './search.ts';
 import type { SourceAdapter } from './adapters/types.ts';
+import { asOffers } from './adapters/types.ts';
 import { RateLimitedError } from './adapters/politeFetch.ts';
 import { getSetting, setSetting } from './db.ts';
 
@@ -31,6 +32,10 @@ const PROBES: Record<Platform, string> = {
   ps4: 'god of war',
   xbox: 'forza horizon',
   switch: 'zelda',
+  // "other" is the bucket for listings read off a page (Amazon), which no
+  // adapter searches — there is nothing here to probe, and this entry exists
+  // only so the map stays exhaustive as platforms are added.
+  other: '',
 };
 
 /** Give a probe longer than a UI search would wait; a slow store isn't a dead one. */
@@ -88,7 +93,7 @@ export async function checkAdapter(adapter: SourceAdapter): Promise<AdapterHealt
     // known id instead, which is the path they actually serve.
     const work =
       adapter.companion && adapter.healthProbeId
-        ? adapter.getOffers(adapter.healthProbeId, platform).then((offers) => offers.length)
+        ? adapter.getOffers(adapter.healthProbeId, platform).then((r) => asOffers(r).length)
         : adapter.search(probe, [platform]).then((hits) => hits.length);
     const count = await Promise.race([
       work,

@@ -258,11 +258,28 @@ export interface SearchProgress {
   games: GameHit[];
 }
 
+/**
+ * The lowest price a tracker has on record for a game.
+ *
+ * Attributed on purpose: this is somebody else's observation over years we were
+ * not watching, and the shekel figure is today's rate applied to a price paid
+ * long ago — a yardstick for the board, not a claim about what anyone here paid.
+ */
+export interface HistoryLow {
+  price: number;
+  currency: string;
+  priceILS: number;
+  window: 'all' | 'y1' | 'm3';
+  source: string;
+}
+
 /** What `api.offers` answers with. */
 export interface OffersResponse {
   offers: Offer[];
   partial?: boolean;
   sources?: SourceStatus[];
+  /** Widest window first; absent when no source keeps a record for this game. */
+  lows?: HistoryLow[];
 }
 
 /** One step of a streamed price lookup: a single store has quoted. */
@@ -271,4 +288,5 @@ export interface OffersProgress {
   done: number;
   status: SourceStatus;
   offers: Offer[];
+  lows?: HistoryLow[];
 }

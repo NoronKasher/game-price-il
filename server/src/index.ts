@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { parseQuery, type Platform } from './search.ts';
 import { describeProduct, groupKey } from './normalize.ts';
 import type { GameHit, Offer, SourceAdapter } from './adapters/types.ts';
+import { asOffers } from './adapters/types.ts';
 import { cheapshark } from './adapters/cheapshark.ts';
 import { steamRegional } from './adapters/steam.ts';
 import { epic } from './adapters/epic.ts';
@@ -227,7 +228,7 @@ app.post('/api/offers/stream', async (req, res) => {
   }
   try {
     const result = await offersFor(sources, refs, platform, (p) => {
-      line({ type: 'source', total: p.total, done: p.done, status: p.status, offers: p.offers });
+      line({ type: 'source', total: p.total, done: p.done, status: p.status, offers: p.offers, lows: p.lows });
     });
     line({ type: 'done', ...result });
   } catch (err) {
@@ -374,7 +375,7 @@ async function currentOffersFor(item: WishlistRow): Promise<Offer[]> {
     const source = sources.find((s) => s.id === ref.sourceId);
     if (!source?.enabled) continue;
     try {
-      offers.push(...(await source.getOffers(ref.sourceGameId, item.platform as Platform)));
+      offers.push(...asOffers(await source.getOffers(ref.sourceGameId, item.platform as Platform)));
     } catch (err) {
       console.error(`price check failed for wishlist #${item.id} via ${ref.sourceId}:`, err);
     }

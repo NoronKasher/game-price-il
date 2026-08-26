@@ -788,6 +788,18 @@ body {
 .pstat-israel-over { color: var(--up); font-size: 11.5px; }
 .pstat-israel-best { color: var(--down); font-size: 11.5px; }
 
+/* Somebody else's record, deliberately quieter than the board's own numbers:
+   it is a yardstick, not a price anyone can buy at right now. */
+.pstat-ever {
+  margin: 8px 0 0; padding: 7px 10px; border-radius: 8px;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+  border: 1px dashed var(--line);
+  font-size: 12px;
+  cursor: help;
+}
+.pstat-ever-label { color: var(--muted); }
+.pstat-ever-src { color: var(--muted); font-size: 11px; direction: ltr; unicode-bidi: isolate; }
+
 .pstat-history { margin-top: 12px; }
 .pstat-spark { width: 100%; height: 44px; display: block; overflow: visible; }
 .pstat-spark-line { fill: none; stroke: var(--amber); stroke-width: 1.6; vector-effect: non-scaling-stroke; }

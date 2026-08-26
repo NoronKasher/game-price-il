@@ -10,7 +10,7 @@ import { boardHasEilatPrices, eilatPrice, eilatSaving } from './eilat';
 import { safeUrl } from './url';
 import { SearchProgressBar, type ProgressState } from './SearchProgressBar';
 import { loadProgressBar, loadProgressBlink } from './progressPrefs';
-import type { GameMeta, Offer, Platform, SourceRef } from './types';
+import type { GameMeta, HistoryLow, Offer, Platform, SourceRef } from './types';
 
 /**
  * The in-page detail "tab" a search card opens into.
@@ -127,6 +127,8 @@ export function DepartureBoard({
   const [eilat, setEilat] = useState(false);
   const [noticeDismissedNow, setNoticeDismissedNow] = useState(false);
   const [priceProgress, setPriceProgress] = useState<ProgressState | null>(null);
+  /** What price trackers have on record for this game, when a source keeps one. */
+  const [lows, setLows] = useState<HistoryLow[]>([]);
 
   const refsKey = refs.map((r) => `${r.sourceId}:${r.sourceGameId}`).join('|');
 
@@ -146,6 +148,7 @@ export function DepartureBoard({
     setShowAll(false);
     setNoticeDismissedNow(false);
     setEilat(false);
+    setLows([]);
     if (refs.length === 0) {
       setOffers([]);
       setMeta(null);
@@ -161,13 +164,18 @@ export function DepartureBoard({
       .offersStream(refs, platform, (p) => {
         if (!live) return;
         landed.push(...p.offers);
+        if (p.lows?.length) setLows(p.lows);
         if (p.status.ok) answered++;
         setPriceProgress({ total: p.total, done: p.done, answered });
         // Cheapest first while it fills, so the top row is meaningful from the
         // first shop that answers rather than jumping around at the end.
         setOffers([...landed].sort((a, b) => a.priceILS - b.priceILS));
       })
-      .then((r) => live && setOffers(r.offers))
+      .then((r) => {
+        if (!live) return;
+        setOffers(r.offers);
+        if (r.lows?.length) setLows(r.lows);
+      })
       .catch(() => live && setError(true));
     api.meta(refs).then((r) => live && setMeta(r.meta)).catch(() => live && setMeta(null));
     return () => {
@@ -375,6 +383,7 @@ export function DepartureBoard({
               refs={refs}
               eilat={eilat}
               filtered={filtered.length !== all.length}
+              lows={lows}
             />
           )}
         </aside>

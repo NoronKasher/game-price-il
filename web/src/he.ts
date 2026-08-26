@@ -206,6 +206,18 @@ export const t = {
   statsTrackThis: '➕ עקבו אחרי המשחק הזה',
   statsTracked: '✓ המשחק במעקב — המחירים נרשמים אוטומטית',
   statsNoHistory: 'אין עדיין היסטוריית מחירים למשחק הזה. הוסיפו אותו למעקב כדי להתחיל לאסוף.',
+  // What an outside tracker has on record — years we were not watching. Always
+  // attributed, and always beside the original currency, because the shekel
+  // figure is today's rate on a price paid long ago.
+  statsEverLow: 'הנמוך ביותר אי־פעם',
+  statsEverLowSource: (original: string, source: string) => `${original} · לפי ${source}`,
+  lowWindows: { all: 'אי־פעם', y1: 'בשנה האחרונה', m3: 'בשלושת החודשים האחרונים' } as Record<string, string>,
+  statsEverLowTitle: (source: string, others: string[]) =>
+    [
+      `השפל שנרשם אצל ${source} מאז שהם עוקבים אחרי המשחק — לא בהכרח מחיר שהיה זמין בישראל.`,
+      'הסכום בשקלים הוא המרה לפי שער היום של מחיר שנרשם בעבר, ולא מה ששילמו עליו אז.',
+      ...(others.length ? [`שפל בחלונות קצרים יותר — ${others.join(' · ')}`] : []),
+    ].join('\n'),
   // Every row goes somewhere — a comparison that cannot be acted on is trivia.
   depColGo: 'לרכישה',
   depGoAria: (store: string, price: string) => `פתיחת ההצעה ב${store} — ${price} (נפתח בלשונית חדשה)`,

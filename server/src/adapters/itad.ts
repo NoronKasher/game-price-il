@@ -1,4 +1,4 @@
-import type { GameHit, Offer, SourceAdapter } from './types.ts';
+import type { GameHit, HistoryLow, Offer, SourceAdapter, SourceOffers } from './types.ts';
 import { toILS } from '../rates.ts';
 import { getApiKey, hasApiKey } from '../keys.ts';
 import { activeShopKeys, normShop } from './cheapsharkStores.ts';
@@ -102,6 +102,43 @@ interface ItadDeal {
 interface ItadPriceEntry {
   id?: string;
   deals?: ItadDeal[];
+  /**
+   * The lowest this game has ever been, over three windows. It arrives in the
+   * SAME response as the deals above and was being thrown away — reading it
+   * costs nothing and answers the question the board could not: not what this
+   * costs, but whether it is a good price.
+   */
+  historyLow?: { all?: ItadMoney; y1?: ItadMoney; m3?: ItadMoney };
+}
+
+/** ITAD's three windows, widest first — the UI leads with "ever". */
+const LOW_WINDOWS = [
+  ['all', 'all'],
+  ['y1', 'y1'],
+  ['m3', 'm3'],
+] as const;
+
+/**
+ * Convert the recorded lows. Anything we cannot price in ILS today is dropped
+ * rather than shown raw: a number beside the board in a different currency
+ * reads as a comparison it is not.
+ */
+async function readLows(entry: ItadPriceEntry | undefined): Promise<HistoryLow[]> {
+  const raw = entry?.historyLow;
+  if (!raw) return [];
+  const lows: HistoryLow[] = [];
+  for (const [key, window] of LOW_WINDOWS) {
+    const money = raw[key];
+    const price = money?.amount;
+    if (typeof price !== 'number' || !(price > 0)) continue;
+    const currency = money?.currency?.trim() || 'USD';
+    try {
+      lows.push({ price, currency, priceILS: await toILS(price, currency), window, source: 'IsThereAnyDeal' });
+    } catch {
+      /* no rate for this currency right now */
+    }
+  }
+  return lows;
 }
 
 export const itad: SourceAdapter = {
@@ -120,11 +157,11 @@ export const itad: SourceAdapter = {
     return [];
   },
 
-  async getOffers(sourceGameId: string): Promise<Offer[]> {
+  async getOffers(sourceGameId: string): Promise<SourceOffers> {
     const apiKey = getApiKey('itad');
-    if (!apiKey) return [];
+    if (!apiKey) return { offers: [] };
     const gameId = await resolveGameId(sourceGameId, apiKey);
-    if (!gameId) return [];
+    if (!gameId) return { offers: [] };
 
     const res = await fetch(
       `${PRICES}?country=${encodeURIComponent(COUNTRY)}&capacity=20&key=${apiKey}`,
@@ -184,6 +221,6 @@ export const itad: SourceAdapter = {
         url: d.url,
       });
     }
-    return offers;
+    return { offers, lows: await readLows(entry) };
   },
 };

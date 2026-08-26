@@ -1,4 +1,5 @@
-import type { GameHit, Offer, SourceAdapter } from './adapters/types.ts';
+import type { GameHit, HistoryLow, Offer, SourceAdapter } from './adapters/types.ts';
+import { asOffers, lowsOf } from './adapters/types.ts';
 import type { Platform } from './search.ts';
 
 /** Which source a game came from, and its id there. */
@@ -228,6 +229,12 @@ export interface OffersResult {
   offers: Offer[];
   partial: boolean;
   sources: SourceStatus[];
+  /**
+   * What the trackers have on record for this game, widest window first. Not a
+   * price you can buy at — a price somebody once could, which is the only way
+   * to tell a real discount from a sticker.
+   */
+  lows?: HistoryLow[];
 }
 
 /** Every price for one game on one platform, cheapest first. */
@@ -236,6 +243,25 @@ export interface OffersProgress {
   done: number;
   status: SourceStatus;
   offers: Offer[];
+  /** Carried on the step that produced them, so the summary fills in mid-stream. */
+  lows?: HistoryLow[];
+}
+
+/**
+ * One low per window, the lowest when several trackers disagree.
+ *
+ * Only one source reports lows today, but taking the minimum is the answer that
+ * stays correct when a second one starts: the lowest a game has EVER been is
+ * the lowest anybody saw, not the lowest the last responder happened to see.
+ */
+export function bestLows(all: HistoryLow[]): HistoryLow[] {
+  const byWindow = new Map<string, HistoryLow>();
+  for (const low of all) {
+    const prev = byWindow.get(low.window);
+    if (!prev || low.priceILS < prev.priceILS) byWindow.set(low.window, low);
+  }
+  const order: HistoryLow['window'][] = ['all', 'y1', 'm3'];
+  return order.map((w) => byWindow.get(w)).filter((l): l is HistoryLow => l !== undefined);
 }
 
 export async function offersFor(
@@ -246,6 +272,7 @@ export async function offersFor(
 ): Promise<OffersResult> {
   const offers: Offer[] = [];
   const status: SourceStatus[] = [];
+  const lows: HistoryLow[] = [];
   // Refs naming a source we do not have (or one switched off) are skipped, so
   // the total has to be the count that will actually be ASKED — otherwise a bar
   // built from it stalls short of the end forever.
@@ -255,10 +282,14 @@ export async function offersFor(
     askable.map(async (ref) => {
       const source = sources.find((s) => s.id === ref.sourceId)!;
       let got: Offer[] = [];
+      let gotLows: HistoryLow[] = [];
       let outcome: SourceStatus;
       try {
-        got = await source.getOffers(ref.sourceGameId, platform);
+        const raw = await source.getOffers(ref.sourceGameId, platform);
+        got = asOffers(raw);
+        gotLows = lowsOf(raw);
         offers.push(...got);
+        lows.push(...gotLows);
         outcome = { id: source.id, name: source.nameHe, ok: true, count: got.length };
       } catch (err) {
         outcome = statusFor(source, err);
@@ -266,7 +297,13 @@ export async function offersFor(
       status.push(outcome);
       done++;
       try {
-        onProgress?.({ total: askable.length, done, status: outcome, offers: got });
+        onProgress?.({
+          total: askable.length,
+          done,
+          status: outcome,
+          offers: got,
+          lows: gotLows.length ? gotLows : undefined,
+        });
       } catch (err) {
         console.error('offers progress listener failed:', err);
       }
@@ -284,5 +321,10 @@ export async function offersFor(
     if (!prev || o.priceILS < prev.priceILS) bestByKey.set(key, o);
   }
   const deduped = [...bestByKey.values()].sort((a, b) => a.priceILS - b.priceILS);
-  return { offers: deduped, partial: status.some((s) => !s.ok), sources: status };
+  return {
+    offers: deduped,
+    partial: status.some((s) => !s.ok),
+    sources: status,
+    lows: lows.length ? bestLows(lows) : undefined,
+  };
 }

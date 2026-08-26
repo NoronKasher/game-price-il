@@ -67,6 +67,54 @@ export interface Offer {
 }
 
 /**
+ * The lowest price a source has ON RECORD for a game.
+ *
+ * This is a fact about the GAME, not about any one offer — which is why it does
+ * not live on `Offer`. It is somebody else's observation, kept over years we
+ * were not watching, so it is always attributed: we did not see this price, a
+ * named tracker did.
+ *
+ * The ILS figure is today's exchange rate applied to a price paid long ago. It
+ * is a convenience for comparing against the board, not a claim about what an
+ * Israeli buyer actually paid at the time, and the UI says so.
+ */
+export interface HistoryLow {
+  /** As recorded, in the currency the tracker keeps. */
+  price: number;
+  currency: string;
+  /** The same figure at today's rate, for comparison with the board. */
+  priceILS: number;
+  /** How far back this low looks. */
+  window: 'all' | 'y1' | 'm3';
+  /** Who keeps the record. Named because it is theirs, not ours. */
+  source: string;
+}
+
+/**
+ * What a source can say beyond the offers themselves.
+ *
+ * Adapters with nothing extra to add keep returning a plain `Offer[]` and need
+ * no changes at all — only the one source that has more to say returns this
+ * shape. The alternative, a second request for the extra data, would mean
+ * asking a store twice for one answer it already gave us in full.
+ */
+export interface SourceOffers {
+  offers: Offer[];
+  /** Lowest-ever and shorter windows, when the source publishes them. */
+  lows?: HistoryLow[];
+}
+
+/** Both return shapes, flattened. Every call site goes through this. */
+export function asOffers(result: Offer[] | SourceOffers): Offer[] {
+  return Array.isArray(result) ? result : result.offers;
+}
+
+/** The extra facts, if the source returned any. */
+export function lowsOf(result: Offer[] | SourceOffers): HistoryLow[] {
+  return Array.isArray(result) ? [] : (result.lows ?? []);
+}
+
+/**
  * A price source. Each store/API we track implements this interface;
  * new sources plug in without touching the rest of the app.
  */
@@ -94,5 +142,5 @@ export interface SourceAdapter {
   /** A known-good sourceGameId for canary probing of a `companion` adapter. */
   healthProbeId?: string;
   search(title: string, platforms: Platform[]): Promise<GameHit[]>;
-  getOffers(sourceGameId: string, platform: Platform): Promise<Offer[]>;
+  getOffers(sourceGameId: string, platform: Platform): Promise<Offer[] | SourceOffers>;
 }

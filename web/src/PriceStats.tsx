@@ -3,7 +3,7 @@ import { api } from './api';
 import { nis, t } from './he';
 import { cleanStoreName, regionLabel } from './source';
 import { eilatPrice } from './eilat';
-import type { HistoryPoint, Offer, Platform, SourceRef } from './types';
+import type { HistoryLow, HistoryPoint, Offer, Platform, SourceRef } from './types';
 
 /**
  * What the board's prices add up to, under the game it belongs to.
@@ -119,6 +119,7 @@ export function PriceStats({
   refs,
   eilat,
   filtered,
+  lows,
 }: {
   /** The offers currently passing the board's filters — what the user can see. */
   offers: Offer[];
@@ -130,6 +131,12 @@ export function PriceStats({
   eilat: boolean;
   /** True when filters are hiding something, so the numbers can say what they cover. */
   filtered: boolean;
+  /**
+   * What an outside tracker has on record, widest window first. Empty for most
+   * games — it needs a source that keeps years of history, which today means
+   * ITAD with the user's own key, PC only.
+   */
+  lows?: HistoryLow[];
 }) {
   const [history, setHistory] = useState<HistoryPoint[] | null>(null);
   const [tracked, setTracked] = useState<boolean | null>(null);
@@ -183,6 +190,12 @@ export function PriceStats({
     israeliPrice != null && lowPrice > 0 && israeliPrice > lowPrice
       ? Math.round(((israeliPrice - lowPrice) / lowPrice) * 100)
       : null;
+
+  // The widest window a tracker offers. The shorter ones ride along in the
+  // tooltip rather than on the line: "lowest ever" is the number people mean,
+  // and three of them side by side is a table nobody asked for.
+  const everLow = lows?.find((l) => l.window === 'all') ?? lows?.[0] ?? null;
+  const otherLows = (lows ?? []).filter((l) => l !== everLow).map((l) => `${t.lowWindows[l.window]}: ${nis(l.priceILS)}`);
 
   const recordedLow = points.length > 0 ? Math.min(...points.map((p) => p.price_ils)) : null;
   const recordedAt = recordedLow != null ? points.find((p) => p.price_ils === recordedLow)?.checked_at : undefined;
@@ -241,6 +254,18 @@ export function PriceStats({
         </p>
       )}
 
+      {everLow && (
+        /* Somebody else's record, labelled as such. The board above says what
+           this costs today; this says what it has cost. Two numbers next to
+           each other is the whole answer — no verdict is drawn here, for the
+           reason in this file's header. */
+        <p className="pstat-ever" title={t.statsEverLowTitle(everLow.source, otherLows)}>
+          <span className="pstat-ever-label">{t.statsEverLow}</span>
+          <span className="pstat-num">{nis(everLow.priceILS)}</span>
+          <span className="pstat-ever-src">{t.statsEverLowSource(foreign(everLow), everLow.source)}</span>
+        </p>
+      )}
+
       {points.length >= 2 && recordedLow != null && (
         <div className="pstat-history">
           <Sparkline points={points} />
@@ -276,6 +301,20 @@ export function PriceStats({
       {tracked && <p className="pstat-tracked">{t.statsTracked}</p>}
     </section>
   );
+}
+
+/**
+ * The low in the currency it was actually recorded in.
+ *
+ * The shekel figure beside it is today's rate applied to a price paid years ago,
+ * which is useful for comparing against the board and is NOT what an Israeli
+ * paid at the time. Printing the original keeps that visible instead of hiding
+ * it behind a conversion.
+ */
+function foreign(low: HistoryLow): string {
+  const symbol: Record<string, string> = { USD: '$', EUR: '€', GBP: '£', ILS: '₪' };
+  const mark = symbol[low.currency] ?? `${low.currency} `;
+  return `${mark}${low.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /** "12 באוגוסט" — the history is months long, so the day and month is enough. */
