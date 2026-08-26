@@ -10,6 +10,7 @@ import { steamAppIdOf } from '../../server/src/fanout.ts';
 import { ilsTo } from '../../server/src/rates.ts';
 import { refreshBadge } from './badge.ts';
 import { tickerDeals } from '../../server/src/ticker.ts';
+import { encodeToken, decodeToken } from '../../server/src/portableToken.ts';
 import {
   fetchWishlist,
   importWishlist,
@@ -325,6 +326,21 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
     exportJson: withDb(() => exportAll()),
     exportCsv: withDb(() => historyCsv()),
     importData: withDb(async (items: unknown) => {
+      const result = importAll(items);
+      await flush();
+      return result;
+    }),
+
+    /** The tracked list as one pasteable string. Same code the server runs. */
+    exportToken: withDb(async (withHistory = true) => {
+      const items = exportAll().map((item) => (withHistory ? item : { ...item, history: [] }));
+      return { token: await encodeToken(items) };
+    }),
+
+    importToken: withDb(async (token: string) => {
+      const items = typeof token === 'string' ? await decodeToken(token) : null;
+      // A bad paste is expected input. It comes back as null and the UI says so.
+      if (!items) return null;
       const result = importAll(items);
       await flush();
       return result;

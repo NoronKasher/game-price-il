@@ -220,6 +220,25 @@ export const api = {
     }).then((r) => json<{ ok: boolean }>(r)),
 
   /**
+   * The tracked list as one pasteable string, and back again.
+   *
+   * The file export stays; this is for where a file is awkward — moving between
+   * the extension and the desktop app, a phone, or a chat message.
+   */
+  exportToken: (withHistory: boolean) =>
+    fetch(`/api/export/token?history=${withHistory ? '1' : '0'}`).then((r) => json<{ token: string }>(r)),
+  importToken: async (token: string): Promise<{ games: number; points: number } | null> => {
+    const res = await fetch('/api/import/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    // A bad paste is expected input, not an exception: it comes back as null and
+    // the UI says "that is not one of our tokens".
+    return res.ok ? ((await res.json()) as { games: number; points: number }) : null;
+  },
+
+  /**
    * Import a public Steam wishlist, reporting as it fills.
    *
    * Streamed for an honest reason rather than a cosmetic one: Valve retired the

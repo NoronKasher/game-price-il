@@ -2309,6 +2309,8 @@ function SettingsView({
         <p className="settings-intro">{t.loadingDetails}</p>
       )}
 
+      <TokenPanel />
+
       <HealthPanel />
 
       <PsnPanel />
@@ -2316,6 +2318,117 @@ function SettingsView({
       <h2 className="settings-section">{t.currencyTitle}</h2>
       <p className="settings-intro">{t.currencySettingsNote}</p>
     </section>
+  );
+}
+
+/**
+ * The tracked list as one string, out and in.
+ *
+ * Lives in Settings rather than beside the tracked list because it is about the
+ * whole installation — everything you have collected, moved somewhere else —
+ * not about the games on the page.
+ */
+function TokenPanel() {
+  const [token, setToken] = useState('');
+  const [withHistory, setWithHistory] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [paste, setPaste] = useState('');
+  const [message, setMessage] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const make = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      const r = await api.exportToken(withHistory);
+      setToken(r.token);
+      setCopied(false);
+    } catch {
+      setMessage(t.tokenFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(token);
+      setCopied(true);
+    } catch {
+      // A clipboard the browser refuses is not a failure worth a red message —
+      // the text is on screen and selectable.
+      setCopied(false);
+    }
+  };
+
+  const load = async () => {
+    if (!paste.trim() || busy) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const r = await api.importToken(paste.trim());
+      // A bad paste is ordinary input, not an error: a truncated copy or the
+      // wrong clipboard entry both land here.
+      setMessage(r ? t.tokenImported(r.games, r.points) : t.tokenBad);
+      if (r) setPaste('');
+    } catch {
+      setMessage(t.tokenFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <h2 className="settings-section">{t.tokenTitle}</h2>
+      <p className="settings-intro">{t.tokenIntro}</p>
+
+      <div className="token-row">
+        <button className="token-make" onClick={make} disabled={busy}>
+          {t.tokenMake}
+        </button>
+        <label className="check-row" title={t.tokenHistoryHint}>
+          <input
+            type="checkbox"
+            checked={withHistory}
+            onChange={(e) => setWithHistory(e.target.checked)}
+            disabled={busy}
+          />
+          {t.tokenWithHistory}
+        </label>
+      </div>
+
+      {token && (
+        <div className="token-out">
+          {/* Read-only and selectable. The length is shown because it is the
+              one surprising thing about a token: history is most of it. */}
+          <textarea className="token-box" readOnly value={token} rows={4} onFocus={(e) => e.target.select()} />
+          <div className="token-meta">
+            <button className="token-copy" onClick={copy}>
+              {copied ? t.tokenCopied : t.tokenCopy}
+            </button>
+            <span className="meta">{t.tokenLength(token.length)}</span>
+          </div>
+        </div>
+      )}
+
+      <h3 className="token-sub">{t.tokenLoadTitle}</h3>
+      <textarea
+        className="token-box"
+        rows={3}
+        value={paste}
+        placeholder={t.tokenPastePlaceholder}
+        disabled={busy}
+        onChange={(e) => setPaste(e.target.value)}
+      />
+      <div className="token-row">
+        <button className="token-make" onClick={load} disabled={busy || !paste.trim()}>
+          {busy ? t.tokenWorking : t.tokenLoad}
+        </button>
+        {message && <span className="meta">{message}</span>}
+      </div>
+      <p className="token-note">{t.tokenNote}</p>
+    </>
   );
 }
 

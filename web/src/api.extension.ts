@@ -111,6 +111,8 @@ export const api: typeof LiveApi = {
   getSettings: () => call('getSettings'),
   setSettings: (patch) => call('setSettings', patch),
   importData: (items: unknown) => call('importData', items),
+  exportToken: (withHistory: boolean) => call('exportToken', withHistory),
+  importToken: (token: string) => call('importToken', token),
   // Streamed through the same port as search and prices: the import is minutes
   // long and the worker must stay awake for it (an open port counts as
   // activity, which is exactly why the port shape is used here).

@@ -5,6 +5,7 @@ import { parseQuery, type Platform } from './search.ts';
 import { describeProduct, groupKey } from './normalize.ts';
 import type { GameHit, Offer, SourceAdapter } from './adapters/types.ts';
 import { asOffers } from './adapters/types.ts';
+import { encodeToken, decodeToken } from './portableToken.ts';
 import {
   fetchWishlist,
   importWishlist,
@@ -631,6 +632,32 @@ app.get('/api/export.csv', (_req, res) => {
 /** Merge a shared tracking file into the local database (input is sanitised in importAll). */
 app.post('/api/import', (req, res) => {
   res.json(importAll(req.body));
+});
+
+/**
+ * The whole tracked list as one pasteable string.
+ *
+ * The file export stays; this is the shape that works where a file does not —
+ * moving between the extension and the desktop app, a phone, or a chat message.
+ * `history=0` leaves the price history out, which is about nine times shorter.
+ */
+app.get('/api/export/token', async (req, res) => {
+  const withHistory = String(req.query.history ?? '1') !== '0';
+  const items = exportAll().map((item) => (withHistory ? item : { ...item, history: [] }));
+  res.json({ token: await encodeToken(items) });
+});
+
+/**
+ * Read a token back in. Not an error path: this string is pasted by hand, so a
+ * truncated copy or the wrong clipboard entry is expected, and both come back
+ * as a plain "that is not one of our tokens". What decodes still goes through
+ * the same sanitiser a file does — a token is untrusted input exactly like one.
+ */
+app.post('/api/import/token', async (req, res) => {
+  const { token } = (req.body ?? {}) as { token?: string };
+  const items = typeof token === 'string' ? await decodeToken(token) : null;
+  if (!items) return res.status(400).json({ error: 'bad_token' });
+  res.json(importAll(items));
 });
 
 /**

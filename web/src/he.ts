@@ -218,6 +218,28 @@ export const t = {
       'הסכום בשקלים הוא המרה לפי שער היום של מחיר שנרשם בעבר, ולא מה ששילמו עליו אז.',
       ...(others.length ? [`שפל בחלונות קצרים יותר — ${others.join(' · ')}`] : []),
     ].join('\n'),
+  // The whole tracked list as one pasteable string. Lives in Settings because
+  // it is about the installation, not about the games on any one page.
+  tokenTitle: 'העברת הנתונים למכשיר אחר',
+  tokenIntro:
+    'יצירת קוד אחד שמכיל את כל רשימת המעקב שלכם — כולל היסטוריית המחירים שנאספה. מעתיקים אותו, מדביקים בכלי במכשיר אחר, והכול עובר. שימושי במיוחד למעבר בין התוסף לאפליקציית שולחן העבודה, או כשאין נוחות בהורדה והעלאה של קובץ.',
+  tokenMake: 'צרו קוד',
+  tokenWithHistory: 'כולל היסטוריית מחירים',
+  tokenHistoryHint:
+    'ההיסטוריה היא רוב אורך הקוד — בערך פי תשעה. בלעדיה עוברת רק רשימת המשחקים וההגדרות שלהם.',
+  tokenCopy: 'העתקה',
+  tokenCopied: 'הועתק ✓',
+  tokenLength: (n: number) => `${n.toLocaleString('he-IL')} תווים`,
+  tokenLoadTitle: 'טעינת קוד ממכשיר אחר',
+  tokenPastePlaceholder: 'הדביקו כאן קוד שמתחיל ב־VGPT1-',
+  tokenLoad: 'טעינה',
+  tokenWorking: 'טוען…',
+  tokenImported: (games: number, points: number) =>
+    `נטענו ${games} משחקים ו־${points} רישומי מחיר. מה שכבר היה כאן לא נמחק.`,
+  tokenBad: 'זה לא נראה כמו קוד שלנו. ודאו שהעתקתם את כולו — הוא מתחיל ב־VGPT1-.',
+  tokenFailed: 'משהו השתבש. אפשר לנסות שוב.',
+  tokenNote:
+    'הקוד דחוס אבל לא מוצפן — מי שמחזיק בו יכול לקרוא ממנו את הרשימה. אין בו שום דבר אישי מעבר לשמות המשחקים ולמחירים שנאספו, והוא לא נשלח לשום מקום: הוא נוצר אצלכם במכשיר ונשאר שם עד שתעבירו אותו בעצמכם. טעינה מוסיפה על מה שכבר יש ולא מוחקת כלום.',
   // A Hebrew query, translated before the stores were asked. Never silent: the
   // catalogues are all English, so the tool searched for something other than
   // what was typed, and the user has to be able to see and correct that.
