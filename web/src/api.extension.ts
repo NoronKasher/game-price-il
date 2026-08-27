@@ -1,3 +1,4 @@
+import type { AdvisorStep } from './types';
 import type { api as LiveApi } from './api';
 import type { SourceRef } from './types';
 
@@ -138,6 +139,8 @@ export const api: typeof LiveApi = {
   deals: (page: number, limit: number) => call('deals', page, limit),
   bundles: (appId: string) => call('bundles', appId),
   diagnostics: (q?: string) => call('diagnostics', q),
+  advisor: (profile: string, onStep: (s: AdvisorStep) => void) =>
+    callStreaming('advisor', (s) => onStep(s as AdvisorStep), profile) as Promise<AdvisorStep | null>,
 
   /**
    * The canary reads its stored report for free; RUNNING one is sixteen real

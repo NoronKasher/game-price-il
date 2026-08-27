@@ -249,6 +249,40 @@ export const t = {
       ...(others.length ? [`שפל בחלונות קצרים יותר — ${others.join(' · ')}`] : []),
     ].join('\n'),
   // The tip jar. One line, no banner — see support.ts.
+  // ALPHA — suggestions from what the user actually plays.
+  advisorTab: 'המלצות',
+  advisorTitle: 'מה כדאי לכם, לפי מה שאתם באמת משחקים',
+  advisorAlpha: 'אלפא',
+  advisorWarning:
+    '⚠️ פיצ׳ר בשלב אלפא. הוא מבוסס על היוריסטיקה פשוטה — התאמת ז׳אנרים משוקללת לפי שעות משחק — וייתכן שיציע שטויות. אם לא יעבוד מספיק טוב, הוא יוסר. אל תסמכו עליו כמו על לוח המחירים, שהוא מדויק בהגדרה.',
+  advisorIntro:
+    'הכלי קורא אילו משחקים יש לכם ב‑Steam וכמה שיחקתם בכל אחד, בונה מזה פרופיל ז׳אנרים, ומצליב אותו מול המבצעים של היום. מה שהוא לא יכול לדעת: אם נהניתם. ל‑Steam אין ממשק לביקורות שכתבתם, ולכן שעות משחק משמשות כתחליף ל"אהבתי" — הנחה שנכונה לרוב ופשוט שגויה למשחק שנטשתם אחרי גריינד ארוך.',
+  advisorProfileLabel: 'פרופיל Steam',
+  advisorProfilePlaceholder: 'קישור לפרופיל, שם משתמש, או SteamID64',
+  advisorKeyNote:
+    'דורש מפתח Steam API (חינמי, נרשם בדקה ב‑steamcommunity.com/dev/apikey ומוזן בהגדרות). Steam סגר את הגישה לרשימת המשחקים בלי מפתח, כך שאין דרך אחרת. הספרייה שלכם לא נשמרת בשום מקום ולא נשלחת לאף אחד.',
+  advisorRun: 'בנו לי המלצות',
+  advisorRunning: 'עובד…',
+  advisorFoundLibrary: (n: number) => `נמצאו ${n} משחקים בספרייה. בונה פרופיל…`,
+  advisorProfiling: (done: number, total: number, title: string) =>
+    `בודק ז׳אנרים — ${done} מתוך ${total}${title ? ` · ${title}` : ''}`,
+  advisorScoring: (done: number, total: number) => `מצליב מול המבצעים — ${done} מתוך ${total}`,
+  advisorTasteTitle: 'הז׳אנרים שאתם משחקים בפועל',
+  advisorHours: (hours: number, games: number) => `${hours} שעות · ${games} משחקים`,
+  advisorPicksTitle: 'מבין המבצעים של היום',
+  advisorNone:
+    'לא נמצאה התאמה טובה במבצעים של היום. זה לא אומר שאין מה לקנות — רק שאף אחד מהם לא מתאים מספיק למה שאתם משחקים כדי שנמליץ עליו.',
+  advisorFoot:
+    'ההמלצות מגיעות רק מהמבצעים של היום, בכוונה: כלי השוואת מחירים שממליץ על משחק במחיר מלא הוא מגזין.',
+  advisorErrors: {
+    steam_key_missing: 'לא הוגדר מפתח Steam API. אפשר להוסיף אותו בהגדרות → מפתחות API.',
+    steam_profile_private: 'רשימת המשחקים בפרופיל הזה פרטית. אפשר לשנות ב‑Steam: Privacy Settings → Game details → Public.',
+    steam_profile_not_found: 'לא מצאנו פרופיל בשם הזה. נסו את הקישור המלא לפרופיל.',
+    no_profile: 'צריך פרופיל Steam כדי להתחיל.',
+    demo: 'ההמלצות לא זמינות בהדגמה — הן דורשות מפתח וספרייה אמיתית.',
+    unreachable: 'אין חיבור לשרת של הכלי.',
+    failed: 'משהו השתבש. אפשר לנסות שוב.',
+  } as Record<string, string>,
   // Reporting a bug, asking for a change, suggesting a feature.
   contactTab: 'צרו קשר',
   contactTitle: 'דיווח על תקלה, בקשה או רעיון',

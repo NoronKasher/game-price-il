@@ -1,4 +1,5 @@
 import type {
+  AdvisorStep,
   AlertMode,
   AlertRule,
   AlertScope,
@@ -228,6 +229,51 @@ export const api = {
    * a search and includes what the grouping did with it — the only way a
    * duplicate report is answerable without a long conversation.
    */
+  /**
+   * ALPHA — suggestions from what the user actually plays.
+   *
+   * Streamed, because building the taste profile means one store lookup per
+   * sampled game and that is genuinely tens of seconds. A progress line beats
+   * a spinner for a wait that long.
+   */
+  async advisor(profile: string, onStep: (s: AdvisorStep) => void): Promise<AdvisorStep | null> {
+    const res = await fetch('/api/advisor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile }),
+    });
+    if (!res.ok || !res.body) return { type: 'error', reason: 'unreachable' };
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let final: AdvisorStep | null = null;
+
+    const handle = (raw: string) => {
+      const text = raw.trim();
+      if (!text) return;
+      try {
+        const step = JSON.parse(text) as AdvisorStep;
+        if (step.type === 'done' || step.type === 'error') final = step;
+        onStep(step);
+      } catch {
+        /* a partial line; the next read completes it */
+      }
+    };
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split(NEWLINE);
+        buffer = lines.pop() ?? '';
+        for (const l of lines) handle(l);
+      }
+      if (done) break;
+    }
+    handle(buffer);
+    return final;
+  },
+
   diagnostics: (q?: string) =>
     fetch(`/api/diagnostics${q ? `?q=${encodeURIComponent(q)}` : ''}`).then((r) =>
       json<{ report: unknown; text: string }>(r)

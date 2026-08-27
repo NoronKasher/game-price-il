@@ -15,19 +15,25 @@ import { getSetting, setSetting } from './db.ts';
  * and where it came from.
  */
 
-export type ApiKeyName = 'ggdeals' | 'itad';
+export type ApiKeyName = 'ggdeals' | 'itad' | 'steam';
 
 const ENV_VAR: Record<ApiKeyName, string> = {
   ggdeals: 'GG_DEALS_API_KEY',
   itad: 'ITAD_API_KEY',
+  // Steam's own Web API key, free from steamcommunity.com/dev/apikey. Needed
+  // only for the library import: Steam login-gates a profile's game list now,
+  // so there is no keyless way to read what somebody owns.
+  steam: 'STEAM_API_KEY',
 };
 const KEY_FILE: Record<ApiKeyName, string> = {
   ggdeals: '.gg_deals_key',
   itad: '.itad_key',
+  steam: '.steam_key',
 };
 const SETTING_KEY: Record<ApiKeyName, string> = {
   ggdeals: 'api_key_ggdeals',
   itad: 'api_key_itad',
+  steam: 'api_key_steam',
 };
 
 export type ApiKeySource = 'settings' | 'env' | 'file' | 'none';

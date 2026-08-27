@@ -1,4 +1,4 @@
-export type ApiKeyName = 'ggdeals' | 'itad';
+export type ApiKeyName = 'ggdeals' | 'itad' | 'steam';
 export type ApiKeySource = 'settings' | 'env' | 'file' | 'none';
 
 /**

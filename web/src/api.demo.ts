@@ -561,6 +561,11 @@ export const api: typeof LiveApi = {
     return { ok: false as const, reason: 'demo' };
   },
 
+  /** The advisor needs a Steam key and a live library; the demo has neither. */
+  async advisor() {
+    return { type: 'error' as const, reason: 'demo' };
+  },
+
   /** The demo has no sources to diagnose and no database to count. */
   async diagnostics() {
     return { report: null, text: 'הדגמה — אין נתונים לאבחון.' };

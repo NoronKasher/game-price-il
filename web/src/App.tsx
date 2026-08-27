@@ -42,6 +42,7 @@ import { safeUrl } from './url';
 import { HoldToConfirm } from './HoldToConfirm';
 import { ALL_CURRENCIES, WIDE_CURRENCIES } from './currencies';
 import { DealsView } from './DealsView';
+import { AdvisorView } from './AdvisorView';
 import { ContactView } from './ContactView';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
 import { SettingsNav } from './SettingsNav';
@@ -119,6 +120,7 @@ function TickerRun({
 type View =
   | { name: 'search' }
   | { name: 'deals' }
+  | { name: 'advisor' }
   | { name: 'contact' }
   | { name: 'offers'; group: GameGroup; platform: Platform }
   | { name: 'wishlist' }
@@ -281,6 +283,12 @@ export function App() {
             {t.settingsTab}
           </button>
           <button
+            className={view.name === 'advisor' ? 'active' : ''}
+            onClick={() => setView({ name: 'advisor' })}
+          >
+            {t.advisorTab}
+          </button>
+          <button
             className={view.name === 'contact' ? 'active' : ''}
             onClick={() => setView({ name: 'contact' })}
           >
@@ -336,6 +344,7 @@ export function App() {
           />
         )}
         {view.name === 'deals' && <DealsView onPick={openDeal} />}
+        {view.name === 'advisor' && <AdvisorView />}
         {view.name === 'contact' && <ContactView />}
         {view.name === 'wishlist' && (
           <WishlistView

@@ -176,7 +176,7 @@ async function settingsPayload() {
 }
 
 /** The two bring-your-own-key sources, and how each is currently supplied. */
-const KEY_NAMES: ApiKeyName[] = ['ggdeals', 'itad'];
+const KEY_NAMES: ApiKeyName[] = ['ggdeals', 'itad', 'steam'];
 const keyStatus = () =>
   Object.fromEntries(KEY_NAMES.map((n) => [n, { configured: hasApiKey(n), source: apiKeySource(n) }]));
 
@@ -570,7 +570,7 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
       const report = buildReport({
         shell: 'extension',
         version: chrome.runtime.getManifest().version,
-        keysPresent: { ggdeals: hasApiKey('ggdeals'), itad: hasApiKey('itad') },
+        keysPresent: Object.fromEntries(KEY_NAMES.map((n) => [n, hasApiKey(n)])),
         health: lastHealthReport(),
         tracked: trackedCounts(),
         settings: allSettings(),

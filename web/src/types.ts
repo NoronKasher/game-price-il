@@ -369,3 +369,35 @@ export interface Bundle {
   discountPercent: number;
   steamIndividualILS: number | null;
 }
+
+/** One suggestion from the alpha advisor. See server/src/advisor.ts. */
+export interface Suggestion {
+  appId: string;
+  title: string;
+  /** 0–100, comparable within one run and meaningless between runs. */
+  score: number;
+  /** Why, in words the user can disagree with. */
+  because: string[];
+  genres: string[];
+  salePriceILS?: number;
+  savings?: number;
+}
+
+export interface GenreAffinity {
+  genre: string;
+  hours: number;
+  games: number;
+}
+
+/** One line of a streamed advisor run. */
+export interface AdvisorStep {
+  type: 'library' | 'profiling' | 'affinity' | 'scoring' | 'done' | 'error';
+  games?: number;
+  total?: number;
+  done?: number;
+  title?: string;
+  affinity?: GenreAffinity[];
+  suggestions?: Suggestion[];
+  libraryGames?: number;
+  reason?: string;
+}

@@ -101,6 +101,9 @@ test('the classes the components render all have rules', () => {
     '.contact-kind',
     '.contact-body',
     '.contact-go',
+    '.advisor-warn',
+    '.advisor-pick',
+    '.advisor-because',
   ];
   const missing = REQUIRED.filter((cls) => !CSS.includes(cls));
   assert.deepEqual(missing, [], `classes rendered by components with no CSS: ${missing.join(', ')}`);

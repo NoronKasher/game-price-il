@@ -104,6 +104,8 @@ const APP_VERSION = (() => {
   return 'unknown';
 })();
 import { record } from './eventLog.ts';
+import { ownedGames } from './steamLibrary.ts';
+import { genreAffinity, scoreCandidate, mostPlayed } from './advisor.ts';
 import { runHealthCheck, lastHealthReport, healthCheckDue } from './health.ts';
 import { currentSearchHash, searchHashSource } from './adapters/psn.ts';
 import {
@@ -679,7 +681,7 @@ app.patch('/api/settings', async (req, res) => {
  * where?) — never the secret. PATCH saves a user-supplied key locally; an empty
  * value clears it (falling back to env/file if present).
  */
-const KEY_NAMES: ApiKeyName[] = ['ggdeals', 'itad'];
+const KEY_NAMES: ApiKeyName[] = ['ggdeals', 'itad', 'steam'];
 function keyStatus() {
   return Object.fromEntries(
     KEY_NAMES.map((n) => [n, { configured: hasApiKey(n), source: apiKeySource(n) }])
@@ -930,7 +932,7 @@ app.get('/api/diagnostics', async (req, res) => {
   const report = buildReport({
     shell: 'server',
     version: APP_VERSION,
-    keysPresent: { ggdeals: hasApiKey('ggdeals'), itad: hasApiKey('itad') },
+    keysPresent: Object.fromEntries(KEY_NAMES.map((n) => [n, hasApiKey(n)])),
     health: lastHealthReport(),
     tracked: trackedCounts(),
     settings: allSettings(),
@@ -941,6 +943,88 @@ app.get('/api/diagnostics', async (req, res) => {
     searchSample,
   });
   res.json({ report, text: renderReport(report) });
+});
+
+/**
+ * ALPHA — "given what you actually play, is this one for you?"
+ *
+ * Streamed, because building a taste profile means a store lookup per game in
+ * the sample and that is genuinely tens of seconds. See advisor.ts for what
+ * this knows (owning, playtime, genres) and the hole in the middle (it cannot
+ * know whether you LIKED anything — Steam has no API for a person's own
+ * reviews, and playtime stands in for liking).
+ */
+app.post('/api/advisor', async (req, res) => {
+  const { profile } = (req.body ?? {}) as { profile?: string };
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.flushHeaders();
+  const line = (obj: unknown) => res.write(JSON.stringify(obj) + String.fromCharCode(10));
+
+  if (!profile?.trim()) {
+    line({ type: 'error', reason: 'no_profile' });
+    return res.end();
+  }
+
+  try {
+    const owned = await ownedGames(profile.trim());
+    line({ type: 'library', games: owned.length });
+
+    const sample = mostPlayed(owned);
+    line({ type: 'profiling', total: sample.length });
+    const genres = new Map<string, string[]>();
+    for (let i = 0; i < sample.length; i++) {
+      const g = sample[i]!;
+      try {
+        const meta = await steamMeta(g.appId);
+        if (meta?.genres?.length) genres.set(g.appId, meta.genres);
+      } catch {
+        /* a game we cannot describe simply does not vote */
+      }
+      line({ type: 'profiling', total: sample.length, done: i + 1, title: g.title });
+      if (i < sample.length - 1) await sleep(300);
+    }
+
+    const affinity = genreAffinity(owned, (id) => genres.get(id));
+    line({ type: 'affinity', affinity: affinity.slice(0, 8) });
+
+    // Candidates come from the deals feed: games that are actually buyable at a
+    // price worth knowing, which is the only kind this tool has any business
+    // suggesting. A recommender that names a full-price game you cannot afford
+    // is a magazine, not a price tracker.
+    const ownedIds = new Set(owned.map((g) => g.appId));
+    const deals = await dealsPage(0, 40);
+    const suggestions = [];
+    for (let i = 0; i < deals.length; i++) {
+      const deal = deals[i]!;
+      const hit = (await searchGames(sources, deal.title, false)).games.find(
+        (g) => g.sourceId === 'steam-regional'
+      );
+      if (!hit) continue;
+      let dealGenres: string[] = [];
+      try {
+        dealGenres = (await steamMeta(hit.sourceGameId))?.genres ?? [];
+      } catch {
+        continue;
+      }
+      const scored = scoreCandidate(
+        { appId: hit.sourceGameId, title: deal.title, genres: dealGenres },
+        affinity,
+        ownedIds
+      );
+      if (scored) suggestions.push({ ...scored, salePriceILS: deal.salePrice, savings: deal.savings });
+      line({ type: 'scoring', total: deals.length, done: i + 1 });
+      if (suggestions.length >= 12) break;
+    }
+
+    suggestions.sort((a, b) => b.score - a.score);
+    line({ type: 'done', suggestions, libraryGames: owned.length });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : 'failed';
+    record('error', 'advisor', err);
+    line({ type: 'error', reason });
+  }
+  res.end();
 });
 
 /** Ticker of today's deals worth caring about — see ticker.ts for what it picks. */
