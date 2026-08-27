@@ -2,6 +2,7 @@
   "name": "game-price-il",
   "private": true,
   "version": "0.2.0",
+  "license": "AGPL-3.0-or-later",
   "description": "VGPT.IL — Israeli video game price comparison and wishlist tracker",
   "workspaces": [
     "server",
