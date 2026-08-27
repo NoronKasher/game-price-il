@@ -41,6 +41,24 @@ export interface SupportLink {
 const GITHUB_USER = 'NoronKasher';
 
 /**
+ * Where a bug report or an idea goes.
+ *
+ * GitHub's issue form is the primary route because it needs no mail client:
+ * the whole report travels in the URL, the user presses one button on a page
+ * that is already filled in, and the thread is public and followable rather
+ * than a message that vanishes into an inbox.
+ *
+ * The address is the NOREPLY one GitHub issues for privacy, not a personal
+ * mailbox — the same reason the commits use it. It exists as a fallback for
+ * people who would rather not have a GitHub account, which is a real
+ * preference and not one to argue with.
+ */
+export const CONTACT = {
+  repo: `${GITHUB_USER}/game-price-il`,
+  email: `${GITHUB_USER}@users.noreply.github.com`,
+};
+
+/**
  * Ko-fi page name, once one exists. Empty until then, and an empty entry is
  * simply not rendered.
  */

@@ -249,6 +249,43 @@ export const t = {
       ...(others.length ? [`שפל בחלונות קצרים יותר — ${others.join(' · ')}`] : []),
     ].join('\n'),
   // The tip jar. One line, no banner — see support.ts.
+  // Reporting a bug, asking for a change, suggesting a feature.
+  contactTab: 'צרו קשר',
+  contactTitle: 'דיווח על תקלה, בקשה או רעיון',
+  contactIntro:
+    'מצאתם באג? חסר לכם משהו? יש רעיון? כתבו כאן, והכלי יכין את הדיווח ויפתח אותו מוכן לשליחה ב‑GitHub — בלי צורך בתוכנת דואר. אם אין לכם חשבון GitHub, יש גם קישור למייל בתחתית.',
+  contactKinds: { bug: 'תקלה', idea: 'רעיון', question: 'שאלה' } as Record<string, string>,
+  contactKindHints: {
+    bug: 'משהו לא עובד או מציג נתון שגוי. הכי עוזר: מה חיפשתם, מה ציפיתם לראות, ומה ראיתם בפועל.',
+    idea: 'פיצ׳ר שהייתם רוצים, או שינוי במשהו קיים. כתבו גם למה — מה זה יפתור עבורכם.',
+    question: 'לא בטוחים איך משהו עובד, או למה הכלי מציג משהו מסוים. אין שאלה טיפשית.',
+  } as Record<string, string>,
+  contactSubject: 'כותרת',
+  contactSubjectPlaceholder: {
+    bug: 'למשל: Diablo 4 מופיע פעמיים בתוצאות',
+    idea: 'למשל: התראה כשמשחק נכנס למבצע בחנות מסוימת',
+    question: 'למשל: למה המחיר בטורקיה שונה ממה שאני רואה בחנות?',
+  } as Record<string, string>,
+  contactBody: 'פירוט',
+  contactBodyPlaceholder: {
+    bug: 'מה חיפשתם, מה ציפיתם, ומה קרה בפועל. אם יש צילום מסך — אפשר לצרף אותו ב‑GitHub אחרי שהדיווח ייפתח.',
+    idea: 'מה הייתם רוצים שיקרה, ומתי זה היה עוזר לכם.',
+    question: 'מה לא ברור?',
+  } as Record<string, string>,
+  contactAttach: 'צרפו דוח אבחון (עוזר מאוד לדיווח על באג)',
+  contactAttachLoading: 'מכין דוח אבחון…',
+  contactAttachHint:
+    'הדוח כולל את מצב מקורות המחיר ושגיאות שקרו בהפעלה הזו. הוא לא כולל מפתחות API, מחירים, הערות או את רשימת המשחקים שלכם.',
+  contactDiagNote: 'זה בדיוק מה שיצורף. אפשר לקרוא ולוודא לפני השליחה:',
+  contactDiagFailed: 'לא הצלחנו להפיק דוח אבחון. אפשר לשלוח את הדיווח בלעדיו.',
+  contactViaGithub: 'פתיחת דיווח ב‑GitHub ←',
+  contactViaMail: 'או שליחה במייל',
+  contactReady: 'הדיווח מוכן. הלחיצה תפתח לשונית חדשה עם הכול כבר ממולא — עדיין תצטרכו ללחוץ על Submit.',
+  contactNeedMore: 'מלאו כותרת ופירוט קצר כדי להמשיך.',
+  contactPublicNote:
+    '⚠️ דיווח ב‑GitHub הוא ציבורי וכל אחד יכול לקרוא אותו. אל תכתבו בו פרטים אישיים.',
+  contactTooLong:
+    'הדיווח ארוך מדי כדי להיפתח דרך קישור. קצרו את הפירוט, או הסירו את דוח האבחון וצרפו אותו ידנית אחרי הפתיחה.',
   // Jumping to a setting, and finding one by name.
   setNavLabel: 'ניווט בהגדרות',
   setNavSearch: 'חיפוש הגדרה…',

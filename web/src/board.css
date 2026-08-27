@@ -567,6 +567,43 @@ body {
 .deals-more { margin: 16px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
 .deals-note { margin: 16px 0 0; max-width: 620px; font-size: 11px; color: var(--muted); line-height: 1.7; }
 
+/* ── contact ── */
+.contact { max-width: 640px; }
+.contact-title { margin: 0 0 6px; font-size: 20px; color: var(--amber); }
+.contact-intro { margin: 0 0 18px; font-size: 12.5px; color: var(--muted); line-height: 1.75; }
+.contact-kinds { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.contact-kind {
+  padding: 6px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: none; color: var(--muted); font: inherit; font-size: 13px;
+}
+.contact-kind.on { border-color: var(--amber); color: var(--amber); }
+.contact-hint { margin: 0 0 16px; font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+.contact-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.contact-input { width: 100%; box-sizing: border-box; }
+.contact-body {
+  width: 100%; box-sizing: border-box; min-height: 150px; resize: vertical;
+  padding: 10px 12px; border-radius: 9px;
+  background: var(--bg); color: var(--fg); border: 1px solid var(--line);
+  font: inherit; font-size: 13.5px; line-height: 1.7;
+}
+.contact-body:focus, .contact-input:focus { outline: none; border-color: var(--amber); }
+.contact-diag-note { margin: 10px 0 6px; font-size: 11.5px; color: var(--muted); }
+.contact-warn {
+  margin: 12px 0 0; padding: 9px 11px; border-radius: 8px;
+  background: color-mix(in srgb, var(--up) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--up) 32%, var(--line));
+  font-size: 11.5px; color: var(--muted); line-height: 1.6;
+}
+.contact-send { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 18px 0 8px; }
+.contact-go {
+  padding: 9px 20px; border-radius: 9px; text-decoration: none;
+  background: var(--amber); color: #0d1117; font-weight: 600; font-size: 13px;
+}
+.contact-go.off { opacity: .45; cursor: not-allowed; }
+.contact-alt { color: var(--muted); font-size: 12.5px; text-decoration: underline; }
+.contact-alt.off { opacity: .45; cursor: not-allowed; text-decoration: none; }
+.contact-note { margin: 4px 0 0; font-size: 11px; color: var(--muted); line-height: 1.65; }
+
 /* ── settings navigation ── */
 .setnav {
   grid-column: 2;
