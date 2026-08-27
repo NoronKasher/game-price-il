@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeProduct, titleMatchesQuery } from './normalize.ts';
+import { describeProduct, looksLikeAccessory, titleMatchesQuery } from './normalize.ts';
 
 test('editions of one game collapse to the same groupKey', () => {
   const base = describeProduct('Red Dead Redemption 2');
@@ -87,4 +87,53 @@ test('accessories are flagged, real games are not', () => {
   assert.equal(describeProduct('PowerA Zelda Switch Carrying Case').accessory, true);
   assert.equal(describeProduct('Elden Ring PS4').accessory, false);
   assert.equal(describeProduct('God of War Ragnarok').accessory, false);
+});
+
+/* ── Hebrew accessory words ──────────────────────────────────────────────── */
+
+test('Hebrew accessory words are actually caught', async () => {
+  // They were not. Two of these had been eaten into literal backspace
+  // characters, and the rest used `\b` — which JavaScript defines as a boundary
+  // between [A-Za-z0-9_] and anything else. A Hebrew letter IS "anything else",
+  // so beside Hebrew the assertion can never hold and the alternative is dead.
+  //
+  // Measured before the fix: "בקר אלחוטי" — a wireless CONTROLLER — went
+  // straight through the accessory filter and into game results.
+  for (const accessory of ['שלט', 'בקר', 'בקר אלחוטי', 'שלט אלחוטי לפלייסטיישן', 'אוזניות גיימינג']) {
+    assert.equal(looksLikeAccessory(accessory), true, `should be filtered: ${accessory}`);
+  }
+});
+
+test('a word that merely starts the same is not an accessory', () => {
+  // What the boundaries are FOR. "בקרוב" (soon) and "שלטון" (regime) both begin
+  // with an accessory word and are neither.
+  for (const notAccessory of ['בקרוב', 'שלטון האופל', 'The Last of Us', 'Elden Ring']) {
+    assert.equal(looksLikeAccessory(notAccessory), false, `should NOT be filtered: ${notAccessory}`);
+  }
+});
+
+test('no source file carries a stray control character', async () => {
+  // Two did, and both were invisible in review. web/src/api.demo.ts held a
+  // literal NUL, which made grep, ripgrep and git diff treat the whole file as
+  // binary and silently skip it. normalize.ts held two backspaces where `\b`
+  // had been meant, which is how the Hebrew accessory filter came to be dead.
+  //
+  // Cheap to check, and the class of bug is one nobody spots by reading.
+  const { readFile } = await import('node:fs/promises');
+  const { glob } = await import('node:fs/promises');
+  const roots = ['server/src', 'web/src', 'extension/src'];
+  const offenders = [];
+  for (const root of roots) {
+    for await (const file of glob(`${root}/**/*.{ts,tsx,mjs}`)) {
+      const bytes = await readFile(file);
+      for (const [i, byte] of bytes.entries()) {
+        // Everything below 0x09, and 0x0E–0x1F. Tab, LF and CR are fine.
+        if (byte < 9 || (byte > 13 && byte < 32)) {
+          offenders.push(`${file} @${i} (0x${byte.toString(16)})`);
+          break;
+        }
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], `stray control characters:\n  ${offenders.join('\n  ')}`);
 });

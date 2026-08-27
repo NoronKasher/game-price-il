@@ -193,3 +193,41 @@ test('a list beyond the quota syncs what fits and says how much it left', async 
     .reduce((n, [k, v]) => n + k.length + String(v).length, 0);
   assert.ok(total < 102_400, `stored ${total} bytes, over chrome's total quota`);
 });
+
+test('a note survives export and import in the extension too', async () => {
+  // The divergence this catches was invisible: the server's exportAll carried
+  // the note and the extension's did not, so a token made in the EXTENSION
+  // silently dropped every note while one made on the desktop kept them.
+  // Nothing failed — the notes were simply not in the string.
+  db.__setTables({});
+  const row = db.addToWishlist({
+    title: 'Noted Game',
+    platform: 'pc',
+    refs: [{ sourceId: 'steam-regional', sourceGameId: '1' }],
+  });
+  db.setNote(row.id, '<b>wait for the GOTY</b>');
+
+  const exported = db.exportAll();
+  assert.equal(exported[0].note, '<b>wait for the GOTY</b>', 'the export has to carry it');
+
+  db.__setTables({});
+  db.importAll(exported);
+  assert.equal(db.listWishlist()[0].note, '<b>wait for the GOTY</b>', 'and the import has to restore it');
+});
+
+test('a hostile note in an imported file is sanitised on the way in', async () => {
+  // A shared file and a pasted token are exactly as untrusted as a web page.
+  db.__setTables({});
+  db.importAll([
+    {
+      title: 'From Somebody Else',
+      platform: 'pc',
+      refs: [{ sourceId: 'steam-regional', sourceGameId: '2' }],
+      note: '<img src=x onerror="alert(1)"><script>alert(2)</script>ok',
+      history: [],
+    },
+  ]);
+  const note = db.listWishlist()[0].note ?? '';
+  assert.ok(!/onerror|script|alert/i.test(note), `survived: ${note}`);
+  assert.match(note, /ok/, 'the words still arrive');
+});

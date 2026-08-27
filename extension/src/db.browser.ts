@@ -643,6 +643,11 @@ export function exportAll(): ExportItem[] {
     refs: JSON.parse(row.refs) as SourceRef[],
     preferred_region: row.preferred_region,
     hide_desc: row.hide_desc,
+    // The note travels too. It did not, and the divergence was invisible: the
+    // server's exportAll carried it and this one did not, so a token made in
+    // the EXTENSION silently dropped every note while one made on the desktop
+    // kept them. Nothing failed; the notes were simply not in the string.
+    note: row.note,
     added_at: row.added_at,
     history: chronological(row.id).map(point),
   }));
@@ -669,6 +674,9 @@ export function importAll(raw: unknown): { games: number; points: number } {
       // New to us: adopt the sharer's per-game settings and original add date.
       if (item.preferred_region !== null) setPreferredRegion(row.id, item.preferred_region);
       if (item.hide_desc) setHideDesc(row.id, true);
+      // Sanitised again by setNote rather than trusting the import guard —
+      // this is the only door to the column. See server/src/noteHtml.ts.
+      if (item.note) setNote(row.id, item.note);
       if (item.added_at) patch(row.id, (r) => (r.added_at = item.added_at));
     }
     // Already tracked locally: leave the local user's own settings alone.

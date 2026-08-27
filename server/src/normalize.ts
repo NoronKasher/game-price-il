@@ -43,8 +43,24 @@ const TRAILING_EDITION_HE = /\s*[-–|]?\s*(מהדורת\s+\S+|מהדורה(?:\s
 /** Strong accessory / non-game signals (hardware, collectibles, console bundles), Hebrew + English. */
 const ACCESSORY_EN =
   /\b(controller|gamepad|joystick|headset|headphones?|thrustmaster|eswap|cockpit|pedals?|shifter|steering|racing wheel|driving wheel|funko|pop!|amiibo|figure|figurine|statue|carrying case|charging|charger|keyboard|mousepad|webcam|dualsense|dualshock|console|oled)\b/i;
+/**
+ * Hebrew accessory words, with edges that actually hold.
+ *
+ * These used a word-boundary escape, and two of them had been eaten into
+ * literal backspace characters somewhere along the way. BOTH forms were dead:
+ * JavaScript defines `\b` as a boundary between `[A-Za-z0-9_]` and anything
+ * else, and a Hebrew letter IS "anything else" — so the assertion can only
+ * hold when an ASCII character sits alongside, and beside Hebrew it never
+ * fires at all.
+ *
+ * Measured before the fix: "בקר אלחוטי" — a wireless CONTROLLER — sailed
+ * through the accessory filter into game results, as did a bare "שלט".
+ *
+ * The lookarounds below say what was meant: not touching another Hebrew
+ * letter. That keeps "בקרוב" and "שלטון" out while catching the words.
+ */
 const ACCESSORY_HE =
-  /(אוזניות|בקר\b|ג'ויסטיק|הגה|חבילת נהיגה|דוושות|כיסא גיימינג|מטען|פאנקו|בובת|דמות אספנים|תיק נשיאה|מעמד טעינה|קונסולה|עם שלט|שלט אלחוטי|שלט למשחק|שלט)/;
+  /(אוזניות|(?<![\u0590-\u05FF])בקר(?![\u0590-\u05FF])|ג'ויסטיק|הגה|חבילת נהיגה|דוושות|כיסא גיימינג|מטען|פאנקו|בובת|דמות אספנים|תיק נשיאה|מעמד טעינה|קונסולה|עם שלט|שלט אלחוטי|שלט למשחק|(?<![֐-׿])שלט(?![֐-׿]))/;
 
 /**
  * Add-on content sold beside a game: season passes, expansion packs, currency,
