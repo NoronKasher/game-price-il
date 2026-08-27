@@ -137,3 +137,94 @@ test('no source file carries a stray control character', async () => {
   }
   assert.deepEqual(offenders, [], `stray control characters:\n  ${offenders.join('\n  ')}`);
 });
+
+/* ── Duplicates found with the diagnostic export ─────────────────────────── */
+
+test('an abbreviation and its full name are the same game', async () => {
+  // "GTA V" from an Israeli shop and "Grand Theft Auto V" from Steam sat on
+  // the board as two entries. Found by exporting a real search and reading the
+  // group keys it produced.
+  const { groupKey } = await import('./normalize.ts');
+  for (const [short, long] of [
+    ['GTA V', 'Grand Theft Auto V'],
+    ['GTA VI', 'Grand Theft Auto VI'],
+    ['COD Modern Warfare', 'Call of Duty Modern Warfare'],
+    ['NFS Unbound', 'Need for Speed Unbound'],
+  ]) {
+    assert.equal(groupKey(short), groupKey(long), `${short} vs ${long}`);
+  }
+});
+
+test('stripping a SKU never costs the platform chip', async () => {
+  // The first attempt at the fix above stripped bare platform tokens too, and
+  // broke something it was not aimed at: stripPlatformTokens READS those to
+  // decide which platform a listing is for, so every such card lost its chip.
+  // A duplicate fix that silently removes platform detection is not a fix.
+  const { describeProduct } = await import('./normalize.ts');
+  assert.deepEqual(describeProduct('ELDEN RING COLLECTOR’S EDITION PS5').platforms, ['ps5']);
+  assert.deepEqual(describeProduct('Halo Infinite Xbox').platforms, ['xbox']);
+  assert.deepEqual(describeProduct('Grand Theft Auto V (PS4™ & PS5™)').platforms, ['ps5']);
+});
+
+test('a console SKU suffix does not make a second game', async () => {
+  // All four of these were live duplicates beside the plain title.
+  const { groupKey } = await import('./normalize.ts');
+  const plain = groupKey('Grand Theft Auto V');
+  for (const tagged of [
+    'Grand Theft Auto V (Xbox One & S)',
+    'Grand Theft Auto V (Xbox Series X S)',
+    'Grand Theft Auto V (PS4™ & PS5™)',
+    'Grand Theft Auto V - Nintendo Switch 2',
+  ]) {
+    assert.equal(groupKey(tagged), plain, tagged);
+  }
+});
+
+test('a Hebrew note about the BOX does not make a second game', async () => {
+  // "ללא אריזה" is "without packaging" — a second-hand condition note an
+  // Israeli shop puts in the product title. Not a different game.
+  const { groupKey } = await import('./normalize.ts');
+  const plain = groupKey('The Witcher 3: Wild Hunt');
+  for (const noisy of [
+    'The Witcher 3: Wild Hunt ללא אריזה!',
+    'The Witcher 3: Wild Hunt יד שנייה',
+    'The Witcher 3: Wild Hunt - משומש',
+  ]) {
+    assert.equal(groupKey(noisy), plain, noisy);
+  }
+});
+
+test('games that merely look alike are still kept apart', async () => {
+  // The failure that matters more than a duplicate: merging two DIFFERENT
+  // games. A duplicate is untidy; a wrong merge shows the wrong price.
+  const { groupKey } = await import('./normalize.ts');
+  for (const [a, b] of [
+    ['Grand Theft Auto V', 'Grand Theft Auto VI'],
+    ['Elden Ring', 'Elden Ring Nightreign'],
+    ['Portal', 'Portal 2'],
+    ['Hades', 'Hades II'],
+    ['Call of Duty Modern Warfare', 'Call of Duty Black Ops'],
+  ]) {
+    assert.notEqual(groupKey(a), groupKey(b), `${a} must not merge with ${b}`);
+  }
+});
+
+test('a bare trailing "ONE" is deliberately NOT stripped', async () => {
+  // "ELDEN RING NIGHTREIGN ONE" really does mean Xbox One, and stripping a
+  // trailing bare "ONE" would fix it — but "Rogue One" and anything else
+  // legitimately ending in the word would then merge into its base game. A
+  // duplicate is untidy; a wrong merge shows somebody the wrong price. This
+  // pins the trade-off so it is a decision rather than an oversight.
+  const { groupKey } = await import('./normalize.ts');
+  assert.notEqual(groupKey('ELDEN RING NIGHTREIGN ONE'), groupKey('Elden Ring Nightreign'));
+});
+
+test('expanding an abbreviation never doubles a name that is already there', async () => {
+  // The first version of the abbreviation fix CREATED duplicates. Shops write
+  // "Grand Theft Auto V GTA" and "GTA: Grand Theft Auto: The Trilogy", and
+  // expanding every occurrence turned those into "...V grand theft auto" — a
+  // brand-new key, produced by the fix for duplicate keys.
+  const { groupKey } = await import('./normalize.ts');
+  assert.equal(groupKey('Grand Theft Auto V GTA'), groupKey('Grand Theft Auto V'));
+  assert.equal(groupKey('GTA: Grand Theft Auto: The Trilogy'), groupKey('Grand Theft Auto: The Trilogy'));
+});

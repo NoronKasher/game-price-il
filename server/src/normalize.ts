@@ -201,7 +201,12 @@ const TRAILING_LANGUAGE = new RegExp(
 /** Full description of a raw store product title. */
 export function describeProduct(rawTitle: string): ProductDescription {
   // Normalize curly/back apostrophes so "Collector’s Edition" matches.
-  const raw = rawTitle.replace(/[’`´]/g, "'");
+  // Retail noise out FIRST — abbreviations expanded, console SKU suffixes and
+  // Hebrew box-condition phrases removed — so the edition, roman-numeral and
+  // platform passes below all see the same words whichever shop supplied the
+  // title. Found with the diagnostic export: every one of these was a live
+  // duplicate on the board. See stripRetailNoise.
+  const raw = stripRetailNoise(rawTitle.replace(/[’`´]/g, "'"));
   const accessory = looksLikeAccessory(raw);
   const dlc = looksLikeDlc(raw);
 
@@ -246,6 +251,117 @@ export function describeProduct(rawTitle: string): ProductDescription {
 }
 
 /** Remove platform tokens from a product title, keeping original casing. */
+/**
+ * Abbreviations stores use as if they were the title.
+ *
+ * "GTA V" and "Grand Theft Auto V" are the same game, and every Israeli shop
+ * writes one while every international one writes the other — so the board
+ * carried both as separate entries. Expanded before anything else so the roman
+ * numeral, edition and platform passes all see the same words.
+ *
+ * Deliberately short. An abbreviation list is a list of guesses about what
+ * somebody meant, and a wrong guess merges two DIFFERENT games, which is worse
+ * than showing one twice. These are the ones where the abbreviation is the
+ * publisher's own and means nothing else.
+ */
+const ABBREVIATIONS: [RegExp, string][] = [
+  [/\bgta\b/gi, 'grand theft auto'],
+  [/\bcod\b/gi, 'call of duty'],
+  [/\bnfs\b/gi, 'need for speed'],
+  [/\brdr\b/gi, 'red dead redemption'],
+  [/\bmgs\b/gi, 'metal gear solid'],
+  [/\bffvii\b/gi, 'final fantasy 7'],
+  [/\btlou\b/gi, 'the last of us'],
+  [/\bbg3\b/gi, 'baldurs gate 3'],
+  [/\bac\s+(?=valhalla|odyssey|origins|mirage|shadows|syndicate|unity|rogue)/gi, 'assassins creed '],
+];
+
+function expandAbbreviations(title: string): string {
+  let out = title;
+  for (const [pattern, full] of ABBREVIATIONS) {
+    // Skip when the full name is ALREADY there. Shops write "Grand Theft Auto
+    // V GTA" and "GTA: Grand Theft Auto: The Trilogy", and expanding blindly
+    // turned those into "...V grand theft auto" — a new key, and a new
+    // duplicate created by the fix for duplicates.
+    // Plain string search rather than a built RegExp: the full forms are fixed
+    // literals with no metacharacters, and a template literal turns "\b" into
+    // a backspace rather than a word boundary — which is exactly the mistake
+    // that made this check silently never fire.
+    if (out.toLowerCase().includes(full)) {
+      out = out.replace(pattern, ' ');
+      continue;
+    }
+    out = out.replace(pattern, full);
+  }
+  return out;
+}
+
+/**
+ * Console SKU noise that shops append to a title.
+ *
+ * Real examples, all of which produced their own entry beside the plain title:
+ *
+ *   Grand Theft Auto V (Xbox One & S)
+ *   Grand Theft Auto V (Xbox Series X S)
+ *   Grand Theft Auto V (PS4™ & PS5™)
+ *   Elden Ring Nightreign Seekers Edition X ONE
+ *   Tales of the Shire ... – Nintendo Switch™ 2
+ *
+ * stripPlatformTokens already removes a trailing platform PARENTHETICAL, but
+ * these are bare suffixes, combined SKUs, or sit before an edition word — so
+ * the parenthetical rule never saw them.
+ */
+/**
+ * COMBINED console SKUs only — never a lone platform token.
+ *
+ * The first version of this stripped `PS5` too, and broke something it was
+ * not meant to touch: stripPlatformTokens READS those tokens to work out which
+ * platform a listing is for, so removing them first left every such card with
+ * no platform chip at all. A test caught it, which is the only reason this is
+ * not a silent regression traded for a duplicate fix.
+ *
+ * So this matches only the shapes the platform parser cannot already handle —
+ * two SKUs joined by an ampersand or slash, and the abbreviated forms — and
+ * rewrites each to the single token the parser understands, so the platform is
+ * still detected AND the duplicate still merges.
+ */
+const SKU_COMBOS: [RegExp, string][] = [
+  // "(PS4™ & PS5™)" → ps5. The newer console is the one a buyer is
+  // choosing today, and either way both map to the same game.
+  [/\s*[(]?\s*\bps\s*4\s*[^\w]*\s*[&+|/]\s*ps\s*5\b[^)]*[)]?/gi, ' PS5 '],
+  [/\s*[(]?\s*\bplaystation\s*4\s*[&+|/]\s*(?:playstation\s*)?5\b[^)]*[)]?/gi, ' PS5 '],
+  // "(Xbox One & S)", "(Xbox Series X S)", "Xbox Series X|S"
+  [/\s*[(]?\s*\bxbox\s+series\s*x\s*[|/&]?\s*s\b[^)]*[)]?/gi, ' Xbox '],
+  [/\s*[(]?\s*\bxbox\s+one\s*[|/&]\s*s\b[^)]*[)]?/gi, ' Xbox One '],
+  // "X ONE" as a bare suffix, which no parser reads as Xbox One.
+  [/\s+\bx\s*one\b\s*$/gi, ' Xbox One'],
+  // "– Nintendo Switch™ 2" and "Switch 2"
+  [/\s*[-–—|]?\s*\bnintendo\s+switch\s*[^\w]*\s*2\b/gi, ' Nintendo Switch '],
+];
+
+/**
+ * Hebrew retail phrases that describe the BOX, not the game.
+ *
+ * "ללא אריזה" is "without packaging" — a second-hand condition note that an
+ * Israeli shop puts in the product title. It is not a different game, and it
+ * was filed as one.
+ */
+const HE_RETAIL_NOISE =
+  /\s*[-–—|]?\s*(ללא\s+אריזה|ללא\s+קופסה|יד\s*שנייה|משומש|חדש\s+באריזה|באריזה\s+פתוחה|מהדורה\s+ישראלית|עבור\s+\d+)\s*!*\s*/g;
+
+/** Everything above, applied before the title is examined. */
+export function stripRetailNoise(title: string): string {
+  let out = expandAbbreviations(title);
+  for (const [pattern, replacement] of SKU_COMBOS) out = out.replace(pattern, replacement);
+  return out
+    .replace(HE_RETAIL_NOISE, ' ')
+    // A truncated SKU leaves a dangling joiner: "Grand Theft Auto V (Xbox One &"
+    // is a real title from a shop whose field was cut short.
+    .replace(/\s*[(]?\s*[&+|/]\s*[)]?\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function stripPlatformTokens(title: string): { title: string; platforms: Platform[] } {
   // Strip a trailing platform-only parenthetical ("Red Dead Redemption (PC)")
   // so it groups with the un-tagged title; keep meaningful parentheticals.
