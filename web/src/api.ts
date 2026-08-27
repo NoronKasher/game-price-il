@@ -391,6 +391,9 @@ export const api = {
 
   ticker: (limit?: number) =>
     fetch(`/api/ticker${limit ? `?limit=${limit}` : ''}`).then((r) => json<{ deals: TickerDeal[] }>(r)),
+  /** One page of the merged deals feed, for the endless list. */
+  deals: (page: number, limit: number) =>
+    fetch(`/api/deals?page=${page}&limit=${limit}`).then((r) => json<{ deals: TickerDeal[] }>(r)),
 
   /** Is this game tracked, plus its full price history for the graph. */
   trackStatus: (title: string, platform: string) =>

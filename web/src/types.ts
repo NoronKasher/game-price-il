@@ -174,10 +174,14 @@ export interface KeysResponse {
 
 export interface TickerDeal {
   title: string;
-  salePrice: number; // in ₪ (converted from USD server-side)
+  salePrice: number; // in ₪ (converted server-side where the feed is not shekels)
   normalPrice: number; // in ₪
   savings: number; // percent
   rating?: number; // Steam positive-review %, when known
+  /** Which feed it came from, and the shop's display name. A price with no
+   *  attribution is not a price. */
+  source?: string;
+  storeName?: string;
 }
 
 export interface HistoryPoint {

@@ -87,13 +87,15 @@ body {
 .ticker .reel-run { display: flex; flex: none; }
 /* Pause the marquee on hover so a deal can actually be read and clicked. */
 .ticker:hover .reel { animation-play-state: paused; }
-/* Somebody who has asked for less motion should not be handed a moving strip;
-   the deals are all still there and still clickable, they simply sit still. */
-@media (prefers-reduced-motion: reduce) {
-  .ticker { overflow-x: auto; }
-  .ticker .reel { animation: none; }
-  .ticker .reel-run[aria-hidden='true'] { display: none; }
-}
+/* Stopping the strip is a CHOICE, not something the OS decides silently.
+   Reading prefers-reduced-motion straight into `animation: none` meant anybody
+   with Windows animation effects switched off — which is common, and is about
+   window transitions, not about a news strip — got a ticker that appeared
+   frozen with no way to start it. The OS preference now only picks the DEFAULT
+   for the switch in Settings; the switch itself always wins. */
+.ticker.still { overflow-x: auto; }
+.ticker.still .reel { animation: none; }
+.ticker.still .reel-run[aria-hidden='true'] { display: none; }
 .ticker .reel .deal {
   margin-inline-end: 34px; color: var(--muted);
   font: inherit; background: none; border: none; padding: 0; cursor: pointer;
@@ -533,7 +535,19 @@ body {
   color: var(--muted); text-decoration: line-through;
 }
 .deal-card-pct { color: var(--down); font-weight: 700; font-size: 12px; }
+.deal-card-foot {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: auto; padding-top: 2px;
+}
+.deal-card-store {
+  font-size: 10.5px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
+}
 .deal-card-rating { font-size: 11px; color: var(--muted); }
+/* The trigger for the next page. Invisible, but it has to have height or it
+   can never intersect the viewport. */
+.deals-sentinel { height: 1px; }
+.deals-more { margin: 16px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
 .deals-note { margin: 16px 0 0; max-width: 620px; font-size: 11px; color: var(--muted); line-height: 1.7; }
 
 /* The automatic first check for rows that arrived without a price. */

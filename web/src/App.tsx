@@ -29,7 +29,14 @@ import { PriceGraph, TrackGraph } from './PriceGraph';
 import { DepartureBoard } from './DepartureBoard';
 import { SearchBox, rememberSearch, loadIncludeDlc, saveIncludeDlc } from './SearchBox';
 import type { FirstCheckProgress, HealthReport, PsnHashStatus, SteamImportProgress } from './types';
-import { applyPrefs, collectPrefs, loadQuietNotices, saveQuietNotices } from './prefs';
+import {
+  applyPrefs,
+  collectPrefs,
+  loadQuietNotices,
+  loadTickerMotion,
+  saveQuietNotices,
+  saveTickerMotion,
+} from './prefs';
 import { loadGamePassAlerts, saveGamePassAlerts } from './gamepassAlerts';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
@@ -105,6 +112,12 @@ type View =
 export function App() {
   const [view, setView] = useState<View>({ name: 'search' });
   const [ticker, setTicker] = useState<TickerDeal[]>([]);
+  // Whether the strip scrolls. A visible switch, not an inference from the OS.
+  const [tickerMoves, setTickerMoves] = useState(loadTickerMotion);
+  const changeTickerMoves = (on: boolean) => {
+    setTickerMoves(on);
+    saveTickerMotion(on);
+  };
   // Search state lives here so returning from a game's board keeps the results.
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<SearchResponse | null>(null);
@@ -230,7 +243,7 @@ export function App() {
            width and then jump back, which shows as a gap crossing the strip and
            an obvious restart. With a second identical copy behind it, the
            animation ends exactly where it began and the loop cannot be seen. */
-        <div className="ticker">
+        <div className={`ticker ${tickerMoves ? '' : 'still'}`}>
           <span className="label">{t.tickerTitle}</span>
           <div className="reel">
             <TickerRun deals={ticker} onPick={openDeal} />
@@ -278,6 +291,8 @@ export function App() {
           <SettingsView
             preferred={preferred}
             onChangePreferred={changePreferred}
+            tickerMoves={tickerMoves}
+            onChangeTickerMoves={changeTickerMoves}
             openAnim={openAnim}
             onChangeOpenAnim={changeOpenAnim}
             boardView={boardView}
@@ -2201,6 +2216,8 @@ function PsnPanel() {
 function SettingsView({
   preferred,
   onChangePreferred,
+  tickerMoves,
+  onChangeTickerMoves,
   openAnim,
   onChangeOpenAnim,
   boardView,
@@ -2208,6 +2225,8 @@ function SettingsView({
 }: {
   preferred: string;
   onChangePreferred: (m: string) => void;
+  tickerMoves: boolean;
+  onChangeTickerMoves: (v: boolean) => void;
   openAnim: boolean;
   onChangeOpenAnim: (v: boolean) => void;
   boardView: BoardView;
@@ -2365,6 +2384,10 @@ function SettingsView({
         <p className="settings-intro">{t.loadingDetails}</p>
       )}
 
+      <h2 className="settings-section">{t.tickerMotionTitle}</h2>
+      <p className="settings-intro">{t.tickerMotionIntro}</p>
+      <TickerMotionToggle value={tickerMoves} onChange={onChangeTickerMoves} />
+
       <h2 className="settings-section">{t.gpAlertsTitle}</h2>
       <p className="settings-intro">{t.gpAlertsIntro}</p>
       <GamePassToggle />
@@ -2382,6 +2405,16 @@ function SettingsView({
       <h2 className="settings-section">{t.currencyTitle}</h2>
       <p className="settings-intro">{t.currencySettingsNote}</p>
     </section>
+  );
+}
+
+/** Whether the deals strip scrolls. See prefs.loadTickerMotion for why. */
+function TickerMotionToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="check-row" title={t.tickerMotionHint}>
+      <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} />
+      {t.tickerMotionLabel}
+    </label>
   );
 }
 

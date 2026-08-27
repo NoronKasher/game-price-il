@@ -36,6 +36,7 @@ const PORTABLE_KEYS = [
   'gp_dlc_expanded',
   'gp_include_dlc',
   'gp_quiet_notices',
+  'gp_ticker_motion',
   'gp_gamepass_alerts',
   'gp_gamepass_ack',
 ] as const;
@@ -91,7 +92,41 @@ export function applyPrefs(prefs: unknown): number {
   return applied;
 }
 
-/* ── Two switches that belong to nobody else ─────────────────────────────── */
+/* ── Three switches that belong to nobody else ───────────────────────────── */
+
+const TICKER_KEY = 'gp_ticker_motion';
+
+/**
+ * Should the deals strip move?
+ *
+ * The operating system's reduced-motion preference picks the DEFAULT and
+ * nothing more. Reading it straight into "no animation" was wrong twice over:
+ * Windows' animation setting is about window transitions rather than a news
+ * strip, it is switched off on a great many machines, and the result was a
+ * ticker that looked broken with no visible way to start it. A preference the
+ * user can see and change beats one inferred from their OS.
+ */
+export function loadTickerMotion(): boolean {
+  try {
+    const stored = localStorage.getItem(TICKER_KEY);
+    if (stored !== null) return stored === '1';
+  } catch {
+    /* fall through to the default */
+  }
+  try {
+    return !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return true;
+  }
+}
+
+export function saveTickerMotion(on: boolean): void {
+  try {
+    localStorage.setItem(TICKER_KEY, on ? '1' : '0');
+  } catch {
+    /* nothing to do */
+  }
+}
 
 const QUIET_KEY = 'gp_quiet_notices';
 

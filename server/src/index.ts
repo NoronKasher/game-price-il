@@ -77,7 +77,7 @@ import { isAllowedRequestOrigin, resolveListenConfig } from './net.ts';
 import { suggestTitles } from './suggest.ts';
 import { searchGames, offersFor, steamAppIdOf, ALL_PLATFORMS } from './fanout.ts';
 import { historyCsv } from './csv.ts';
-import { tickerDeals } from './ticker.ts';
+import { tickerDeals, dealsPage } from './ticker.ts';
 import { runHealthCheck, lastHealthReport, healthCheckDue } from './health.ts';
 import { currentSearchHash, searchHashSource } from './adapters/psn.ts';
 import {
@@ -808,6 +808,23 @@ app.post('/api/notify/gamepass', (req, res) => {
 app.get('/api/ticker', async (req, res) => {
   const limit = Number(req.query.limit);
   res.json({ deals: await tickerDeals(Number.isFinite(limit) ? limit : undefined) });
+});
+
+/**
+ * A page of deals, for a list you can keep scrolling.
+ *
+ * Every feed is asked for the same page in parallel and merged, so one more
+ * screenful costs one round of requests rather than one per source per screen.
+ */
+app.get('/api/deals', async (req, res) => {
+  const page = Number(req.query.page);
+  const limit = Number(req.query.limit);
+  res.json({
+    deals: await dealsPage(
+      Number.isFinite(page) ? Math.max(0, Math.floor(page)) : 0,
+      Number.isFinite(limit) ? limit : undefined
+    ),
+  });
 });
 
 /**

@@ -135,6 +135,7 @@ export const api: typeof LiveApi = {
   suggest: async () => ({ suggestions: [] }),
 
   ticker: (limit?: number) => call('ticker', limit),
+  deals: (page: number, limit: number) => call('deals', page, limit),
 
   /**
    * The canary reads its stored report for free; RUNNING one is sixteen real

@@ -73,6 +73,20 @@ function codeFor(o: Offer): string {
   return isDirectPurchase(storeFamily(o.store).key) ? t.depDirect : t.depKey;
 }
 
+/**
+ * What that code in the region column actually means.
+ *
+ * The column asks "which region", and three of its possible answers are not
+ * regions at all — "ישיר", "מפתח" and "דיסק" say why this row HAS no region.
+ * That was left to be inferred, and it is not inferrable: a reasonable person
+ * reads "ישיר" in a region column and asks what kind of region that is.
+ */
+function codeHint(o: Offer): string {
+  if (o.region) return t.depRegionHint(regionLabel(o.region) || o.region);
+  if (o.kind === 'physical') return t.depDiscHint;
+  return isDirectPurchase(storeFamily(o.store).key) ? t.depDirectHint : t.depKeyHint;
+}
+
 /** How many rows the "top" view shows before the "show the rest" button. */
 const TOP_N = 12;
 
@@ -655,7 +669,9 @@ export function DepartureBoard({
                             </button>
                           )}
                         </span>
-                        <span className="dep-flap">{codeFor(o)}</span>
+                        <span className="dep-flap" title={codeHint(o)}>
+                          {codeFor(o)}
+                        </span>
                         <span className="dep-flap amber">
                           {eilat && eilatPrice(o) != null ? nis(eilatPrice(o)!) : nis(o.priceILS)}
                           {eilat &&

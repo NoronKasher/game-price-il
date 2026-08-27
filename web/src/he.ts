@@ -21,9 +21,11 @@ export const t = {
   dealsFailed: 'לא הצלחנו לטעון את המבצעים. אפשר לנסות שוב מאוחר יותר.',
   dealsSort: { discount: 'לפי אחוז הנחה', price: 'לפי מחיר', rating: 'לפי דירוג שחקנים' } as Record<string, string>,
   dealsCardHint: 'לחצו כדי להשוות את המחיר בכל החנויות',
+  dealsLoadingMore: 'טוען עוד מבצעים…',
+  dealsEnd: (n: number) => `זהו — ${n} מבצעים, וזה כל מה שהמקורות מציעים כרגע.`,
   dealsRating: (pct: number) => `${pct}% משוב חיובי בסטים`,
   dealsNote:
-    'הנתונים מגיעים מ‑CheapShark — הקריאה היחידה בכלי הזה שלא נוגעת באף חנות ישירות. המחירים הם למחשב, והומרו לשקלים לפי שער יציג.',
+    'המבצעים מגיעים משלושה ממשקים פומביים: CheapShark (עשרות חנויות מחשב), המבצעים של Steam לישראל (מחירים בשקלים, ישירות מ‑Steam, בלי המרה), והקטלוג המוזל של GOG. אף אחד מהם לא נסרק — כולם ממשקים שנועדו לשימוש. מחירים שאינם בשקלים הומרו לפי שער יציג.',
   // Sale-alert notifications
   notifTitle: 'התראות מבצעים',
   notifEmpty: 'אין התראות עדיין. כל המשחקים ברשימת המעקב נבדקים אוטומטית — ברגע שמחיר יירד, ההתראה תופיע כאן.',
@@ -148,6 +150,15 @@ export const t = {
   depDirect: 'ישיר',
   depColStore: 'מקור',
   depColRegion: 'אזור',
+  // Three of the values in the region column are not regions: they say why the
+  // row HAS no region. Left unexplained, "ישיר" in a column headed "אזור" reads
+  // as a region nobody has heard of.
+  depRegionHint: (name: string) => `המחיר בחנות של ${name}. רכישה מאזור אחר דורשת חשבון באותו אזור.`,
+  depDirectHint:
+    'רכישה ישירה מהחנות עצמה, בלי אזור מסוים — המחיר זהה מכל מקום והמשחק נכנס ישר לספרייה שלכם, בלי קוד הפעלה.',
+  depKeyHint:
+    'קוד הפעלה שנמכר על ידי מוכר צד שלישי, ולא על ידי החנות עצמה. אין לו אזור, אבל יש לוודא באיזו פלטפורמה הקוד מופעל.',
+  depDiscHint: 'עותק פיזי — דיסק או קלטת. אין לו אזור מחיר; זה פשוט מה שהחנות מבקשת עליו.',
   depColPrice: 'מחיר',
   depColDelta: 'חיסכון',
   depNoMatch: 'אין הצעות שמתאימות לסינון — נסו לשחרר פילטר.',
@@ -231,6 +242,14 @@ export const t = {
       'הסכום בשקלים הוא המרה לפי שער היום של מחיר שנרשם בעבר, ולא מה ששילמו עליו אז.',
       ...(others.length ? [`שפל בחלונות קצרים יותר — ${others.join(' · ')}`] : []),
     ].join('\n'),
+  // Whether the deals strip scrolls. A visible switch rather than an inference
+  // from the OS — see prefs.loadTickerMotion.
+  tickerMotionTitle: 'סרגל המבצעים',
+  tickerMotionLabel: 'הזיזו את סרגל המבצעים שבראש העמוד',
+  tickerMotionIntro:
+    'הסרגל שבראש העמוד גולל את מבצעי היום בלולאה רציפה. אפשר לעצור אותו — כשהוא עצור אפשר לגלול אותו ביד, וכל המבצעים עדיין שם.',
+  tickerMotionHint:
+    'ברירת המחדל נקבעת לפי הגדרת האנימציות של המערכת שלכם, אבל הבחירה כאן גוברת עליה תמיד.',
   // Turning the explanatory notices off for good — different from dismissing
   // one, which means "not this one, for now".
   quietTitle: 'הודעות הסבר',
