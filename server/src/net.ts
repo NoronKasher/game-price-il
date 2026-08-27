@@ -104,17 +104,45 @@ export function resolveListenConfig(env: NodeJS.ProcessEnv = process.env): {
 }
 
 /**
- * The full CSRF decision, deployment-aware: a state-changing request is allowed
- * when its Origin is local (dev: the Vite app on another localhost port) OR
- * exactly the host the request itself was addressed to (production: the server
- * serves the app, so the app's Origin host:port === the Host header). A page on
- * any other site keeps getting 403 — evil.com can never match the Host header
- * of a request the browser sent to our server.
+ * Is the request addressed to this machine by a loopback name?
+ *
+ * This closes DNS REBINDING, which the Origin check alone did not. An attacker
+ * who owns evil.com can point it at 127.0.0.1 and have the victim's browser
+ * send `Host: evil.com:5174` with `Origin: http://evil.com:5174` — and the
+ * "Origin host equals Host header" rule matched, because the attacker controls
+ * both halves of the comparison. The Host header is the one thing they cannot
+ * make say "localhost" while still resolving to the victim's own machine.
+ *
+ * A real deployment has a real hostname, so this only applies when the server
+ * is running in its default local-first mode.
+ */
+export function isLoopbackHost(requestHost: string | undefined): boolean {
+  if (!requestHost) return false;
+  const name = requestHost.replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
+  return name === 'localhost' || name === '127.0.0.1' || name === '::1';
+}
+
+/**
+ * The full CSRF decision, deployment-aware.
+ *
+ * In the default local-first mode the request must be addressed to loopback AND
+ * carry a local (or absent) Origin. Requiring both is what makes the check
+ * meaningful: either half alone is something an attacker can supply.
+ *
+ * A deployment (NODE_ENV=production) serves the app itself, so the app's Origin
+ * host:port equals the Host header, and that equality is the rule there. A page
+ * on any other site still gets 403.
  */
 export function isAllowedRequestOrigin(
   origin: string | undefined | null,
-  requestHost: string | undefined
+  requestHost: string | undefined,
+  production = process.env.NODE_ENV === 'production'
 ): boolean {
+  if (!production) {
+    // Local mode. Loopback Host closes DNS rebinding; local Origin closes the
+    // ordinary cross-site POST. Both, or neither.
+    return isLoopbackHost(requestHost) && isLocalOrigin(origin);
+  }
   if (isLocalOrigin(origin)) return true;
   if (!origin || !requestHost) return false;
   try {

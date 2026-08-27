@@ -77,6 +77,26 @@ const shekels = (n: number) =>
   `₪${n.toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /**
+ * Only http(s) may reach an href.
+ *
+ * Offer URLs come from the adapters, and several of those adapters build theirs
+ * out of scraped markup. Assigning one straight to `href` means a hostile or
+ * compromised store page could plant `javascript:…` and have it run — inside a
+ * content script, on whatever page the user is standing on. The web app has had
+ * this guard (see web/src/url.ts) since imports became shareable; the extension
+ * panels did not, and they are the half that runs on other people's sites.
+ */
+function safeHref(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url, location.origin);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * One round trip to the worker. Never hangs.
  *
  * The timeout is generous because the work is real: a comparison is a search
@@ -122,9 +142,10 @@ function rowNode(row: ComparisonRow, best: boolean): HTMLElement {
   );
 
   line.append(where, price);
-  if (row.url) {
+  const href = safeHref(row.url);
+  if (href) {
     const go = el('a', 'color:#ffcc55;text-decoration:none;font-size:12px;', '↗');
-    go.href = row.url;
+    go.href = href;
     go.target = '_blank';
     go.rel = 'noopener noreferrer';
     go.title = 'פתיחת ההצעה בלשונית חדשה';

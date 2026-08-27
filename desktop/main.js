@@ -128,6 +128,23 @@ async function waitForServer(port, timeoutMs = 30_000) {
   }
 }
 
+/**
+ * Only http(s) may be handed to the operating system.
+ *
+ * shell.openExternal passes the string to Windows, which resolves it through
+ * whatever program claims that scheme. Offer URLs come from adapters, several
+ * of which build theirs out of scraped store markup — not a source that gets to
+ * choose what launches on somebody's machine.
+ */
+function isWebUrl(url) {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function createWindow(port) {
   win = new BrowserWindow({
     width: 1280,
@@ -163,8 +180,22 @@ function createWindow(port) {
   // Store links belong in the user's real browser, with their sessions and
   // payment details — never in this window.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    // Only http(s) reaches the OS. shell.openExternal hands the string to
+    // Windows, which resolves it through whatever program claims that scheme —
+    // so `file://`, `smb://` and friends are a way to make the shell open
+    // something. Every link in this app is an offer URL, and several adapters
+    // build theirs out of scraped store markup, which is not a source that gets
+    // to decide what runs on somebody's machine.
+    if (isWebUrl(url)) shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  // The window itself only ever shows the local app. A navigation anywhere else
+  // means a link slipped past the handler above; it opens outside instead.
+  win.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith(`http://127.0.0.1:${port}`) || url.startsWith(`http://localhost:${port}`)) return;
+    event.preventDefault();
+    if (isWebUrl(url)) shell.openExternal(url);
   });
 
   // Here rather than at startup, because the usual way this app starts is at

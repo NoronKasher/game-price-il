@@ -136,6 +136,45 @@ function decodeBody(buf: ArrayBuffer, contentType: string | null): string {
   }
 }
 
+/** How many hops a store may bounce us through before we give up. */
+const MAX_REDIRECTS = 5;
+
+/**
+ * Follow redirects OURSELVES, checking every hop against the allowlist.
+ *
+ * `redirect: 'follow'` walked straight around the SSRF guard. The guard checks
+ * the URL we ask for; fetch then silently follows wherever the answer points,
+ * and the final request is the one that actually happens. A store that is
+ * compromised — or simply one whose open-redirect endpoint somebody found —
+ * could answer with `Location: http://127.0.0.1:6379/` or the cloud metadata
+ * address, and this server would dutifully fetch it. Those are the exact two
+ * targets net.ts names as the reason the allowlist exists.
+ *
+ * So: manual redirects, every hop re-validated, and a cap so a redirect loop
+ * ends in an error rather than a hang.
+ */
+async function followChecked(startUrl: string): Promise<Response> {
+  let url = startUrl;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'he-IL,he;q=0.9,en;q=0.8' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    // 3xx with a Location is the only thing we follow; a 304 or a bodyless 3xx
+    // is handed back as-is for the caller to deal with.
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+    if (!location) return res;
+
+    const next = new URL(location, url).href;
+    if (!isAllowedScrapeUrl(next)) {
+      throw new Error(`politeFetch: refusing to follow redirect to disallowed URL "${next}"`);
+    }
+    url = next;
+  }
+  throw new Error(`politeFetch: too many redirects from "${startUrl}"`);
+}
+
 /** Fetch a URL politely; returns the response body as text. */
 export async function politeFetch(url: string): Promise<string> {
   // SSRF guard first — before cache or anything else. Product URLs are fetched
@@ -192,11 +231,7 @@ export async function politeFetch(url: string): Promise<string> {
     // still remember that the request happened.
     await store.set(host, st);
     sent = true;
-    const res = await fetch(url, {
-      headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'he-IL,he;q=0.9,en;q=0.8' },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
+    const res = await followChecked(url);
     if (res.status === 429 || res.status === 503 || res.status === 403) {
       // The store is asking us to slow down — honour it: pause this host.
       //

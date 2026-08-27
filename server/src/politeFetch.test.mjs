@@ -146,3 +146,65 @@ test('a new day resets the count but not an active back-off', async () => {
   );
   assert.equal(called, false, 'midnight is not permission to ignore a stand-down');
 });
+
+/* ── SSRF via redirect ───────────────────────────────────────────────────── */
+
+test('a redirect off the allowlist is refused, not followed', async () => {
+  // The hole that `redirect: 'follow'` left wide open. The guard checks the URL
+  // we ASK for; fetch then silently follows wherever the answer points, and the
+  // final request is the one that actually happens. A store answering with
+  // `Location: http://127.0.0.1:6379/` — or the cloud metadata address — turned
+  // this server into the SSRF proxy the allowlist exists to prevent.
+  const real = globalThis.fetch;
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    asked.push(String(url));
+    if (String(url).includes('vgs.co.il')) {
+      return new Response(null, { status: 302, headers: { location: 'http://127.0.0.1:6379/' } });
+    }
+    return new Response('SHOULD NEVER BE REACHED', { status: 200 });
+  };
+  try {
+    await assert.rejects(
+      () => politeFetch('https://www.vgs.co.il/product/1'),
+      /disallowed URL/,
+      'the redirect target must be refused'
+    );
+    assert.equal(asked.length, 1, 'and the disallowed host must never be contacted at all');
+    assert.ok(!asked.some((u) => u.includes('127.0.0.1')));
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test('a redirect that stays on the allowlist is followed', async () => {
+  // http → https, or /product/1 → /products/1. Refusing these would break the
+  // stores rather than protect anybody.
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith('/old')) {
+      return new Response(null, { status: 301, headers: { location: 'https://www.vgs.co.il/new' } });
+    }
+    return new Response('the real page', { status: 200, headers: { 'content-type': 'text/html' } });
+  };
+  try {
+    assert.match(await politeFetch('https://www.vgs.co.il/old'), /the real page/);
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test('a redirect loop ends in an error rather than a hang', async () => {
+  const real = globalThis.fetch;
+  let hops = 0;
+  globalThis.fetch = async () => {
+    hops++;
+    return new Response(null, { status: 302, headers: { location: 'https://www.vgs.co.il/loop' } });
+  };
+  try {
+    await assert.rejects(() => politeFetch('https://www.vgs.co.il/loop'), /too many redirects/);
+    assert.ok(hops <= 6, `capped, not endless (made ${hops} requests)`);
+  } finally {
+    globalThis.fetch = real;
+  }
+});
