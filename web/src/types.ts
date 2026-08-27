@@ -159,6 +159,8 @@ export interface AppNotification {
 }
 
 export interface SettingsResponse {
+  /** A second currency to print beside the first, or null for one. */
+  secondaryCurrency?: string | null;
   captureDaysGlobal: number;
   displayCurrency: 'ILS' | 'USD' | 'EUR';
   ratesFromILS: { ILS: number; USD: number; EUR: number };

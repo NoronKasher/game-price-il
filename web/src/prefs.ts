@@ -139,7 +139,24 @@ export function saveMotionPref(key: string, on: boolean): void {
   }
 }
 
-export const loadTickerMotion = () => loadMotionPref(TICKER_KEY);
+/**
+ * The deals strip moves unless the user says otherwise.
+ *
+ * Not `loadMotionPref`, which would take its default from the OS. Windows'
+ * animation switch is off on a great many machines and it is about window
+ * transitions, not a news strip — and a first-run experience of a ticker that
+ * sits frozen is one nobody goes looking in Settings to fix. The switch is
+ * right there when they want it off.
+ */
+export function loadTickerMotion(): boolean {
+  try {
+    const stored = localStorage.getItem(TICKER_KEY);
+    if (stored !== null) return stored === '1';
+  } catch {
+    /* storage unavailable */
+  }
+  return true;
+}
 export const saveTickerMotion = (on: boolean) => saveMotionPref(TICKER_KEY, on);
 
 const QUIET_KEY = 'gp_quiet_notices';

@@ -18,8 +18,6 @@ import {
   savePreferredRegion,
   loadHideAllDesc,
   saveHideAllDesc,
-  loadOpenAnim,
-  saveOpenAnim,
   loadBoardView,
   saveBoardView,
   BOARD_VIEWS,
@@ -41,11 +39,12 @@ import { loadGamePassAlerts, saveGamePassAlerts } from './gamepassAlerts';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
 import { HoldToConfirm } from './HoldToConfirm';
+import { ALL_CURRENCIES } from './currencies';
 import { DealsView } from './DealsView';
 import { NoteEditor, NoteView } from './NoteEditor';
 import { supportLinks } from './support';
 import { SearchProgressBar, type ProgressState } from './SearchProgressBar';
-import { loadProgressBar, loadProgressBlink, saveProgressBar, saveProgressBlink } from './progressPrefs';
+import { loadProgressBar, saveProgressBar } from './progressPrefs';
 import { clearMutesForWorkingSources, muteForADay, muteUntilBack, visibleFailures } from './sourceNotice';
 import {
   setCurrencyConfig,
@@ -54,6 +53,7 @@ import {
   isMeaningfulChange,
   CURRENCIES,
   type CurrencyCode,
+  money,
 } from './currency';
 import { sourceLabel } from './source';
 import type {
@@ -175,12 +175,7 @@ export function App() {
 
   // Whether a search card animates "into" its price board when opened. Global,
   // persisted, and toggleable from the settings page.
-  const [openAnim, setOpenAnim] = useState<boolean>(() => loadOpenAnim());
   const [boardView, setBoardView] = useState<BoardView>(() => loadBoardView());
-  const changeOpenAnim = (v: boolean) => {
-    setOpenAnim(v);
-    saveOpenAnim(v);
-  };
   const changeBoardView = (v: BoardView) => {
     setBoardView(v);
     saveBoardView(v);
@@ -189,11 +184,25 @@ export function App() {
   // Display currency — global. Prices are stored in ILS and converted for display;
   // `currency` in state forces the whole tree to reformat when it changes.
   const [currency, setCurrency] = useState<CurrencyCode>('ILS');
-  const [rates, setRates] = useState<Record<CurrencyCode, number>>({ ILS: 1, USD: 1, EUR: 1 });
+  const [rates, setRates] = useState<Record<string, number>>({ ILS: 1 });
+  /**
+   * A second currency printed beside the first, when one is chosen.
+   *
+   * The case it exists for: the board converts a Turkish or Ukrainian price
+   * into shekels, and the buyer wants to see both — what the tool is comparing
+   * against, and what the store will actually charge them.
+   */
+  const [secondCurrency, setSecondCurrency] = useState<string | null>(null);
+
   const changeCurrency = async (c: CurrencyCode) => {
-    setCurrencyConfig(c, rates);
+    setCurrencyConfig(c, rates, secondCurrency);
     setCurrency(c);
     await api.setSettings({ displayCurrency: c });
+  };
+  const changeSecondCurrency = async (c: string | null) => {
+    setCurrencyConfig(currency, rates, c);
+    setSecondCurrency(c);
+    await api.setSettings({ secondaryCurrency: c ?? '' });
   };
 
   // The one sale-alert rule every tracked game is watched with. Lives here because
@@ -224,7 +233,8 @@ export function App() {
       .then((s) => {
         setRates(s.ratesFromILS);
         setCurrency(s.displayCurrency);
-        setCurrencyConfig(s.displayCurrency, s.ratesFromILS);
+        setSecondCurrency(s.secondaryCurrency ?? null);
+        setCurrencyConfig(s.displayCurrency, s.ratesFromILS, s.secondaryCurrency ?? null);
         setAlerts(s.alerts);
       })
       .catch(() => {});
@@ -303,7 +313,6 @@ export function App() {
             onAutoConsumed={() => setAutoQuery(null)}
             onOpen={(group, platform) => setView({ name: 'offers', group, platform })}
             preferred={preferred}
-            openAnim={openAnim}
           />
         )}
         {view.name === 'offers' && (
@@ -328,15 +337,23 @@ export function App() {
           <SettingsView
             preferred={preferred}
             onChangePreferred={changePreferred}
+            currency={currency}
+            onChangeCurrency={changeCurrency}
+            secondCurrency={secondCurrency}
+            onChangeSecondCurrency={changeSecondCurrency}
+            rates={rates}
             tickerMoves={tickerMoves}
             onChangeTickerMoves={changeTickerMoves}
-            openAnim={openAnim}
-            onChangeOpenAnim={changeOpenAnim}
             boardView={boardView}
             onChangeBoardView={changeBoardView}
           />
         )}
       </main>
+
+      {/* Reachable from every screen, and at the bottom of it. A tip jar that
+          followed you down the page would be a nag; one you meet when you have
+          finished reading is just there. */}
+      <SupportFooter />
 
       <AlertToasts
         items={notifications.toasts}
@@ -1038,7 +1055,6 @@ function SearchView({
   onAutoConsumed,
   onOpen,
   preferred,
-  openAnim,
 }: {
   query: string;
   setQuery: (q: string) => void;
@@ -1048,13 +1064,11 @@ function SearchView({
   onAutoConsumed: () => void;
   onOpen: (group: GameGroup, platform: Platform) => void;
   preferred: string;
-  openAnim: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [progress, setProgress] = useState<ProgressState | null>(null);
   const [showProgress] = useState(loadProgressBar);
-  const [progressBlink] = useState(loadProgressBlink);
   const [includeDlc, setIncludeDlc] = useState<boolean>(() => loadIncludeDlc());
   const [example] = useState(
     () => searchExamples[Math.floor(Math.random() * searchExamples.length)]
@@ -1065,8 +1079,6 @@ function SearchView({
   // board's game pane so the move reads as one object. `absorb` tracks that
   // flight so the board's game pane stays hidden until the clone lands.
   const [expanded, setExpanded] = useState<{ key: string; platform: Platform } | null>(null);
-  const [flight, setFlight] = useState<FlightState | null>(null);
-  const [absorb, setAbsorb] = useState<'active' | 'done' | null>(null);
   /** The results grid, so opening a board can scroll its top into view. */
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -1074,18 +1086,8 @@ function SearchView({
     // Clicking the platform already open closes the board and restores the card.
     if (expanded && expanded.key === g.key && expanded.platform === platform) {
       setExpanded(null);
-      setFlight(null);
-      setAbsorb(null);
       return;
     }
-    // The SETTING decides. It used to be `openAnim && !prefersReducedMotion()`,
-    // which meant the switch in Settings could not turn the animation on:
-    // Windows' "animation effects" toggle is off on a great many machines, and
-    // reading it as a veto left people with a switch that did nothing. The OS
-    // preference now only picks that switch's default — see prefs.ts.
-    const animate = openAnim && !!cardEl;
-    // Capture the card's on-screen box BEFORE React removes it from the grid.
-    let fromRect = animate && cardEl ? cardEl.getBoundingClientRect() : null;
 
     // The board always opens at the TOP of the results, so bring that into view
     // in the same beat. Without it, clicking a card far down the grid opens a
@@ -1093,34 +1095,17 @@ function SearchView({
     const scrolledFrom = window.scrollY;
     const resultsTop = resultsRef.current?.getBoundingClientRect().top ?? 0;
     window.scrollTo({ top: Math.max(0, scrolledFrom + resultsTop - 12), behavior: 'auto' });
-    // Jumping moves the card's box out from under the clone, which is positioned
-    // in viewport coordinates — shift the captured box by however far we went.
-    const delta = window.scrollY - scrolledFrom;
-    if (fromRect && delta !== 0) {
-      fromRect = new DOMRect(fromRect.left, fromRect.top - delta, fromRect.width, fromRect.height);
-    }
 
     setExpanded({ key: g.key, platform });
-    if (fromRect) {
-      setAbsorb('active');
-      setFlight({ fromRect, image: g.image, title: g.title });
-    } else {
-      setAbsorb(null);
-      setFlight(null);
-    }
   };
 
   const switchPlatform = (key: string, platform: Platform) => {
     // Switching platform inside an open board never re-flies; just reload it.
-    setFlight(null);
-    setAbsorb('done');
     setExpanded({ key, platform });
   };
 
   const closeBoard = () => {
     setExpanded(null);
-    setFlight(null);
-    setAbsorb(null);
   };
 
   /**
@@ -1259,8 +1244,6 @@ function SearchView({
     if (!platform) return;
     // Opened without the card-into-board flight: there is no card on screen to
     // fly from, and the board carries its own platform switcher for changing.
-    setFlight(null);
-    setAbsorb(null);
     setExpanded({ key: g.key, platform });
   }, [result, groups]);
 
@@ -1293,7 +1276,6 @@ function SearchView({
 
       <SearchProgressBar
         progress={showProgress ? progress : null}
-        blink={progressBlink}
         onHidden={() => setProgress(null)}
       />
       {result && <SourceNotice sources={result.sources} />}
@@ -1341,7 +1323,6 @@ function SearchView({
             platform={expanded.platform}
             image={openGroup.image}
             preferred={preferred}
-            absorb={absorb}
             platforms={[...openGroup.byPlatform.keys()]}
             onSwitchPlatform={(p) => switchPlatform(openGroup.key, p)}
             refs={(openGroup.byPlatform.get(expanded.platform) ?? []).map((h) => ({
@@ -1430,26 +1411,8 @@ function SearchView({
         </section>
       )}
 
-      {/* The card-into-board flight: a fixed clone morphing from the card's old
-          box into the board's game pane. Fast on purpose; it clears itself. */}
-      {flight && (
-        <AbsorbClone
-          flight={flight}
-          onDone={() => {
-            setFlight(null);
-            setAbsorb('done');
-          }}
-        />
-      )}
     </section>
   );
-}
-
-/** The card box + art captured at click time, so a clone can fly from it. */
-interface FlightState {
-  fromRect: DOMRect;
-  image?: string;
-  title: string;
 }
 
 /**
@@ -1460,65 +1423,6 @@ interface FlightState {
  * target, animates there, then removes itself (`onDone`) so the board's own game
  * pane fades in exactly where the clone came to rest.
  */
-function AbsorbClone({ flight, onDone }: { flight: FlightState; onDone: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  // useLayoutEffect (not useEffect): the clone was just committed at the card's
-  // old box, so we can lock that start state with a forced reflow and then set
-  // the end transform — no requestAnimationFrame needed (some throttle it).
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const done = () => onDone();
-    // The board mounts in the same commit; its game art is our landing target.
-    const target =
-      document.querySelector<HTMLElement>('.dt-panel .dt-art') ??
-      document.querySelector<HTMLElement>('.dt-panel .dt-noart');
-    if (!target) {
-      done();
-      return;
-    }
-    const to = target.getBoundingClientRect();
-    const { fromRect: from } = flight;
-    if (to.width === 0 || from.width === 0) {
-      done();
-      return;
-    }
-    // Force the start box to be laid out, THEN switch on the transition and move
-    // to the pane's box — the browser now has two states to animate between.
-    void el.getBoundingClientRect();
-    el.classList.add('fly');
-    el.style.transform = `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${
-      to.width / from.width
-    }, ${to.height / from.height})`;
-    el.addEventListener('transitionend', done, { once: true });
-    // Safety net: if the transition never fires (identical boxes, a tab that
-    // isn't painting), clean up anyway so the board never gets stuck behind it.
-    const timer = window.setTimeout(done, 360);
-    return () => {
-      el.removeEventListener('transitionend', done);
-      window.clearTimeout(timer);
-    };
-  }, [flight, onDone]);
-
-  const { fromRect, image, title } = flight;
-  return (
-    <div
-      ref={ref}
-      className="absorb-clone"
-      style={{
-        top: fromRect.top,
-        left: fromRect.left,
-        width: fromRect.width,
-        height: fromRect.height,
-      }}
-      aria-hidden="true"
-    >
-      {image ? <img src={safeUrl(image)} alt="" /> : <div className="absorb-noart">{title}</div>}
-    </div>
-  );
-}
-
 /* ───────────────────────── game page ───────────────────────── */
 
 type Mode = 'physical' | 'digital';
@@ -2254,24 +2158,29 @@ function PsnPanel() {
 function SettingsView({
   preferred,
   onChangePreferred,
+  currency,
+  onChangeCurrency,
+  secondCurrency,
+  onChangeSecondCurrency,
+  rates,
   tickerMoves,
   onChangeTickerMoves,
-  openAnim,
-  onChangeOpenAnim,
   boardView,
   onChangeBoardView,
 }: {
   preferred: string;
   onChangePreferred: (m: string) => void;
+  currency: string;
+  onChangeCurrency: (c: string) => void;
+  secondCurrency: string | null;
+  onChangeSecondCurrency: (c: string | null) => void;
+  rates: Record<string, number>;
   tickerMoves: boolean;
   onChangeTickerMoves: (v: boolean) => void;
-  openAnim: boolean;
-  onChangeOpenAnim: (v: boolean) => void;
   boardView: BoardView;
   onChangeBoardView: (v: BoardView) => void;
 }) {
   const [bar, setBar] = useState(loadProgressBar);
-  const [blinkPref, setBlinkPref] = useState(loadProgressBlink);
   // The chosen region's Hebrew name, for the board-view option that pins it.
   const preferredName = REGIONS.find((r) => r.market === preferred)?.nameHe ?? '';
   const [keys, setKeys] = useState<KeysResponse | null>(null);
@@ -2291,6 +2200,20 @@ function SettingsView({
 
   return (
     <section className="settings-view">
+      {/*
+        ORDER MATTERS, AND THE RULE IS: THE FURTHER DOWN, THE MORE A MISTAKE
+        COSTS.
+
+        Appearance first — flicking the deals strip on and off is reversible
+        and obvious. Then the things that change what the tool tells you. Then,
+        last, the ones that can lose data or break a source: the alert log, the
+        portable token, the API keys, the PlayStation hash.
+
+        It also matches how the page is used. Most people stop scrolling before
+        the consequential half, which is exactly where it belongs. Anything
+        added later goes in by that measure, not by when it was written.
+      */}
+
       {/* General preferences — stored locally in the browser, so they work even
           when the server is unreachable. */}
       <h2>{t.generalTitle}</h2>
@@ -2316,25 +2239,6 @@ function SettingsView({
 
       <div className="setting-row">
         <div className="setting-text">
-          <span className="setting-label">{t.openAnimLabel}</span>
-          <p className="setting-note">{t.openAnimNote}</p>
-        </div>
-        <button
-          className={`toggle ${openAnim ? 'on' : ''}`}
-          role="switch"
-          aria-checked={openAnim}
-          aria-label={t.openAnimLabel}
-          onClick={() => onChangeOpenAnim(!openAnim)}
-        >
-          <span className="toggle-knob" aria-hidden="true" />
-          <span className="toggle-text">{openAnim ? t.animOn : t.animOff}</span>
-        </button>
-      </div>
-
-      <NotificationLog />
-
-      <div className="setting-row">
-        <div className="setting-text">
           <span className="setting-label">{t.progressShow}</span>
           <p className="setting-note">{t.progressHint}</p>
         </div>
@@ -2352,28 +2256,6 @@ function SettingsView({
           <span className="toggle-text">{bar ? t.animOn : t.animOff}</span>
         </button>
       </div>
-
-      {bar && (
-        <div className="setting-row">
-          <div className="setting-text">
-            <span className="setting-label">{t.progressBlinkLabel}</span>
-            <p className="setting-note">{t.progressBlinkHint}</p>
-          </div>
-          <button
-            className={`toggle ${blinkPref ? 'on' : ''}`}
-            role="switch"
-            aria-checked={blinkPref}
-            aria-label={t.progressBlinkLabel}
-            onClick={() => {
-              saveProgressBlink(!blinkPref);
-              setBlinkPref(!blinkPref);
-            }}
-          >
-            <span className="toggle-knob" aria-hidden="true" />
-            <span className="toggle-text">{blinkPref ? t.animOn : t.animOff}</span>
-          </button>
-        </div>
-      )}
 
       <div className="setting-row setting-row-block">
         <div className="setting-text">
@@ -2399,6 +2281,55 @@ function SettingsView({
           </div>
         </div>
       </div>
+
+      <h2 className="settings-section">{t.tickerMotionTitle}</h2>
+      <p className="settings-intro">{t.tickerMotionIntro}</p>
+      <TickerMotionToggle value={tickerMoves} onChange={onChangeTickerMoves} />
+
+      <h2 className="settings-section">{t.currencyTitle}</h2>
+      <p className="settings-intro">{t.currencySettingsNote}</p>
+      <div className="cur-row">
+        <label className="cur-field">
+          <span className="cur-label">{t.currencyPrimary}</span>
+          <select
+            className="pref-select"
+            value={currency}
+            onChange={(e) => void onChangeCurrency(e.target.value)}
+          >
+            {ALL_CURRENCIES.filter((c) => c.code === 'ILS' || rates[c.code]).map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.symbol} · {c.nameHe} ({c.code})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="cur-field">
+          <span className="cur-label">{t.currencySecondary}</span>
+          <select
+            className="pref-select"
+            value={secondCurrency ?? ''}
+            onChange={(e) => void onChangeSecondCurrency(e.target.value || null)}
+          >
+            <option value="">{t.currencyNoSecond}</option>
+            {ALL_CURRENCIES.filter((c) => c.code !== currency && (c.code === 'ILS' || rates[c.code])).map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.symbol} · {c.nameHe} ({c.code})
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p className="cur-sample">{t.currencySample(money(149))}</p>
+
+      <h2 className="settings-section">{t.quietTitle}</h2>
+      <p className="settings-intro">{t.quietIntro}</p>
+      <QuietToggle />
+
+      <h2 className="settings-section">{t.gpAlertsTitle}</h2>
+      <p className="settings-intro">{t.gpAlertsIntro}</p>
+      <GamePassToggle />
+
+      <TokenPanel />
 
       <h2 className="settings-section">{t.keysTitle}</h2>
       <p className="settings-intro">{t.keysIntro}</p>
@@ -2429,40 +2360,55 @@ function SettingsView({
         <p className="settings-intro">{t.loadingDetails}</p>
       )}
 
-      <SupportSection />
-
-      <h2 className="settings-section">{t.tickerMotionTitle}</h2>
-      <p className="settings-intro">{t.tickerMotionIntro}</p>
-      <TickerMotionToggle value={tickerMoves} onChange={onChangeTickerMoves} />
-
-      <h2 className="settings-section">{t.gpAlertsTitle}</h2>
-      <p className="settings-intro">{t.gpAlertsIntro}</p>
-      <GamePassToggle />
-
-      <h2 className="settings-section">{t.quietTitle}</h2>
-      <p className="settings-intro">{t.quietIntro}</p>
-      <QuietToggle />
-
-      <TokenPanel />
+      <PsnPanel />
 
       <HealthPanel />
 
-      <PsnPanel />
+      {/* The record of everything the tool has told you, and the only place to
+          clear it for good. At the bottom because it is consequential, not
+          because it is an afterthought. */}
+      <NotificationLog />
 
-      <h2 className="settings-section">{t.currencyTitle}</h2>
-      <p className="settings-intro">{t.currencySettingsNote}</p>
+      <SupportSection />
     </section>
   );
 }
 
 /**
- * The tip jar.
+ * The tip jar, at the foot of every page.
  *
- * One line, no banner, no popup, no counter. The tool is free and runs on the
- * user's own machine; there is no bill to cover, so this has no business
- * behaving like a fundraiser. Rendered at all only when a link is configured —
- * see support.ts, which also records why it is a tip and never an affiliate
- * link.
+ * On every screen because it is easy to miss otherwise, and at the FOOT of it
+ * because that is the difference between visible and pushy. Nothing floats,
+ * nothing follows the scroll, nothing pops up, and there is no counter or
+ * progress bar toward a goal — the tool is free and runs on the user's own
+ * machine, so there is no bill to be raising money against.
+ *
+ * Rendered at all only when a link is configured; see support.ts, which also
+ * records why this is a tip and never an affiliate link.
+ */
+function SupportFooter() {
+  const links = supportLinks();
+  if (links.length === 0) return null;
+  return (
+    <footer className="support-footer">
+      <span className="support-footer-text">{t.supportFooter}</span>
+      {links.map((link) => (
+        <a
+          key={link.id}
+          className="support-footer-link"
+          href={link.url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {link.label}
+        </a>
+      ))}
+    </footer>
+  );
+}
+
+/**
+ * The same thing in Settings, with room to say why it exists.
  */
 function SupportSection() {
   const links = supportLinks();

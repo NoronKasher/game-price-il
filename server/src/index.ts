@@ -90,7 +90,7 @@ import {
   waitForHashSaved,
   HOST_RECOVER_MARKER,
 } from './adapters/psnHash.ts';
-import { setSetting } from './db.ts';
+import { setSetting, getSetting } from './db.ts';
 import { sqlitePoliteStore } from './politeStore.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -578,12 +578,40 @@ app.delete('/api/notifications', (_req, res) => {
 
 /** Global app settings: auto-capture interval + the display currency (with the
  *  ILS→currency rates the client uses to show every stored ILS price in it). */
+/**
+ * Every currency the settings picker can offer.
+ *
+ * Sent in full rather than just the header's three: the picker is there so
+ * somebody can read a Turkish price in lira, and a rate that arrives only after
+ * they choose would make the whole board flicker on selection. The feed already
+ * carries 166 currencies in one response, so this costs nothing extra — the
+ * rates are fetched once and cached in rates.ts either way.
+ */
+const DISPLAY_CURRENCIES = [
+  'USD', 'EUR', 'GBP', 'TRY', 'UAH', 'ARS', 'BRL', 'INR', 'KZT', 'ZAR', 'MXN', 'PLN',
+  'JPY', 'KRW', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK', 'CNY', 'HKD', 'SGD', 'TWD', 'THB',
+  'IDR', 'MYR', 'PHP', 'VND', 'CLP', 'COP', 'PEN', 'SAR', 'AED',
+];
+
 async function settingsPayload() {
-  const [usd, eur] = await Promise.all([ilsTo('USD'), ilsTo('EUR')]);
+  const rates: Record<string, number> = { ILS: 1 };
+  await Promise.all(
+    DISPLAY_CURRENCIES.map(async (code) => {
+      try {
+        const rate = await ilsTo(code);
+        // ilsTo falls back to 1 for anything it cannot price, which would show
+        // a Ukrainian price as its shekel figure with a ₴ in front of it.
+        if (rate > 0 && rate !== 1) rates[code] = rate;
+      } catch {
+        /* a currency the feed does not carry is simply not offered */
+      }
+    })
+  );
   return {
     captureDaysGlobal: getCaptureDaysGlobal(),
     displayCurrency: getDisplayCurrency(),
-    ratesFromILS: { ILS: 1, USD: usd, EUR: eur },
+    secondaryCurrency: getSetting('secondary_currency') ?? null,
+    ratesFromILS: rates,
     alerts: getAlertDefaults(),
   };
 }
@@ -613,6 +641,11 @@ app.patch('/api/settings', async (req, res) => {
     setAlertDefaults(patch);
   }
   if ('displayCurrency' in body) setDisplayCurrency(String(body.displayCurrency));
+  // '' clears it — one currency again.
+  if ('secondaryCurrency' in body) {
+    const v = body.secondaryCurrency == null ? '' : String(body.secondaryCurrency).slice(0, 8);
+    setSetting('secondary_currency', v);
+  }
   res.json(await settingsPayload());
 });
 

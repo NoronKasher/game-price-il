@@ -376,6 +376,8 @@ export const api = {
   setSettings: (patch: {
     captureDaysGlobal?: number;
     displayCurrency?: string;
+    /** '' clears the second currency. */
+    secondaryCurrency?: string;
     alerts?: Partial<AlertRule>;
   }) =>
     fetch('/api/settings', {

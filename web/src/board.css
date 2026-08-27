@@ -106,7 +106,14 @@ body {
    window transitions, not about a news strip — got a ticker that appeared
    frozen with no way to start it. The OS preference now only picks the DEFAULT
    for the switch in Settings; the switch itself always wins. */
-.ticker.still { overflow-x: auto; }
+/* Stopped, but not stuck: it can still be pushed by hand.
+   `overflow-x: auto` alone did nothing here, because the track carries
+   `will-change: transform` and the strip carries `contain: paint` for the
+   moving case — together those made the overflow uncomputable, so there was
+   nothing to scroll. Both are switched off when the strip is still, which is
+   also when neither is buying anything. */
+.ticker.still { overflow-x: auto; contain: none; -webkit-overflow-scrolling: touch; }
+.ticker.still .reel { will-change: auto; }
 .ticker.still .reel { animation: none; }
 .ticker.still .reel-run[aria-hidden='true'] { display: none; }
 .ticker .reel .deal {
@@ -156,37 +163,13 @@ body {
    a faint amber grid suggesting a shelf, and the title centred over it. */
 .card .noart,
 .dt-noart,
-.absorb-clone .absorb-noart {
-  position: relative;
-  display: flex; align-items: center; justify-content: center; text-align: center;
-  padding: 10px 14px; overflow: hidden;
-  color: color-mix(in srgb, var(--text) 78%, transparent);
-  font-size: 13px; font-weight: 600; line-height: 1.4;
-  background:
-    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--amber) 9%, transparent) 0%, transparent 60%),
-    var(--panel-2);
-}
 .card .noart { width: 100%; aspect-ratio: 460/215; }
 /* The shelf: two thin amber rules, faint enough to sit behind the title. */
 .card .noart::before,
 .dt-noart::before,
-.absorb-clone .absorb-noart::before {
-  content: ""; position: absolute; inset: 0;
-  background-image:
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0 22px,
-      color-mix(in srgb, var(--amber) 13%, transparent) 22px 23px
-    );
-  pointer-events: none;
-}
 /* A small mark so the space reads as "no picture", not "failed to load". */
 .card .noart::after,
 .dt-noart::after,
-.absorb-clone .absorb-noart::after {
-  content: "🎮"; position: absolute; top: 10px; inset-inline-start: 12px;
-  font-size: 15px; opacity: 0.32; filter: grayscale(1);
-}
 .card .body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
 .card h3 { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.3; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -563,7 +546,31 @@ body {
 .deals-more { margin: 16px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
 .deals-note { margin: 16px 0 0; max-width: 620px; font-size: 11px; color: var(--muted); line-height: 1.7; }
 
-/* The tip jar. Quiet on purpose. */
+/* The tip jar at the foot of every page. In the flow, never floating: a
+   sticky one would follow you down the screen, which is the difference
+   between visible and pushy. */
+.support-footer {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; flex-wrap: wrap;
+  margin: 8px auto 0; padding: 14px 20px 22px;
+  width: min(1060px, 100%); box-sizing: border-box;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px; color: var(--muted);
+}
+.support-footer-text { opacity: .85; }
+.support-footer-link {
+  color: var(--muted); text-decoration: none;
+  border-bottom: 1px dotted var(--line); padding-bottom: 1px;
+}
+.support-footer-link:hover { color: var(--amber); border-bottom-color: var(--amber); }
+
+/* The currency picker in Settings. */
+.cur-row { display: flex; gap: 14px; flex-wrap: wrap; margin: 10px 0 0; }
+.cur-field { display: flex; flex-direction: column; gap: 4px; min-width: 240px; flex: 1 1 240px; }
+.cur-label { font-size: 12px; color: var(--muted); }
+.cur-sample { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+
+/* The tip jar in Settings. Quiet on purpose. */
 .support-links { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0 0; }
 .support-link {
   display: inline-flex; flex-direction: column; gap: 2px;
@@ -934,27 +941,12 @@ body {
 @keyframes dtGameIn { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
 @keyframes dtMainIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
 
-/* Card-into-board flight. While the clone is in the air the board is already in
-   place (no slide of its own) but its game pane is invisible, so the clone reads
-   as the only moving object; once it lands the pane fades in exactly there. */
-.dt-panel.absorbing { animation: none; }
-.dt-panel.absorbing .dt-game { animation: none; opacity: 0; }
-.dt-panel.absorbed { animation: none; }
-.dt-panel.absorbed .dt-game { animation: none; opacity: 1; transition: opacity 0.2s ease; }
+
 
 /* The flying clone itself: the card's art, fixed to the viewport, morphing from
    the card's old box into the game pane. transform-origin top-left so the scale
    pairs with the translate computed from the two boxes. */
-.absorb-clone {
-  position: fixed; z-index: 60; margin: 0; border-radius: 10px; overflow: hidden;
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55); pointer-events: none;
-  transform-origin: top left; will-change: transform;
-}
-.absorb-clone.fly { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
 .absorb-clone img,
-.absorb-clone .absorb-noart {
-  width: 100%; height: 100%; object-fit: cover; display: block; background: var(--panel-2);
-}
 
 
 /* Platform switcher tucked inside the game pane (the grid card that carried
@@ -1149,11 +1141,6 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .dt-panel, .dt-game, .dt-main, .dep-row, .dep-pulse { animation: none; }
-  /* No card-into-board flight when the user asked for reduced motion; the board
-     just appears. (SearchView also skips creating the clone in this case.) */
-  .absorb-clone { display: none; }
-  .dt-panel.absorbing .dt-game, .dt-panel.absorbed .dt-game { opacity: 1; transition: none; }
-}
 
 /* Settings-page preference rows: a label + explanation on one side, the control
    on the other. */

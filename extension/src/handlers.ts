@@ -22,7 +22,7 @@ import { runHealthCheck, lastHealthReport, healthCheckDue } from '../../server/s
 import { hasApiKey, setApiKey, apiKeySource, type ApiKeyName } from './keys.browser.ts';
 import { currentSearchHash, searchHashSource } from '../../server/src/adapters/psn.ts';
 import { noteHashSaved } from './psnHash.browser.ts';
-import { setSetting } from './db.browser.ts';
+import { setSetting, getSetting } from './db.browser.ts';
 import {
   ready,
   flush,
@@ -115,13 +115,37 @@ function wishlistPayload() {
   });
 }
 
+/**
+ * Every currency the settings picker can offer — the same list the server
+ * sends, so both shells behave identically. The rate feed carries 166 in one
+ * cached response, so asking for all of these costs nothing extra.
+ */
+const DISPLAY_CURRENCIES = [
+  'USD', 'EUR', 'GBP', 'TRY', 'UAH', 'ARS', 'BRL', 'INR', 'KZT', 'ZAR', 'MXN', 'PLN',
+  'JPY', 'KRW', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK', 'CNY', 'HKD', 'SGD', 'TWD', 'THB',
+  'IDR', 'MYR', 'PHP', 'VND', 'CLP', 'COP', 'PEN', 'SAR', 'AED',
+];
+
 async function settingsPayload() {
   // Rates are quoted per shekel, the currency every price is stored in.
-  const [usd, eur] = await Promise.all([ilsTo('USD'), ilsTo('EUR')]);
+  const rates: Record<string, number> = { ILS: 1 };
+  await Promise.all(
+    DISPLAY_CURRENCIES.map(async (code) => {
+      try {
+        const rate = await ilsTo(code);
+        // ilsTo falls back to 1 for anything it cannot price, which would show
+        // a foreign price as its shekel figure with the wrong symbol in front.
+        if (rate > 0 && rate !== 1) rates[code] = rate;
+      } catch {
+        /* a currency the feed does not carry is simply not offered */
+      }
+    })
+  );
   return {
     captureDaysGlobal: getCaptureDaysGlobal(),
     displayCurrency: getDisplayCurrency(),
-    ratesFromILS: { ILS: 1, USD: usd, EUR: eur },
+    secondaryCurrency: getSetting('secondary_currency') || null,
+    ratesFromILS: rates,
     alerts: getAlertDefaults(),
   };
 }
@@ -369,9 +393,16 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
 
     getSettings: withDb(() => settingsPayload()),
     setSettings: withDb(
-      async (p: { captureDaysGlobal?: number; displayCurrency?: string; alerts?: Record<string, unknown> }) => {
+      async (p: {
+        captureDaysGlobal?: number;
+        displayCurrency?: string;
+        secondaryCurrency?: string | null;
+        alerts?: Record<string, unknown>;
+      }) => {
         if (typeof p.captureDaysGlobal === 'number') setCaptureDaysGlobal(p.captureDaysGlobal);
         if (p.displayCurrency) setDisplayCurrency(p.displayCurrency);
+        // '' clears it — one currency again.
+        if ('secondaryCurrency' in p) setSetting('secondary_currency', p.secondaryCurrency ?? '');
         if (p.alerts) setAlertDefaults(p.alerts as never);
         await flush();
         return settingsPayload();

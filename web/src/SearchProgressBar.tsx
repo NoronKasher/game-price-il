@@ -51,15 +51,13 @@ function fillColour(fraction: number): string {
 
 export function SearchProgressBar({
   progress,
-  blink,
   onHidden,
 }: {
   progress: ProgressState | null;
   /** The settings toggle: some people find a flashing number worse than useless. */
-  blink: boolean;
   onHidden: () => void;
 }) {
-  const [phase, setPhase] = useState<'running' | 'blinking' | 'gone'>('running');
+  const [phase, setPhase] = useState<'running' | 'gone'>('running');
 
   const complete = progress != null && progress.total > 0 && progress.done >= progress.total;
 
@@ -68,16 +66,16 @@ export function SearchProgressBar({
       setPhase('running');
       return;
     }
-    // Two blinks then out, or straight out when the user asked for no blinking.
-    // Either way it leaves: a progress bar that stays at 100% is furniture.
-    const blinkMs = blink ? 900 : 350;
-    setPhase(blink ? 'blinking' : 'running');
+    // A short beat at 100%, then out — a progress bar that stays at 100% is
+    // furniture. There used to be a two-blink flourish here that nobody could
+    // ever see, including the person who asked for it, so it is gone along
+    // with its setting.
     const timer = setTimeout(() => {
       setPhase('gone');
       onHidden();
-    }, blinkMs);
+    }, 350);
     return () => clearTimeout(timer);
-  }, [complete, blink, onHidden]);
+  }, [complete, onHidden]);
 
   if (!progress || phase === 'gone' || progress.total === 0) return null;
 
@@ -90,7 +88,7 @@ export function SearchProgressBar({
 
   return (
     <div
-      className={`searchprog ${phase === 'blinking' ? 'blink' : ''}`}
+      className={`searchprog ${phase === 'running' ? 'blink' : ''}`}
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}

@@ -70,22 +70,6 @@ export function savePreferredRegion(market: string): void {
  */
 import { loadMotionPref } from './prefs';
 
-const OPEN_ANIM_KEY = 'gp_open_anim';
-/**
- * The card-into-board flight. Same rule as every other motion setting: the OS
- * preference picks the default, the stored choice always wins. See
- * loadMotionPref in prefs.ts.
- */
-export function loadOpenAnim(): boolean {
-  return loadMotionPref(OPEN_ANIM_KEY);
-}
-export function saveOpenAnim(v: boolean): void {
-  try {
-    localStorage.setItem(OPEN_ANIM_KEY, v ? '1' : '0');
-  } catch {
-    /* ignore */
-  }
-}
 
 /** Global "hide all game descriptions" preference. */
 const HIDE_ALL_KEY = 'gp_hide_all_desc';

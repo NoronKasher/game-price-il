@@ -10,7 +10,7 @@ import { loadBoardView, type BoardView } from './regions';
 import { boardHasEilatPrices, eilatPrice, eilatSaving } from './eilat';
 import { safeUrl } from './url';
 import { SearchProgressBar, type ProgressState } from './SearchProgressBar';
-import { loadProgressBar, loadProgressBlink } from './progressPrefs';
+import { loadProgressBar } from './progressPrefs';
 import { loadQuietNotices } from './prefs';
 import {
   acknowledge,
@@ -106,7 +106,6 @@ export function DepartureBoard({
   image,
   refs,
   preferred,
-  absorb,
   platforms,
   onSwitchPlatform,
   onOpenFull,
@@ -119,7 +118,6 @@ export function DepartureBoard({
   preferred: string;
   /** Card-into-board flight phase: 'active' hides the game pane until the flying
    *  clone lands, 'done' fades it in there; null/undefined = no flight (open plainly). */
-  absorb?: 'active' | 'done' | null;
   /** Sibling platforms of this game, so the user can switch without closing. */
   platforms?: Platform[];
   onSwitchPlatform?: (p: Platform) => void;
@@ -128,7 +126,6 @@ export function DepartureBoard({
 }) {
   const [offers, setOffers] = useState<Offer[] | null>(null);
   const [showProgress] = useState(loadProgressBar);
-  const [progressBlink] = useState(loadProgressBlink);
   const [error, setError] = useState(false);
   const [meta, setMeta] = useState<GameMeta | null | undefined>(undefined);
   // Filters — all permissive by default; a game/platform switch resets them.
@@ -387,11 +384,10 @@ export function DepartureBoard({
   // prefs.ts. Read at render rather than cached, so flipping it in Settings
   // takes effect the next time a board opens rather than on the next reload.
   const showNotice = anyRisk && !noticeHidden && !noticeDismissedNow && !loadQuietNotices();
-  const absorbClass = absorb === 'active' ? 'absorbing' : absorb === 'done' ? 'absorbed' : '';
 
   return (
     <section
-      className={`dt-panel ${absorbClass}`}
+      className="dt-panel"
       role="region"
       aria-label={`${title} — ${platformNames[platform]}`}
     >
@@ -631,7 +627,6 @@ export function DepartureBoard({
 
           <SearchProgressBar
             progress={showProgress ? priceProgress : null}
-            blink={progressBlink}
             onHidden={() => setPriceProgress(null)}
           />
 

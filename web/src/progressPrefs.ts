@@ -1,16 +1,16 @@
 /**
- * Whether to show the search progress bar, and whether its final number blinks.
+ * Whether to show the bar that fills as each shop answers a search.
  *
- * Both are on by default and both can be turned off, because a moving bar is
- * reassuring to most people and a flashing number is genuinely unpleasant to
- * some — including anyone who has asked their system not to animate things.
- * Kept apart from the bar's own module so the settings screen can read them
+ * On by default: a search that touches sixteen sources takes seconds, and a
+ * blank screen for that long reads as a broken app rather than a busy one.
+ *
+ * There used to be a second preference here for a two-blink flourish when the
+ * bar reached 100%. Nobody could ever see it, so the flourish and its switch
+ * are both gone — a setting that changes nothing is worse than no setting.
+ * Kept apart from the bar's own module so the settings screen can read this
  * without pulling a component in.
  */
-import { loadMotionPref, saveMotionPref } from './prefs';
-
 const BAR_KEY = 'gp_search_progress';
-const BLINK_KEY = 'gp_search_progress_blink';
 
 function read(key: string): boolean {
   try {
@@ -31,14 +31,3 @@ function write(key: string, on: boolean): void {
 export const loadProgressBar = () => read(BAR_KEY);
 export const saveProgressBar = (on: boolean) => write(BAR_KEY, on);
 
-/**
- * The blink takes the OS preference as a DEFAULT, not as a veto.
- *
- * It used to check the media query FIRST and return false without ever looking
- * at what the user had stored — so turning the blink on in Settings worked
- * until the next navigation, when the component remounted, asked again, and got
- * false. The switch appeared to turn itself off. See loadMotionPref in prefs.ts
- * for the rule, which two other settings had got wrong in the same way.
- */
-export const loadProgressBlink = () => loadMotionPref(BLINK_KEY);
-export const saveProgressBlink = (on: boolean) => saveMotionPref(BLINK_KEY, on);
