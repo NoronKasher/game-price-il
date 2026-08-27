@@ -81,6 +81,11 @@ export const t = {
   toastDismiss: 'סגור',
   // Display currency
   currencyTitle: 'מטבע תצוגה',
+  currencyWideLabel: 'הציגו גם מטבעות שאף חנות לא גובה בהם',
+  currencyWideHint:
+    'פותח עוד עשרות מטבעות להמרה. ההגדרה נשמרת גם בקוד ההעברה למכשיר אחר.',
+  currencyWideWarn:
+    '⚠️ שימו לב: מטבעות מהרשימה המורחבת הם המרה שלנו מהמחיר בשקלים, ולא מחיר שחנות כלשהי תגבה בפועל. הם שימושיים כדי להבין סדר גודל, אבל אין חנות בכלי שמוכרת בהם — ולכן ייתכנו הפרשי עיגול או תצוגה. הרשימה לא כוללת מטבעות של מדינות שאין אליהן מסלול רכישה חוקי מישראל.',
   currencyPrimary: 'מטבע ראשי',
   currencySecondary: 'מטבע נוסף לצד הראשי',
   currencyNoSecond: '— בלי מטבע נוסף —',
@@ -326,8 +331,14 @@ export const t = {
   tokenPastePlaceholder: 'הדביקו כאן קוד שמתחיל ב־VGPT1-',
   tokenLoad: 'טעינה',
   tokenWorking: 'טוען…',
-  tokenImported: (games: number, points: number, prefs: number) =>
-    `נטענו ${games} משחקים ו־${points} רישומי מחיר${prefs > 0 ? `, וגם ${prefs} העדפות תצוגה` : ''}. מה שכבר היה כאן לא נמחק.`,
+  tokenImported: (games: number, points: number, prefs: number, settings: number) => {
+    const extras = [
+      prefs > 0 ? `${prefs} העדפות תצוגה` : '',
+      settings > 0 ? `${settings} הגדרות` : '',
+    ].filter(Boolean);
+    const tail = extras.length ? `, וגם ${extras.join(' ו־')}` : '';
+    return `נטענו ${games} משחקים ו־${points} רישומי מחיר${tail}. מה שכבר היה כאן לא נמחק. רעננו את העמוד כדי לראות את ההגדרות החדשות.`;
+  },
   tokenBad: 'זה לא נראה כמו קוד שלנו. ודאו שהעתקתם את כולו — הוא מתחיל ב־VGPT1-.',
   tokenFailed: 'משהו השתבש. אפשר לנסות שוב.',
   tokenNote:

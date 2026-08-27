@@ -32,6 +32,8 @@ import {
   collectPrefs,
   loadQuietNotices,
   loadTickerMotion,
+  loadWideCurrencies,
+  saveWideCurrencies,
   saveQuietNotices,
   saveTickerMotion,
 } from './prefs';
@@ -39,7 +41,7 @@ import { loadGamePassAlerts, saveGamePassAlerts } from './gamepassAlerts';
 import { Logo } from './Logo';
 import { safeUrl } from './url';
 import { HoldToConfirm } from './HoldToConfirm';
-import { ALL_CURRENCIES } from './currencies';
+import { ALL_CURRENCIES, WIDE_CURRENCIES } from './currencies';
 import { DealsView } from './DealsView';
 import { NoteEditor, NoteView } from './NoteEditor';
 import { supportLinks } from './support';
@@ -2181,6 +2183,18 @@ function SettingsView({
   onChangeBoardView: (v: BoardView) => void;
 }) {
   const [bar, setBar] = useState(loadProgressBar);
+  const [wideCurrencies, setWideCurrencies] = useState(loadWideCurrencies);
+  /**
+   * The currencies the pickers offer.
+   *
+   * A currency with no rate is not offered at all — a picker entry that turns
+   * every price into its shekel figure with the wrong symbol in front would be
+   * worse than its absence.
+   */
+  const pickable = useMemo(
+    () => (wideCurrencies ? WIDE_CURRENCIES : ALL_CURRENCIES).filter((c) => c.code === 'ILS' || rates[c.code]),
+    [wideCurrencies, rates]
+  );
   // The chosen region's Hebrew name, for the board-view option that pins it.
   const preferredName = REGIONS.find((r) => r.market === preferred)?.nameHe ?? '';
   const [keys, setKeys] = useState<KeysResponse | null>(null);
@@ -2288,6 +2302,19 @@ function SettingsView({
 
       <h2 className="settings-section">{t.currencyTitle}</h2>
       <p className="settings-intro">{t.currencySettingsNote}</p>
+      <label className="check-row cur-wide" title={t.currencyWideHint}>
+        <input
+          type="checkbox"
+          checked={wideCurrencies}
+          onChange={(e) => {
+            setWideCurrencies(e.target.checked);
+            saveWideCurrencies(e.target.checked);
+          }}
+        />
+        {t.currencyWideLabel}
+      </label>
+      {wideCurrencies && <p className="cur-warn">{t.currencyWideWarn}</p>}
+
       <div className="cur-row">
         <label className="cur-field">
           <span className="cur-label">{t.currencyPrimary}</span>
@@ -2296,7 +2323,7 @@ function SettingsView({
             value={currency}
             onChange={(e) => void onChangeCurrency(e.target.value)}
           >
-            {ALL_CURRENCIES.filter((c) => c.code === 'ILS' || rates[c.code]).map((c) => (
+            {pickable.map((c) => (
               <option key={c.code} value={c.code}>
                 {c.symbol} · {c.nameHe} ({c.code})
               </option>
@@ -2311,7 +2338,7 @@ function SettingsView({
             onChange={(e) => void onChangeSecondCurrency(e.target.value || null)}
           >
             <option value="">{t.currencyNoSecond}</option>
-            {ALL_CURRENCIES.filter((c) => c.code !== currency && (c.code === 'ILS' || rates[c.code])).map((c) => (
+            {pickable.filter((c) => c.code !== currency).map((c) => (
               <option key={c.code} value={c.code}>
                 {c.symbol} · {c.nameHe} ({c.code})
               </option>
@@ -2540,7 +2567,7 @@ function TokenPanel() {
       // A bad paste is ordinary input, not an error: a truncated copy or the
       // wrong clipboard entry both land here.
       const applied = r?.prefs ? applyPrefs(r.prefs) : 0;
-      setMessage(r ? t.tokenImported(r.games, r.points, applied) : t.tokenBad);
+      setMessage(r ? t.tokenImported(r.games, r.points, applied, r.settings ?? 0) : t.tokenBad);
       if (r) setPaste('');
     } catch {
       setMessage(t.tokenFailed);

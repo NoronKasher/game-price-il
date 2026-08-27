@@ -40,6 +40,7 @@ const PORTABLE_KEYS = [
   'gp_gamepass_alerts',
   'gp_gamepass_ack',
   'gp_owned_apps',
+  'gp_wide_currencies',
 ] as const;
 
 /**
@@ -158,6 +159,33 @@ export function loadTickerMotion(): boolean {
   return true;
 }
 export const saveTickerMotion = (on: boolean) => saveMotionPref(TICKER_KEY, on);
+
+const WIDE_CUR_KEY = 'gp_wide_currencies';
+
+/**
+ * Offer every currency the rate feed can price, not just the ones shops quote.
+ *
+ * Off by default and warned about, because it changes what a price MEANS. The
+ * standard list holds the currencies stores actually charge in, so ₺257 is what
+ * Steam Turkey will take. A currency from the wider list is our own conversion
+ * of a shekel figure — genuinely useful for "roughly what is that in rand", and
+ * not a number any shop will honour.
+ */
+export function loadWideCurrencies(): boolean {
+  try {
+    return localStorage.getItem(WIDE_CUR_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function saveWideCurrencies(on: boolean): void {
+  try {
+    localStorage.setItem(WIDE_CUR_KEY, on ? '1' : '0');
+  } catch {
+    /* nothing to do */
+  }
+}
 
 const QUIET_KEY = 'gp_quiet_notices';
 

@@ -94,6 +94,13 @@ interface CompactPayload {
   d: { s: string[]; r: string[]; k: string[]; c: string[] };
   i: CompactItem[];
   prefs?: Record<string, string>;
+  /**
+   * The settings that live in the database rather than the browser: display
+   * currency, the alert rule, the capture interval. They were the other half
+   * that did not travel — a token restored your list and your dismissed
+   * notices, then quietly put your alert rule back to default.
+   */
+  settings?: Record<string, string>;
 }
 
 interface CompactItem {
@@ -130,7 +137,10 @@ export interface TokenPayload {
 
 export interface DecodedToken {
   items: unknown[];
+  /** Browser-side choices — dismissed notices, the ticker, the owned list. */
   prefs: Record<string, string>;
+  /** Database-side settings — display currency, alert rule, capture interval. */
+  settings: Record<string, string>;
 }
 
 /** "2026-08-01 10:00:00" → epoch seconds. 0 when it cannot be read. */
@@ -176,7 +186,11 @@ interface ExportShape {
 }
 
 /** The list as a token. `items` is whatever exportAll() produced. */
-export async function encodeToken(items: unknown[], prefs?: Record<string, string>): Promise<string> {
+export async function encodeToken(
+  items: unknown[],
+  prefs?: Record<string, string>,
+  settings?: Record<string, string>
+): Promise<string> {
   const stores = makeDict();
   const regions = makeDict();
   const kinds = makeDict();
@@ -220,6 +234,7 @@ export async function encodeToken(items: unknown[], prefs?: Record<string, strin
     i: compactItems,
   };
   if (prefs && Object.keys(prefs).length > 0) payload.prefs = prefs;
+  if (settings && Object.keys(settings).length > 0) payload.settings = settings;
   return PREFIX + toBase64Url(await gzip(JSON.stringify(payload)));
 }
 
@@ -275,13 +290,15 @@ export async function decodeToken(raw: string): Promise<DecodedToken | null> {
   if (!bytes || bytes.length === 0) return null;
   try {
     const parsed = JSON.parse(await gunzip(bytes)) as TokenPayload | CompactPayload;
-    const prefs =
-      parsed?.prefs && typeof parsed.prefs === 'object' && !Array.isArray(parsed.prefs) ? parsed.prefs : {};
+    const bag = (v: unknown): Record<string, string> =>
+      v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, string>) : {};
+    const prefs = bag(parsed?.prefs);
+    const settings = bag((parsed as CompactPayload)?.settings);
     // v2 is the compact shape; v1 is the plain export, still read so a token
     // somebody saved before this change keeps working.
-    if (parsed?.v === 2) return { items: expand(parsed as CompactPayload), prefs };
+    if (parsed?.v === 2) return { items: expand(parsed as CompactPayload), prefs, settings };
     const items = (parsed as TokenPayload)?.items;
-    return Array.isArray(items) ? { items, prefs } : null;
+    return Array.isArray(items) ? { items, prefs, settings } : null;
   } catch {
     return null;
   }

@@ -22,7 +22,7 @@ import { runHealthCheck, lastHealthReport, healthCheckDue } from '../../server/s
 import { hasApiKey, setApiKey, apiKeySource, type ApiKeyName } from './keys.browser.ts';
 import { currentSearchHash, searchHashSource } from '../../server/src/adapters/psn.ts';
 import { noteHashSaved } from './psnHash.browser.ts';
-import { setSetting, getSetting } from './db.browser.ts';
+import { setSetting, getSetting, exportSettings, importSettings } from './db.browser.ts';
 import {
   ready,
   flush,
@@ -124,6 +124,22 @@ const DISPLAY_CURRENCIES = [
   'USD', 'EUR', 'GBP', 'TRY', 'UAH', 'ARS', 'BRL', 'INR', 'KZT', 'ZAR', 'MXN', 'PLN',
   'JPY', 'KRW', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK', 'CNY', 'HKD', 'SGD', 'TWD', 'THB',
   'IDR', 'MYR', 'PHP', 'VND', 'CLP', 'COP', 'PEN', 'SAR', 'AED',
+  // The wider set, offered only when the user switches it on. Sent regardless
+  // because the rate feed returns all 166 in one cached response — asking for
+  // these costs nothing, and fetching them only after the switch is flipped
+  // would make every price on screen flicker at that moment.
+  //
+  // Deliberately absent: IRR, SYP, KPW, CUP, AFN, SDG, VES, MMK, BYN, LBP,
+  // YER, SOS, LYD, IQD — each under a comprehensive embargo, an Israeli trade
+  // prohibition, or with no convertible market, so a price in one describes a
+  // purchase nobody reading this can lawfully make. RUB stays: sanctioned in
+  // ways that affect payment rails, not a jurisdiction Israelis may not
+  // transact with, and Steam still publishes rouble prices people compare to.
+  'RUB', 'CZK', 'HUF', 'RON', 'BGN', 'HRK', 'RSD', 'ISK', 'DKK', 'NZD', 'EGP', 'MAD',
+  'JOD', 'BHD', 'KWD', 'OMR', 'QAR', 'AZN', 'GEL', 'AMD', 'UZS', 'PKR', 'BDT', 'LKR',
+  'NPR', 'KHR', 'MNT', 'NGN', 'KES', 'GHS', 'TZS', 'UGX', 'ETB', 'DZD', 'TND', 'BOB',
+  'PYG', 'UYU', 'CRC', 'GTQ', 'DOP', 'JMD', 'TTD', 'MUR', 'MDL', 'MKD', 'ALL', 'BAM',
+  'BWP', 'NAD', 'ZMW', 'XOF', 'XAF', 'FJD', 'PGK', 'BND', 'MOP', 'LAK', 'MVR',
 ];
 
 async function settingsPayload() {
@@ -444,7 +460,7 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
     /** The tracked list as one pasteable string. Same code the server runs. */
     exportToken: withDb(async (withHistory = true, prefs?: Record<string, string>) => {
       const items = exportAll().map((item) => (withHistory ? item : { ...item, history: [] }));
-      return { token: await encodeToken(items, prefs) };
+      return { token: await encodeToken(items, prefs, exportSettings()) };
     }),
 
     importToken: withDb(async (token: string) => {
@@ -452,9 +468,11 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
       // A bad paste is expected input. It comes back as null and the UI says so.
       if (!decoded) return null;
       const result = importAll(decoded.items);
+      // Settings are applied here — they live in this database. The prefs go
+      // back to the page, which owns those.
+      const settings = importSettings(decoded.settings);
       await flush();
-      // Preferences go back to the page to apply — they belong in its storage.
-      return { ...result, prefs: decoded.prefs };
+      return { ...result, prefs: decoded.prefs, settings };
     }),
 
     /**

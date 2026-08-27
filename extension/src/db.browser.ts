@@ -635,6 +635,52 @@ export interface ExportItem {
   }[];
 }
 
+/**
+ * The settings that travel with a tracked list — the same list the server
+ * carries, so a token made in either shell restores the same things in either.
+ *
+ * Explicit, not "every settings row". `psn_search_hash` is discovered per
+ * install and means nothing elsewhere, and an API key is the user's own
+ * credential — a token is a string people paste to each other.
+ *
+ * WHEN A SETTING IS ADDED, ADD IT HERE AND IN server/src/db.ts. A preference
+ * that silently does not travel is the exact failure the token exists to
+ * prevent, and it fails quietly: nothing errors, the setting is just back to
+ * default on the new machine.
+ */
+const PORTABLE_SETTINGS = [
+  'display_currency',
+  'secondary_currency',
+  'capture_days_global',
+  'alert_any_drop',
+  'alert_pct_global',
+  'alert_price_global',
+  'alert_price_ccy_global',
+  'alert_scope_global',
+];
+
+export function exportSettings(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of PORTABLE_SETTINGS) {
+    const value = getSetting(key);
+    if (value !== null && value !== '') out[key] = value;
+  }
+  return out;
+}
+
+/** Only keys on the list above are written, however many the token claims. */
+export function importSettings(settings: unknown): number {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return 0;
+  const allowed = new Set(PORTABLE_SETTINGS);
+  let applied = 0;
+  for (const [key, value] of Object.entries(settings as Record<string, unknown>)) {
+    if (!allowed.has(key) || typeof value !== 'string' || value.length > 64) continue;
+    setSetting(key, value);
+    applied++;
+  }
+  return applied;
+}
+
 export function exportAll(): ExportItem[] {
   return listWishlist().map((row) => ({
     title: row.title,

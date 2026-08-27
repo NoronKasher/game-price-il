@@ -290,7 +290,13 @@ export const api = {
     }).then((r) => json<{ token: string }>(r)),
   importToken: async (
     token: string
-  ): Promise<{ games: number; points: number; prefs?: Record<string, string> } | null> => {
+  ): Promise<{
+    games: number;
+    points: number;
+    prefs?: Record<string, string>;
+    /** How many database-side settings the token restored. */
+    settings?: number;
+  } | null> => {
     const res = await fetch('/api/import/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

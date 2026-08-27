@@ -787,6 +787,58 @@ export interface ExportItem {
 }
 
 /** Everything the user tracks + full history — a shareable, re-importable file. */
+/**
+ * The settings that travel with a tracked list.
+ *
+ * An explicit list, and deliberately not "every row in the settings table".
+ * Two of those rows must never leave this machine: `psn_search_hash` is
+ * discovered per install and is meaningless elsewhere, and any API key is the
+ * user's own credential — a token is a string people paste to each other, and
+ * carrying a key inside one would hand it over with the list.
+ *
+ * WHEN A SETTING IS ADDED, ADD IT HERE. The whole point of the token is that
+ * arriving on a new machine feels like arriving at your own; a preference that
+ * silently does not travel is the exact failure it exists to prevent, and it
+ * fails quietly — nothing errors, the setting is just back to default.
+ */
+const PORTABLE_SETTINGS = [
+  'display_currency',
+  'secondary_currency',
+  'capture_days_global',
+  'alert_any_drop',
+  'alert_pct_global',
+  'alert_price_global',
+  'alert_price_ccy_global',
+  'alert_scope_global',
+] as const;
+
+/** The portable settings as they currently stand. Absent keys stay absent. */
+export function exportSettings(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of PORTABLE_SETTINGS) {
+    const value = getSetting(key);
+    if (value !== null && value !== '') out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * Apply carried settings. Only keys on the list above are written, however many
+ * the token claims — a token is untrusted input, and it must not be a way to
+ * set arbitrary rows in somebody's settings table.
+ */
+export function importSettings(settings: unknown): number {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return 0;
+  const allowed = new Set<string>(PORTABLE_SETTINGS);
+  let applied = 0;
+  for (const [key, value] of Object.entries(settings as Record<string, unknown>)) {
+    if (!allowed.has(key) || typeof value !== 'string' || value.length > 64) continue;
+    setSetting(key, value);
+    applied++;
+  }
+  return applied;
+}
+
 export function exportAll(): ExportItem[] {
   return listWishlist().map((row) => ({
     title: row.title,

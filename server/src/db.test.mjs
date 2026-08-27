@@ -204,3 +204,40 @@ test('alert scopes read the right price series for the game', async () => {
   assert.equal(priceOf('auto', 'JP'), 90);
   assert.equal(priceOf('official', 'JP'), 150);
 });
+
+/* ── Which settings a token may carry ────────────────────────────────────── */
+
+test('the portable settings round-trip', async () => {
+  const { exportSettings, importSettings, setSetting, getSetting } = await import('./db.ts');
+  setSetting('display_currency', 'UAH');
+  setSetting('capture_days_global', '14');
+  const carried = exportSettings();
+  assert.equal(carried.display_currency, 'UAH');
+  assert.equal(carried.capture_days_global, '14');
+
+  setSetting('display_currency', 'ILS');
+  assert.equal(importSettings(carried), Object.keys(carried).length);
+  assert.equal(getSetting('display_currency'), 'UAH', 'the carried value wins on import');
+});
+
+test('a token cannot set settings that are not on the list', async () => {
+  // The list is a whitelist for a reason: a token is a string people paste to
+  // each other, so it must not be able to write arbitrary rows — least of all
+  // the PlayStation hash, which is per-install, or anything holding a key.
+  const { importSettings, getSetting } = await import('./db.ts');
+  const applied = importSettings({
+    psn_search_hash: 'deadbeef'.repeat(8),
+    api_key_itad: 'stolen',
+    display_currency: 'EUR',
+  });
+  assert.equal(applied, 1, 'only the one legitimate setting');
+  assert.notEqual(getSetting('psn_search_hash'), 'deadbeef'.repeat(8));
+  assert.notEqual(getSetting('api_key_itad'), 'stolen');
+});
+
+test('junk in the settings slot is ignored rather than thrown at', async () => {
+  const { importSettings } = await import('./db.ts');
+  for (const junk of [null, undefined, 'a string', 42, ['an', 'array']]) {
+    assert.equal(importSettings(junk), 0, JSON.stringify(junk));
+  }
+});

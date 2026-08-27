@@ -66,6 +66,8 @@ import {
   type SourceRef,
   type WishlistRow,
   addNotification,
+  exportSettings,
+  importSettings,
 } from './db.ts';
 import { steamMeta } from './adapters/steam.ts';
 import { toILS, ilsTo } from './rates.ts';
@@ -591,6 +593,22 @@ const DISPLAY_CURRENCIES = [
   'USD', 'EUR', 'GBP', 'TRY', 'UAH', 'ARS', 'BRL', 'INR', 'KZT', 'ZAR', 'MXN', 'PLN',
   'JPY', 'KRW', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK', 'CNY', 'HKD', 'SGD', 'TWD', 'THB',
   'IDR', 'MYR', 'PHP', 'VND', 'CLP', 'COP', 'PEN', 'SAR', 'AED',
+  // The wider set, offered only when the user switches it on. Sent regardless
+  // because the rate feed returns all 166 in one cached response — asking for
+  // these costs nothing, and fetching them only after the switch is flipped
+  // would make every price on screen flicker at that moment.
+  //
+  // Deliberately absent: IRR, SYP, KPW, CUP, AFN, SDG, VES, MMK, BYN, LBP,
+  // YER, SOS, LYD, IQD — each under a comprehensive embargo, an Israeli trade
+  // prohibition, or with no convertible market, so a price in one describes a
+  // purchase nobody reading this can lawfully make. RUB stays: sanctioned in
+  // ways that affect payment rails, not a jurisdiction Israelis may not
+  // transact with, and Steam still publishes rouble prices people compare to.
+  'RUB', 'CZK', 'HUF', 'RON', 'BGN', 'HRK', 'RSD', 'ISK', 'DKK', 'NZD', 'EGP', 'MAD',
+  'JOD', 'BHD', 'KWD', 'OMR', 'QAR', 'AZN', 'GEL', 'AMD', 'UZS', 'PKR', 'BDT', 'LKR',
+  'NPR', 'KHR', 'MNT', 'NGN', 'KES', 'GHS', 'TZS', 'UGX', 'ETB', 'DZD', 'TND', 'BOB',
+  'PYG', 'UYU', 'CRC', 'GTQ', 'DOP', 'JMD', 'TTD', 'MUR', 'MDL', 'MKD', 'ALL', 'BAM',
+  'BWP', 'NAD', 'ZMW', 'XOF', 'XAF', 'FJD', 'PGK', 'BND', 'MOP', 'LAK', 'MVR',
 ];
 
 async function settingsPayload() {
@@ -734,7 +752,7 @@ app.post('/api/export/token', async (req, res) => {
   // The browser's own remembered choices ride along. They live in localStorage,
   // which is right for per-browser UI state, and were therefore the one thing
   // that could not travel with everything else.
-  res.json({ token: await encodeToken(items, prefs) });
+  res.json({ token: await encodeToken(items, prefs, exportSettings()) });
 });
 
 /**
@@ -749,7 +767,10 @@ app.post('/api/import/token', async (req, res) => {
   if (!decoded) return res.status(400).json({ error: 'bad_token' });
   // The preferences go back to the CLIENT to apply: they belong in that
   // browser's storage, and the server has no business holding them.
-  res.json({ ...importAll(decoded.items), prefs: decoded.prefs });
+  // Settings are applied HERE — they live in this database, not the browser.
+  // The prefs go back to the client, which owns those.
+  const settings = importSettings(decoded.settings);
+  res.json({ ...importAll(decoded.items), prefs: decoded.prefs, settings });
 });
 
 /**

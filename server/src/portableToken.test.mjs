@@ -223,3 +223,33 @@ test('looksLikeToken tells a paste apart from a file', () => {
   assert.equal(looksLikeToken('  VGPT1-abc'), true);
   assert.equal(looksLikeToken('{"items":[]}'), false);
 });
+
+/* ── Settings, the other half that did not travel ────────────────────────── */
+
+test('database-side settings travel with the list', async () => {
+  // The token restored your games and your dismissed notices, then quietly put
+  // your display currency and alert rule back to default. Nothing errored — the
+  // settings simply were not in the string.
+  const settings = { display_currency: 'TRY', secondary_currency: 'ILS', capture_days_global: '3' };
+  const back = await decodeToken(await encodeToken(exported, {}, settings));
+  assert.deepEqual(back.settings, settings);
+});
+
+test('a token with no settings yields an empty object, not undefined', async () => {
+  assert.deepEqual((await decodeToken(await encodeToken(exported))).settings, {});
+});
+
+test('a v1 token decodes with empty settings rather than throwing', async () => {
+  const legacy = { v: 1, at: '2026-08-01T00:00:00Z', items: exported };
+  const bytes = new Uint8Array(
+    await new Response(
+      new Blob([JSON.stringify(legacy)]).stream().pipeThrough(new CompressionStream('gzip'))
+    ).arrayBuffer()
+  );
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  const token = 'VGPT1-' + btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const back = await decodeToken(token);
+  assert.deepEqual(back.settings, {});
+  assert.deepEqual(back.items, exported);
+});

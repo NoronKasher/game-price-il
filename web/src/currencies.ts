@@ -66,7 +66,95 @@ export const ALL_CURRENCIES: Currency[] = [
 /** The three the header offers. Everything else lives in Settings. */
 export const QUICK_CURRENCIES = ['ILS', 'USD', 'EUR'];
 
-const BY_CODE = new Map(ALL_CURRENCIES.map((c) => [c.code, c]));
+/**
+ * The wider list, shown only when the user asks for it.
+ *
+ * These are real currencies with real published rates, but no shop this tool
+ * reads prices from quotes in them. A price shown in one is our conversion of
+ * a shekel figure, which is a useful thing to know and is NOT what any store
+ * will charge — which is exactly what the warning beside the switch says.
+ *
+ * WHAT IS DELIBERATELY ABSENT, and why, so the list can be argued with rather
+ * than guessed at. Not included: IRR (Iran), SYP (Syria), KPW (North Korea),
+ * CUP (Cuba), AFN (Afghanistan), SDG (Sudan), VES (Venezuela), MMK (Myanmar),
+ * BYN (Belarus), LBP (Lebanon), YER (Yemen), SOS (Somalia), LYD (Libya),
+ * IQD (Iraq). Every one of them sits under a comprehensive embargo, an
+ * Israeli trade prohibition, or has no functioning convertible market — so a
+ * "price" in any of them describes a purchase nobody reading this can lawfully
+ * make. RUB is included: Russia is sanctioned in ways that affect payment
+ * rails, not a jurisdiction an Israeli may not transact with at all, and
+ * Steam still publishes rouble prices people genuinely compare against.
+ */
+export const EXTRA_CURRENCIES: Currency[] = [
+  { code: 'RUB', symbol: '₽', nameHe: 'רובל רוסי' },
+  { code: 'CZK', symbol: 'Kč', nameHe: 'קורונה צ׳כית' },
+  { code: 'HUF', symbol: 'Ft', nameHe: 'פורינט הונגרי' },
+  { code: 'RON', symbol: 'lei', nameHe: 'לאו רומני' },
+  { code: 'BGN', symbol: 'лв', nameHe: 'לב בולגרי' },
+  { code: 'HRK', symbol: 'kn', nameHe: 'קונה קרואטית' },
+  { code: 'RSD', symbol: 'дин', nameHe: 'דינר סרבי' },
+  { code: 'ISK', symbol: 'kr', nameHe: 'כתר איסלנדי' },
+  { code: 'DKK', symbol: 'kr', nameHe: 'כתר דני' },
+  { code: 'NZD', symbol: 'NZ$', nameHe: 'דולר ניו־זילנדי' },
+  { code: 'EGP', symbol: 'E£', nameHe: 'לירה מצרית' },
+  { code: 'MAD', symbol: 'MAD', nameHe: 'דירהם מרוקאי' },
+  { code: 'JOD', symbol: 'JD', nameHe: 'דינר ירדני' },
+  { code: 'BHD', symbol: 'BD', nameHe: 'דינר בחרייני' },
+  { code: 'KWD', symbol: 'KD', nameHe: 'דינר כווייתי' },
+  { code: 'OMR', symbol: 'OMR', nameHe: 'ריאל עומאני' },
+  { code: 'QAR', symbol: 'QR', nameHe: 'ריאל קטארי' },
+  { code: 'AZN', symbol: '₼', nameHe: 'מאנת אזרבייג׳ני' },
+  { code: 'GEL', symbol: '₾', nameHe: 'לארי גיאורגי' },
+  { code: 'AMD', symbol: '֏', nameHe: 'דרם ארמני' },
+  { code: 'UZS', symbol: 'soʼm', nameHe: 'סום אוזבקי' },
+  { code: 'PKR', symbol: '₨', nameHe: 'רופי פקיסטני' },
+  { code: 'BDT', symbol: '৳', nameHe: 'טאקה בנגלדשי' },
+  { code: 'LKR', symbol: 'Rs', nameHe: 'רופי סרי־לנקי' },
+  { code: 'NPR', symbol: 'Rs', nameHe: 'רופי נפאלי' },
+  { code: 'KHR', symbol: '៛', nameHe: 'ריאל קמבודי' },
+  { code: 'MNT', symbol: '₮', nameHe: 'טוגריק מונגולי' },
+  { code: 'NGN', symbol: '₦', nameHe: 'נאירה ניגרית' },
+  { code: 'KES', symbol: 'KSh', nameHe: 'שילינג קנייתי' },
+  { code: 'GHS', symbol: 'GH₵', nameHe: 'סדי גאני' },
+  { code: 'TZS', symbol: 'TSh', nameHe: 'שילינג טנזני' },
+  { code: 'UGX', symbol: 'USh', nameHe: 'שילינג אוגנדי' },
+  { code: 'ETB', symbol: 'Br', nameHe: 'בר אתיופי' },
+  { code: 'DZD', symbol: 'DA', nameHe: 'דינר אלג׳יראי' },
+  { code: 'TND', symbol: 'DT', nameHe: 'דינר תוניסאי' },
+  { code: 'BOB', symbol: 'Bs', nameHe: 'בוליביאנו' },
+  { code: 'PYG', symbol: '₲', nameHe: 'גוארני פרגוואי' },
+  { code: 'UYU', symbol: '$U', nameHe: 'פזו אורוגוואי' },
+  { code: 'CRC', symbol: '₡', nameHe: 'קולון קוסטה־ריקני' },
+  { code: 'GTQ', symbol: 'Q', nameHe: 'קצל גואטמלי' },
+  { code: 'DOP', symbol: 'RD$', nameHe: 'פזו דומיניקני' },
+  { code: 'JMD', symbol: 'J$', nameHe: 'דולר ג׳מייקני' },
+  { code: 'TTD', symbol: 'TT$', nameHe: 'דולר טרינידדי' },
+  { code: 'MUR', symbol: '₨', nameHe: 'רופי מאוריציאני' },
+  { code: 'MDL', symbol: 'L', nameHe: 'לאו מולדובי' },
+  { code: 'MKD', symbol: 'ден', nameHe: 'דינר מקדוני' },
+  { code: 'ALL', symbol: 'L', nameHe: 'לק אלבני' },
+  { code: 'BAM', symbol: 'KM', nameHe: 'מארק בוסני' },
+  { code: 'BWP', symbol: 'P', nameHe: 'פולה בוצוואני' },
+  { code: 'NAD', symbol: 'N$', nameHe: 'דולר נמיבי' },
+  { code: 'ZMW', symbol: 'ZK', nameHe: 'קוואצ׳ה זמבית' },
+  { code: 'XOF', symbol: 'CFA', nameHe: 'פרנק מערב־אפריקאי' },
+  { code: 'XAF', symbol: 'FCFA', nameHe: 'פרנק מרכז־אפריקאי' },
+  { code: 'FJD', symbol: 'FJ$', nameHe: 'דולר פיג׳י' },
+  { code: 'PGK', symbol: 'K', nameHe: 'קינה פפואית' },
+  { code: 'BND', symbol: 'B$', nameHe: 'דולר ברוניי' },
+  { code: 'MOP', symbol: 'MOP$', nameHe: 'פטקה מקאואנית' },
+  { code: 'LAK', symbol: '₭', nameHe: 'קיפ לאוסי' },
+  { code: 'MVR', symbol: 'Rf', nameHe: 'רופיה מלדיבית' },
+];
+
+/** Everything, for the picker when the wider list is switched on. */
+export const WIDE_CURRENCIES: Currency[] = [...ALL_CURRENCIES, ...EXTRA_CURRENCIES];
+
+// Built from BOTH lists: a currency chosen from the wider set still needs its
+// symbol and Hebrew name wherever a price is printed.
+const BY_CODE = new Map<string, Currency>();
+
+for (const c of [...ALL_CURRENCIES, ...EXTRA_CURRENCIES]) BY_CODE.set(c.code, c);
 
 export function currencyInfo(code: string): Currency {
   // An unknown code prints as its own name, which is what a currency with no

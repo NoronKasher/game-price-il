@@ -76,3 +76,27 @@ test('…but a game whose name contains "upgrade" is still a game', () => {
   assert.equal(describeProduct('Diablo IV').dlc, false);
   assert.equal(describeProduct('Diablo IV Standard Edition').dlc, false);
 });
+
+test('the Hebrew alias table is not silently losing entries', async () => {
+  // It nearly did. A script that rebuilt this table parsed only the
+  // double-quoted entries and dropped the 137 written with single quotes —
+  // nothing errored, the aliases were just gone, and "סייברפאנק" stopped
+  // resolving. A floor on the count is what turns that into a failure.
+  const { readFile } = await import('node:fs/promises');
+  const src = await readFile(new URL('./hebrewTitles.ts', import.meta.url), 'utf8');
+  const block = src.slice(src.indexOf('const ALIASES'), src.indexOf('\n};', src.indexOf('const ALIASES')));
+  const entries = block.split('\n').filter((l) => /^\s*["']/.test(l)).length;
+  assert.ok(entries >= 480, `the table has shrunk to ${entries} entries`);
+
+  // And the ones people search for most must actually resolve.
+  const { toLatinQuery } = await import('./hebrewTitles.ts');
+  for (const [hebrew, latin] of [
+    ['סייברפאנק', 'Cyberpunk 2077'],
+    ['זלדה', 'Zelda'],
+    ['מלחמת הכוכבים', 'Star Wars'],
+    ['פרסונה 5', 'Persona 5'],
+    ['ציוויליזציה', 'Civilization'],
+  ]) {
+    assert.equal(toLatinQuery(hebrew)?.query, latin, hebrew);
+  }
+});
