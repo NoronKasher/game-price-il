@@ -2,7 +2,6 @@ import {
   Fragment,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -1087,15 +1086,12 @@ function SearchView({
     () => searchExamples[Math.floor(Math.random() * searchExamples.length)]
   );
   // Which card is expanded into its inline price board (one at a time). The
-  // opened card is REMOVED from the grid — it has "gone into" the board — and,
-  // when animation is on, a fixed clone flies from the card's old spot into the
-  // board's game pane so the move reads as one object. `absorb` tracks that
-  // flight so the board's game pane stays hidden until the clone lands.
+  // opened card is REMOVED from the grid — it has "gone into" the board.
   const [expanded, setExpanded] = useState<{ key: string; platform: Platform } | null>(null);
   /** The results grid, so opening a board can scroll its top into view. */
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  const openBoard = (g: GameGroup, platform: Platform, cardEl: HTMLElement | null) => {
+  const openBoard = (g: GameGroup, platform: Platform) => {
     // Clicking the platform already open closes the board and restores the card.
     if (expanded && expanded.key === g.key && expanded.platform === platform) {
       setExpanded(null);
@@ -1366,7 +1362,7 @@ function SearchView({
                     <button
                       key={platform}
                       className={`chip ${platform}`}
-                      onClick={(e) => openBoard(g, platform, e.currentTarget.closest('.card'))}
+                      onClick={() => openBoard(g, platform)}
                     >
                       {platformNames[platform]}
                     </button>
@@ -1410,7 +1406,7 @@ function SearchView({
                         <button
                           key={platform}
                           className={`chip ${platform}`}
-                          onClick={(e) => openBoard(g, platform, e.currentTarget.closest('.card'))}
+                          onClick={() => openBoard(g, platform)}
                         >
                           {platformNames[platform]}
                         </button>

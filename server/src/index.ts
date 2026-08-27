@@ -2,9 +2,8 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import url from 'node:url';
-import { parseQuery, type Platform } from './search.ts';
-import { describeProduct, groupKey } from './normalize.ts';
-import type { GameHit, Offer, SourceAdapter } from './adapters/types.ts';
+import type { Platform } from './search.ts';
+import type { Offer, SourceAdapter } from './adapters/types.ts';
 import { asOffers } from './adapters/types.ts';
 import { encodeToken, decodeToken } from './portableToken.ts';
 import {
@@ -30,7 +29,6 @@ import { xbox } from './adapters/xbox.ts';
 import { nintendo } from './adapters/nintendo.ts';
 import { psn } from './adapters/psn.ts';
 import { gog } from './adapters/gog.ts';
-import { RateLimitedError, setPoliteStore } from './adapters/politeFetch.ts';
 import {
   addToWishlist,
   listWishlist,
@@ -73,7 +71,7 @@ import {
   allSettings,
 } from './db.ts';
 import { steamMeta } from './adapters/steam.ts';
-import { toILS, ilsTo } from './rates.ts';
+import { ilsTo } from './rates.ts';
 import { hasApiKey, setApiKey, apiKeySource, type ApiKeyName } from './keys.ts';
 import { isAlertMode, isAlertScope } from './alerts.ts';
 import { evaluateAlerts } from './notify.ts';
@@ -81,7 +79,7 @@ import { captureFromView, isCaptureDue } from './capture.ts';
 import { priceVerdict } from './verdict.ts';
 import { isAllowedRequestOrigin, resolveListenConfig } from './net.ts';
 import { suggestTitles } from './suggest.ts';
-import { searchGames, offersFor, steamAppIdOf, ALL_PLATFORMS } from './fanout.ts';
+import { searchGames, offersFor, steamAppIdOf } from './fanout.ts';
 import { historyCsv } from './csv.ts';
 import { tickerDeals, dealsPage } from './ticker.ts';
 import { bundlesForApp } from './bundle.ts';
@@ -116,6 +114,7 @@ import {
   waitForHashSaved,
   HOST_RECOVER_MARKER,
 } from './adapters/psnHash.ts';
+import { setPoliteStore } from './adapters/politeFetch.ts';
 import { setSetting, getSetting } from './db.ts';
 import { sqlitePoliteStore } from './politeStore.ts';
 
@@ -123,22 +122,6 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Gentle spacing between games in a batch capture, so many tracked games don't
  *  burst the official APIs at once (physical stores are already paced by politeFetch). */
 const GAME_GAP_MS = 1500;
-
-/** Per-source outcome of a fan-out, so the UI can distinguish "no results" from "source broke". */
-interface SourceStatus {
-  id: string;
-  name: string;
-  ok: boolean;
-  reason?: 'error' | 'rate_limited';
-  count: number;
-}
-
-/** Classify a thrown error: a self-imposed rate-limit/back-off vs a genuine failure. */
-function statusFor(source: SourceAdapter, err: unknown): SourceStatus {
-  const rateLimited = err instanceof RateLimitedError;
-  if (!rateLimited) console.error(`source ${source.id} failed:`, err);
-  return { id: source.id, name: source.nameHe, ok: false, reason: rateLimited ? 'rate_limited' : 'error', count: 0 };
-}
 
 /** Source registry — adding a store means adding one adapter here. */
 const sources: SourceAdapter[] = [

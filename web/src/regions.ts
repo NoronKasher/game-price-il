@@ -68,8 +68,6 @@ export function savePreferredRegion(market: string): void {
  * On by default; the settings page can turn it off for instant opens (and
  * `prefers-reduced-motion` disables the motion regardless of this flag).
  */
-import { loadMotionPref } from './prefs';
-
 
 /** Global "hide all game descriptions" preference. */
 const HIDE_ALL_KEY = 'gp_hide_all_desc';

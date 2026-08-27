@@ -1,5 +1,11 @@
 {
   "compilerOptions": {
+    /* Dead code is a bug that compiles. Both shells had accumulated it —
+       index.ts still held a statusFor/SourceStatus pair that had moved to
+       fanout.ts, and App.tsx carried an argument for an animation that had
+       been removed. None of it failed; it just sat there misleading readers. */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
