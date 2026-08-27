@@ -249,6 +249,10 @@ export const t = {
       ...(others.length ? [`שפל בחלונות קצרים יותר — ${others.join(' · ')}`] : []),
     ].join('\n'),
   // The tip jar. One line, no banner — see support.ts.
+  // Jumping to a setting, and finding one by name.
+  setNavLabel: 'ניווט בהגדרות',
+  setNavSearch: 'חיפוש הגדרה…',
+  setNavNone: (q: string) => `לא נמצאה הגדרה שמתאימה ל"${q}"`,
   // The diagnostic export — "הוראות הפעלה" and what the file does and does not hold.
   diagTitle: 'אבחון ותמיכה',
   diagHowtoTitle: 'הוראות הפעלה',

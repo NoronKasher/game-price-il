@@ -44,6 +44,7 @@ import { HoldToConfirm } from './HoldToConfirm';
 import { ALL_CURRENCIES, WIDE_CURRENCIES } from './currencies';
 import { DealsView } from './DealsView';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
+import { SettingsNav } from './SettingsNav';
 import { NoteEditor, NoteView } from './NoteEditor';
 import { supportLinks } from './support';
 import { SearchProgressBar, type ProgressState } from './SearchProgressBar';
@@ -2185,6 +2186,7 @@ function SettingsView({
 }) {
   const [bar, setBar] = useState(loadProgressBar);
   const [wideCurrencies, setWideCurrencies] = useState(loadWideCurrencies);
+  const settingsRoot = useRef<HTMLElement | null>(null);
   /**
    * The currencies the pickers offer.
    *
@@ -2214,7 +2216,11 @@ function SettingsView({
   const save = async (patch: { ggdeals?: string; itad?: string }) => setKeys(await api.setKeys(patch));
 
   return (
-    <section className="settings-view">
+    <section className="settings-view" ref={settingsRoot}>
+      {/* Reads the headings the page rendered, so a section added later
+          appears here for free. See SettingsNav for why it is not a list. */}
+      <SettingsNav container={settingsRoot} />
+
       {/*
         ORDER MATTERS, AND THE RULE IS: THE FURTHER DOWN, THE MORE A MISTAKE
         COSTS.

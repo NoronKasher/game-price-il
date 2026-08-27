@@ -567,6 +567,40 @@ body {
 .deals-more { margin: 16px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
 .deals-note { margin: 16px 0 0; max-width: 620px; font-size: 11px; color: var(--muted); line-height: 1.7; }
 
+/* ── settings navigation ── */
+.setnav {
+  position: sticky; top: 0; z-index: 3;
+  margin: 0 0 20px; padding: 12px 0 14px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.setnav-search {
+  width: min(340px, 100%); box-sizing: border-box;
+  padding: 7px 12px; border-radius: 8px;
+  background: var(--panel); color: var(--fg); border: 1px solid var(--line);
+  font: inherit; font-size: 13px;
+}
+.setnav-search:focus { outline: none; border-color: var(--amber); }
+.setnav-list {
+  list-style: none; margin: 10px 0 0; padding: 0;
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.setnav-item {
+  padding: 4px 11px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: none; color: var(--muted);
+  font: inherit; font-size: 11.5px;
+}
+.setnav-item:hover { border-color: var(--amber); color: var(--fg); }
+.setnav-item.on { border-color: var(--amber); color: var(--amber); }
+.setnav-empty { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+/* A brief mark so jumping to a heading that looks like every other heading
+   does not leave the reader wondering whether anything happened. */
+.set-flash { animation: setFlash 1.2s ease-out; }
+@keyframes setFlash {
+  0%, 40% { color: var(--amber); }
+  100% { color: inherit; }
+}
+
 /* ── the diagnostic export ── */
 .diag-howto {
   margin: 10px 0 14px; padding: 12px 14px; border-radius: 9px; max-width: 640px;
