@@ -10,6 +10,7 @@ import { steamAppIdOf } from '../../server/src/fanout.ts';
 import { ilsTo } from '../../server/src/rates.ts';
 import { refreshBadge } from './badge.ts';
 import { tickerDeals, dealsPage } from '../../server/src/ticker.ts';
+import { bundlesForApp } from '../../server/src/bundle.ts';
 import { encodeToken, decodeToken } from '../../server/src/portableToken.ts';
 import {
   fetchWishlist,
@@ -474,6 +475,15 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
      * extension can make it exactly as the server does.
      */
     ticker: async (limit?: number) => ({ deals: await tickerDeals(limit) }),
+
+    /** Bundles for a Steam game — same code the server runs. */
+    bundles: async (appId: string) => {
+      try {
+        return { bundles: await bundlesForApp(String(appId)) };
+      } catch {
+        return { bundles: [] };
+      }
+    },
 
     /** One page of the merged deals feed — same code the server runs. */
     deals: async (page: number, limit: number) => ({ deals: await dealsPage(page, limit) }),

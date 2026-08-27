@@ -574,6 +574,42 @@ body {
 .support-link:hover { border-color: var(--amber); }
 .support-note { font-size: 10.5px; color: var(--muted); }
 
+/* ── the bundle checker ── */
+.bundles { margin: 12px 0 0; }
+.bundles-toggle {
+  width: 100%; text-align: start; cursor: pointer; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+  font: inherit; font-size: 12.5px;
+}
+.bundles-toggle:hover { border-color: var(--amber); }
+.bundles-intro { margin: 8px 0 10px; font-size: 11px; color: var(--muted); line-height: 1.65; }
+.bundle {
+  margin-bottom: 10px; padding: 10px 11px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--panel);
+}
+.bundle-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 7px; }
+.bundle-name { font-weight: 600; font-size: 12.5px; flex: 1 1 auto; }
+.bundle-price { font-family: ui-monospace, monospace; color: var(--amber); font-size: 13px; }
+.bundle-cut { color: var(--down); font-weight: 700; font-size: 11px; }
+.bundle-apps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.bundle-app {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  font-size: 12px; padding: 3px 4px; border-radius: 6px;
+}
+.bundle-app:hover { background: color-mix(in srgb, var(--line) 40%, transparent); }
+.bundle-app.owned .bundle-app-title { color: var(--muted); text-decoration: line-through; }
+.bundle-app-title { flex: 1 1 auto; overflow-wrap: anywhere; }
+.bundle-app-price {
+  font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--muted);
+  direction: ltr; unicode-bidi: isolate; white-space: nowrap;
+}
+.bundle-verdict { margin: 9px 0 0; font-size: 12px; }
+.bundle-verdict.good { color: var(--down); }
+.bundle-verdict.bad { color: var(--up); }
+.bundle-verdict.none { color: var(--muted); }
+.bundle-math { margin: 3px 0 0; font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+.bundle-floor { color: color-mix(in srgb, var(--amber) 75%, var(--muted)); }
+
 /* ── per-game notes ── */
 .note-toggle { display: flex; align-items: center; gap: 7px; font-size: 12.5px; margin-bottom: 8px; cursor: pointer; }
 .note-editor { margin: 0 0 14px; max-width: 640px; }

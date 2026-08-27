@@ -136,6 +136,7 @@ export const api: typeof LiveApi = {
 
   ticker: (limit?: number) => call('ticker', limit),
   deals: (page: number, limit: number) => call('deals', page, limit),
+  bundles: (appId: string) => call('bundles', appId),
 
   /**
    * The canary reads its stored report for free; RUNNING one is sixteen real

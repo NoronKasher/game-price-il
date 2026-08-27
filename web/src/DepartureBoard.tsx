@@ -3,6 +3,7 @@ import { api } from './api';
 import { nis, platformNames, t } from './he';
 import { DlcPanel } from './DlcPanel';
 import { PriceStats } from './PriceStats';
+import { BundlePanel } from './BundlePanel';
 import { cleanStoreName, isDirectPurchase, regionLabel, storeFamily } from './source';
 import { offerRisk, boardHasRisk, loadRegionNoticeHidden, saveRegionNoticeHidden, type RowRisk } from './regionRisk';
 import { loadBoardView, type BoardView } from './regions';
@@ -157,6 +158,8 @@ export function DepartureBoard({
   const [ackBump, setAckBump] = useState(0);
 
   const refsKey = refs.map((r) => `${r.sourceId}:${r.sourceGameId}`).join('|');
+  /** Steam's app id for this game, when it has one — the bundle checker needs it. */
+  const steamAppId = refs.find((r) => r.sourceId === 'steam-regional')?.sourceGameId ?? null;
 
   useEffect(() => {
     let live = true;
@@ -468,6 +471,10 @@ export function DepartureBoard({
               different thing to buy, and mixing them into the board's rows was
               exactly the noise the DLC filter exists to remove. */}
           <DlcPanel title={title} platform={platform} />
+          {/* Bundles this game is sold in, and whether one is worth it GIVEN
+              what the user already owns. Steam only — see server/src/bundle.ts
+              for why that is what the shops publish rather than a shortcut. */}
+          {steamAppId && <BundlePanel steamAppId={steamAppId} />}
           {/* What the rows on the left add up to. Placed with the game rather
               than above the table because it is a property of the game, and
               because a summary that scrolls away with the board is a summary

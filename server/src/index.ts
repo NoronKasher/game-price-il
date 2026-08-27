@@ -79,6 +79,7 @@ import { suggestTitles } from './suggest.ts';
 import { searchGames, offersFor, steamAppIdOf, ALL_PLATFORMS } from './fanout.ts';
 import { historyCsv } from './csv.ts';
 import { tickerDeals, dealsPage } from './ticker.ts';
+import { bundlesForApp } from './bundle.ts';
 import { runHealthCheck, lastHealthReport, healthCheckDue } from './health.ts';
 import { currentSearchHash, searchHashSource } from './adapters/psn.ts';
 import {
@@ -810,6 +811,24 @@ app.post('/api/notify/gamepass', (req, res) => {
     scope: null,
   });
   res.json({ ok: true });
+});
+
+/**
+ * Which multi-game bundles a Steam game is sold in, with every game priced.
+ *
+ * Steam only, and see bundle.ts for why that is what the shops publish rather
+ * than a shortcut: GOG marks a product as a pack but will not say what is in
+ * one, and the consoles cannot answer "what do you own" without a login.
+ */
+app.get('/api/bundles/:appId', async (req, res) => {
+  const appId = String(req.params.appId ?? '').trim();
+  if (!/^\d+$/.test(appId)) return res.status(400).json({ error: 'bad app id' });
+  try {
+    res.json({ bundles: await bundlesForApp(appId) });
+  } catch {
+    // A bundle panel that cannot load is a missing panel, never a broken board.
+    res.json({ bundles: [] });
+  }
 });
 
 /** Ticker of today's deals worth caring about — see ticker.ts for what it picks. */

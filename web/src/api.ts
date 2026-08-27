@@ -3,6 +3,7 @@ import type {
   AlertRule,
   AlertScope,
   AppNotification,
+  Bundle,
   FirstCheckProgress,
   GameMeta,
   HealthReport,
@@ -221,6 +222,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     }).then((r) => json<{ ok: boolean }>(r)),
+
+  /** Multi-game bundles this Steam game is sold in, each with its games priced. */
+  bundles: (appId: string) =>
+    fetch(`/api/bundles/${encodeURIComponent(appId)}`).then((r) => json<{ bundles: Bundle[] }>(r)),
 
   /** Raise a "already on Game Pass" alert into the bell and the Settings log. */
   notifyGamePass: (title: string, platform: string, subscriptions: string[]) =>

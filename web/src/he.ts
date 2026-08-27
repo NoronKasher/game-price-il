@@ -262,6 +262,29 @@ export const t = {
     'הכלי מסביר כשחנות לא זמינה, וכשמחיר מאזור אחר דורש חשבון באותו אזור. אם כבר ברור לכם איך זה עובד, אפשר לכבות את ההסברים האלה לגמרי — הנתונים עצמם לא משתנים, רק ההודעות נעלמות.',
   quietHint:
     'ההגדרה הזו נשמרת גם בקוד ההעברה למכשיר אחר, יחד עם כל הודעה שסגרתם לתמיד.',
+  // The bundle checker. The one comparison a shop will never show you, because
+  // it depends on what you already own.
+  bundlesTitle: (n: number) => (n === 1 ? 'המשחק נמכר גם בחבילה' : `המשחק נמכר גם ב־${n} חבילות`),
+  bundlesIntro:
+    'סמנו מה כבר יש לכם, והכלי יחשב כמה יעלה לקנות רק את מה שחסר — לעומת מחיר החבילה. החנויות מציגות את ההנחה על החבילה המלאה, וזו לא בהכרח ההשוואה שלכם. הסימון נשמר אצלכם ונוסע עם קוד ההעברה.',
+  bundleNoSolo: 'לא נמכר בנפרד',
+  bundleAllOwned: 'כבר יש לכם את כל המשחקים בחבילה הזו.',
+  bundleNoneOwned: (sep: string) => `בנפרד כל המשחקים עולים ${sep}`,
+  bundleSome: (owned: number, sep: string) =>
+    owned === 1 ? `יש לכם כבר משחק אחד. מה שחסר עולה בנפרד ${sep}` : `יש לכם כבר ${owned}. מה שחסר עולה בנפרד ${sep}`,
+  // Nothing that is left can be bought on its own, so there is no comparison.
+  bundleOnlyWay: (n: number) =>
+    n === 1
+      ? 'המשחק שנותר לא נמכר בנפרד — החבילה היא הדרך היחידה לקבל אותו.'
+      : `${n} המשחקים שנותרו לא נמכרים בנפרד — החבילה היא הדרך היחידה לקבל אותם.`,
+  bundleSaves: (amount: string) => `החבילה זולה ב־${amount} ✓`,
+  bundleCosts: (amount: string) => `קנייה בנפרד זולה ב־${amount}`,
+  // Plural-aware: Hebrew does not let one form carry both, and "X, Y ו־Z לא
+  // נמכר בנפרד" reads as a mistake to anybody who speaks it.
+  bundleFloor: (titles: string[]) =>
+    titles.length === 1
+      ? `שימו לב: ${titles[0]} לא נמכר בנפרד, ולכן הסכום הזה הוא מינימום ולא מחיר מלא`
+      : `שימו לב: ${titles.join(', ')} לא נמכרים בנפרד, ולכן הסכום הזה הוא מינימום ולא מחיר מלא`,
   // A note about one game, in the user's own words and formatting. Behind a
   // checkbox so a list nobody has annotated stays a list of games.
   noteAdd: '📝 הוסיפו הערה למשחק הזה',

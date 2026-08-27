@@ -349,3 +349,21 @@ export interface FirstCheckProgress {
   title?: string;
   updated?: number;
 }
+
+/** One game inside a bundle, and what it costs on its own. */
+export interface BundleApp {
+  appId: string;
+  title: string;
+  /** Null means the store does not sell it separately — which is not zero. */
+  priceILS: number | null;
+}
+
+/** A multi-game package, priced. See server/src/bundle.ts. */
+export interface Bundle {
+  packageId: string;
+  name: string;
+  apps: BundleApp[];
+  priceILS: number;
+  discountPercent: number;
+  steamIndividualILS: number | null;
+}

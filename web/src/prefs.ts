@@ -39,6 +39,7 @@ const PORTABLE_KEYS = [
   'gp_ticker_motion',
   'gp_gamepass_alerts',
   'gp_gamepass_ack',
+  'gp_owned_apps',
 ] as const;
 
 /**
