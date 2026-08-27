@@ -1839,3 +1839,44 @@ a.dlc-offer-price:hover { text-decoration: underline; }
 .pstat-track:hover { filter: brightness(1.08); }
 .pstat-track:disabled { opacity: .6; cursor: default; }
 .pstat-tracked { margin: 12px 0 0; font-size: 12px; color: var(--down); }
+
+/*
+ * Touch targets.
+ *
+ * Measured at 375px: 42 of the 44 controls on the first screen were 35–37px
+ * tall. That is comfortable with a mouse and cramped under a thumb — Apple asks
+ * for 44pt, Android for 48dp, and the tab strip in particular sits close enough
+ * together that a near miss switches to the wrong page rather than doing
+ * nothing, which is the annoying kind of wrong.
+ *
+ * Gated on `pointer: coarse` rather than on width, because the question is what
+ * is doing the pointing, not how wide the screen is: a touchscreen laptop wants
+ * this at 1400px and a mouse-driven small window does not want it at 380px.
+ * Nothing changes for anybody using a mouse.
+ */
+@media (pointer: coarse) {
+  .tabs button,
+  .key-actions button,
+  .contact-go,
+  .diag-go,
+  .setnav-item,
+  .depsort button,
+  .bell {
+    min-height: 44px;
+  }
+
+  /* Inputs get the same floor, and 16px of text — anything smaller makes iOS
+     Safari zoom the whole page on focus, which then has to be pinched back. */
+  input,
+  select,
+  .pref-select,
+  .key-input {
+    min-height: 44px;
+    font-size: max(16px, 1rem);
+  }
+
+  /* Hairline gaps between adjacent controls are the other half of a mis-tap. */
+  .tabs {
+    gap: 0.4rem;
+  }
+}
