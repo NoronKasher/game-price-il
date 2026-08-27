@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
+import url from 'node:url';
 import { parseQuery, type Platform } from './search.ts';
 import { describeProduct, groupKey } from './normalize.ts';
 import type { GameHit, Offer, SourceAdapter } from './adapters/types.ts';
@@ -68,6 +69,8 @@ import {
   addNotification,
   exportSettings,
   importSettings,
+  trackedCounts,
+  allSettings,
 } from './db.ts';
 import { steamMeta } from './adapters/steam.ts';
 import { toILS, ilsTo } from './rates.ts';
@@ -82,6 +85,27 @@ import { searchGames, offersFor, steamAppIdOf, ALL_PLATFORMS } from './fanout.ts
 import { historyCsv } from './csv.ts';
 import { tickerDeals, dealsPage } from './ticker.ts';
 import { bundlesForApp } from './bundle.ts';
+import { buildReport, renderReport } from './diagnostics.ts';
+/**
+ * Read once at startup from the workspace manifest, so a report never claims a
+ * version that was hardcoded and then drifted.
+ */
+const APP_VERSION = (() => {
+  try {
+    const here = path.dirname(url.fileURLToPath(import.meta.url));
+    for (const up of ['../..', '..', '.']) {
+      const file = path.join(here, up, 'package.json');
+      if (fs.existsSync(file)) {
+        const pkg = JSON.parse(fs.readFileSync(file, 'utf8')) as { version?: string };
+        if (pkg.version) return pkg.version;
+      }
+    }
+  } catch {
+    /* a report with an unknown version is still a useful report */
+  }
+  return 'unknown';
+})();
+import { record } from './eventLog.ts';
 import { runHealthCheck, lastHealthReport, healthCheckDue } from './health.ts';
 import { currentSearchHash, searchHashSource } from './adapters/psn.ts';
 import {
@@ -883,6 +907,57 @@ app.get('/api/bundles/:appId', async (req, res) => {
     // A bundle panel that cannot load is a missing panel, never a broken board.
     res.json({ bundles: [] });
   }
+});
+
+/**
+ * A report the user can hand to somebody trying to help.
+ *
+ * `?q=` optionally runs a search and includes what the grouping actually did
+ * with the results — which is the only way a duplicate report is answerable
+ * without a long conversation. See diagnostics.ts for what is deliberately
+ * left out, and why.
+ */
+app.get('/api/diagnostics', async (req, res) => {
+  const query = String(req.query.q ?? '').trim().slice(0, 80);
+
+  let searchSample;
+  if (query) {
+    try {
+      const result = await searchGames(sources, query, true);
+      const hits = result.games.map((g) => ({
+        sourceId: g.sourceId,
+        title: g.title,
+        groupKey: g.groupKey,
+        platform: g.platform,
+        dlc: g.dlc,
+      }));
+      const byKey = new Map<string, { key: string; titles: string[]; platforms: string[] }>();
+      for (const h of hits) {
+        const group = byKey.get(h.groupKey) ?? { key: h.groupKey, titles: [], platforms: [] };
+        if (!group.titles.includes(h.title)) group.titles.push(h.title);
+        if (!group.platforms.includes(h.platform)) group.platforms.push(h.platform);
+        byKey.set(h.groupKey, group);
+      }
+      searchSample = { query, hits, groups: [...byKey.values()] };
+    } catch (err) {
+      record('error', 'diagnostics', err);
+    }
+  }
+
+  const report = buildReport({
+    shell: 'server',
+    version: APP_VERSION,
+    keysPresent: { ggdeals: hasApiKey('ggdeals'), itad: hasApiKey('itad') },
+    health: lastHealthReport(),
+    tracked: trackedCounts(),
+    settings: allSettings(),
+    environment: {
+      node: process.version,
+      platform: `${process.platform} ${process.arch}`,
+    },
+    searchSample,
+  });
+  res.json({ report, text: renderReport(report) });
 });
 
 /** Ticker of today's deals worth caring about — see ticker.ts for what it picks. */

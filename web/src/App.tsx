@@ -43,6 +43,7 @@ import { safeUrl } from './url';
 import { HoldToConfirm } from './HoldToConfirm';
 import { ALL_CURRENCIES, WIDE_CURRENCIES } from './currencies';
 import { DealsView } from './DealsView';
+import { DiagnosticsPanel } from './DiagnosticsPanel';
 import { NoteEditor, NoteView } from './NoteEditor';
 import { supportLinks } from './support';
 import { SearchProgressBar, type ProgressState } from './SearchProgressBar';
@@ -2395,6 +2396,8 @@ function SettingsView({
           clear it for good. At the bottom because it is consequential, not
           because it is an afterthought. */}
       <NotificationLog />
+
+      <DiagnosticsPanel />
 
       <SupportSection />
     </section>

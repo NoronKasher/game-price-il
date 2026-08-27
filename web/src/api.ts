@@ -223,6 +223,16 @@ export const api = {
       body: JSON.stringify(patch),
     }).then((r) => json<{ ok: boolean }>(r)),
 
+  /**
+   * A report the user can hand to somebody trying to help. `q` optionally runs
+   * a search and includes what the grouping did with it — the only way a
+   * duplicate report is answerable without a long conversation.
+   */
+  diagnostics: (q?: string) =>
+    fetch(`/api/diagnostics${q ? `?q=${encodeURIComponent(q)}` : ''}`).then((r) =>
+      json<{ report: unknown; text: string }>(r)
+    ),
+
   /** Multi-game bundles this Steam game is sold in, each with its games priced. */
   bundles: (appId: string) =>
     fetch(`/api/bundles/${encodeURIComponent(appId)}`).then((r) => json<{ bundles: Bundle[] }>(r)),

@@ -813,6 +813,30 @@ const PORTABLE_SETTINGS = [
 ] as const;
 
 /** The portable settings as they currently stand. Absent keys stay absent. */
+/**
+ * Counts for a diagnostic report — never the list itself.
+ *
+ * A tracked list is a shopping list. How many games somebody watches is a
+ * useful thing for a bug report to say; WHICH games is not, and the difference
+ * is the whole reason this returns three numbers.
+ */
+export function trackedCounts(): { games: number; historyPoints: number; withNotes: number } {
+  const one = (sql: string) => (db.prepare(sql).get() as { n: number } | undefined)?.n ?? 0;
+  return {
+    games: one('SELECT COUNT(*) AS n FROM wishlist'),
+    historyPoints: one('SELECT COUNT(*) AS n FROM price_history'),
+    withNotes: one("SELECT COUNT(*) AS n FROM wishlist WHERE note IS NOT NULL AND note != ''"),
+  };
+}
+
+/** Every settings row, for a report to filter. Callers must redact. */
+export function allSettings(): Record<string, string> {
+  const rows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+  const out: Record<string, string> = {};
+  for (const r of rows) out[r.key] = r.value;
+  return out;
+}
+
 export function exportSettings(): Record<string, string> {
   const out: Record<string, string> = {};
   for (const key of PORTABLE_SETTINGS) {

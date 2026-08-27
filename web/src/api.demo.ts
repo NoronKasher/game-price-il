@@ -561,6 +561,11 @@ export const api: typeof LiveApi = {
     return { ok: false as const, reason: 'demo' };
   },
 
+  /** The demo has no sources to diagnose and no database to count. */
+  async diagnostics() {
+    return { report: null, text: 'הדגמה — אין נתונים לאבחון.' };
+  },
+
   // Bundles need a live Steam call; the demo is a recording.
   async bundles() {
     return { bundles: [] };

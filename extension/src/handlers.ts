@@ -11,6 +11,8 @@ import { ilsTo } from '../../server/src/rates.ts';
 import { refreshBadge } from './badge.ts';
 import { tickerDeals, dealsPage } from '../../server/src/ticker.ts';
 import { bundlesForApp } from '../../server/src/bundle.ts';
+import { buildReport, renderReport } from '../../server/src/diagnostics.ts';
+import { record } from '../../server/src/eventLog.ts';
 import { encodeToken, decodeToken } from '../../server/src/portableToken.ts';
 import {
   fetchWishlist,
@@ -22,7 +24,14 @@ import { runHealthCheck, lastHealthReport, healthCheckDue } from '../../server/s
 import { hasApiKey, setApiKey, apiKeySource, type ApiKeyName } from './keys.browser.ts';
 import { currentSearchHash, searchHashSource } from '../../server/src/adapters/psn.ts';
 import { noteHashSaved } from './psnHash.browser.ts';
-import { setSetting, getSetting, exportSettings, importSettings } from './db.browser.ts';
+import {
+  setSetting,
+  getSetting,
+  exportSettings,
+  importSettings,
+  trackedCounts,
+  allSettings,
+} from './db.browser.ts';
 import {
   ready,
   flush,
@@ -524,6 +533,55 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
      * extension can make it exactly as the server does.
      */
     ticker: async (limit?: number) => ({ deals: await tickerDeals(limit) }),
+
+    /**
+     * A report the user can hand to somebody trying to help.
+     *
+     * Same builder the server uses, so both shells produce the same shape. The
+     * environment block differs, because what is worth knowing differs: the
+     * browser and the extension's own version, rather than Node's.
+     */
+    diagnostics: withDb(async (query?: string) => {
+      let searchSample;
+      const q = String(query ?? '').trim().slice(0, 80);
+      if (q) {
+        try {
+          const result = await searchGames(sources, q, true);
+          const hits = result.games.map((g) => ({
+            sourceId: g.sourceId,
+            title: g.title,
+            groupKey: g.groupKey,
+            platform: g.platform,
+            dlc: g.dlc,
+          }));
+          const byKey = new Map<string, { key: string; titles: string[]; platforms: string[] }>();
+          for (const h of hits) {
+            const group = byKey.get(h.groupKey) ?? { key: h.groupKey, titles: [], platforms: [] };
+            if (!group.titles.includes(h.title)) group.titles.push(h.title);
+            if (!group.platforms.includes(h.platform)) group.platforms.push(h.platform);
+            byKey.set(h.groupKey, group);
+          }
+          searchSample = { query: q, hits, groups: [...byKey.values()] };
+        } catch (err) {
+          record('error', 'diagnostics', err);
+        }
+      }
+
+      const report = buildReport({
+        shell: 'extension',
+        version: chrome.runtime.getManifest().version,
+        keysPresent: { ggdeals: hasApiKey('ggdeals'), itad: hasApiKey('itad') },
+        health: lastHealthReport(),
+        tracked: trackedCounts(),
+        settings: allSettings(),
+        environment: {
+          browser: navigator.userAgent,
+          language: navigator.language,
+        },
+        searchSample,
+      });
+      return { report, text: renderReport(report) };
+    }),
 
     /** Bundles for a Steam game — same code the server runs. */
     bundles: async (appId: string) => {

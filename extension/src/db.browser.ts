@@ -659,6 +659,23 @@ const PORTABLE_SETTINGS = [
   'alert_scope_global',
 ];
 
+/**
+ * Counts for a diagnostic report — never the list itself. A tracked list is a
+ * shopping list; how many is useful in a bug report, which games is not.
+ */
+export function trackedCounts(): { games: number; historyPoints: number; withNotes: number } {
+  return {
+    games: tables.wishlist.length,
+    historyPoints: tables.history.length,
+    withNotes: tables.wishlist.filter((r) => r.note).length,
+  };
+}
+
+/** Every settings row, for a report to filter. Callers must redact. */
+export function allSettings(): Record<string, string> {
+  return { ...tables.settings };
+}
+
 export function exportSettings(): Record<string, string> {
   const out: Record<string, string> = {};
   for (const key of PORTABLE_SETTINGS) {

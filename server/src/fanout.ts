@@ -1,5 +1,6 @@
 import type { GameHit, HistoryLow, Inclusion, Offer, SourceAdapter } from './adapters/types.ts';
 import { asOffers, inclusionsOf, lowsOf } from './adapters/types.ts';
+import { record } from './eventLog.ts';
 import type { Platform } from './search.ts';
 
 /** Which source a game came from, and its id there. */
@@ -136,6 +137,8 @@ export async function searchGames(
         outcome = { id: s.id, name: s.nameHe, ok: true, count: found.length };
       } catch (err) {
         outcome = statusFor(s, err);
+        // Recorded so a diagnostic report can name the source and the reason.
+        record('error', s.id, err);
       }
       status.push(outcome);
       // After the status is recorded, so a listener always sees a consistent
@@ -331,6 +334,9 @@ export async function offersFor(
         outcome = { id: source.id, name: source.nameHe, ok: true, count: got.length };
       } catch (err) {
         outcome = statusFor(source, err);
+        // Recorded so a diagnostic report can say WHICH source failed and how.
+        // Without this the failure is a caught exception nobody can see later.
+        record('error', source.id, err);
       }
       status.push(outcome);
       done++;
