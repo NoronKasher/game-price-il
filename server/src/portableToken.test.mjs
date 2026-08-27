@@ -31,6 +31,9 @@ const exported = [
     refs: [{ sourceId: 'steam-regional', sourceGameId: '367520' }],
     preferred_region: 'IL',
     hide_desc: 0,
+    // The export shape carries the user's note now, so the round trip has to
+    // reconstruct it too — including its formatting.
+    note: '<b>wait for the GOTY</b>',
     added_at: '2026-07-01 08:00:00',
     history: [
       { store: 'Steam', region: 'IL', kind: 'digital', price: 89.12, currency: 'ILS', price_ils: 89.12, checked_at: '2026-08-01 10:00:00' },
@@ -44,6 +47,7 @@ const exported = [
     refs: [],
     preferred_region: null,
     hide_desc: 0,
+    note: null,
     added_at: '2026-07-02 08:00:00',
     history: [],
   },
@@ -53,6 +57,12 @@ test('a list survives the round trip exactly', async () => {
   const token = await encodeToken(exported);
   const back = await decodeToken(token);
   assert.deepEqual(back.items, exported, 'the compact form must reconstruct the export shape byte for byte');
+});
+
+test('a note travels with the game and keeps its formatting', async () => {
+  const back = await decodeToken(await encodeToken(exported));
+  assert.equal(back.items[0].note, '<b>wait for the GOTY</b>');
+  assert.equal(back.items[1].note, null, 'and a game with no note still has none');
 });
 
 test('prices and timestamps come back with no drift', async () => {

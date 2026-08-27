@@ -103,6 +103,8 @@ interface CompactItem {
   f?: unknown;
   pr?: string | null;
   hd?: number;
+  /** The user's own note. Sanitised again on import — see noteHtml.ts. */
+  n?: string;
   /** Added-at, epoch seconds. */
   a?: number;
   /**
@@ -168,6 +170,7 @@ interface ExportShape {
   refs?: unknown;
   preferred_region?: unknown;
   hide_desc?: unknown;
+  note?: unknown;
   added_at?: unknown;
   history?: { store?: unknown; region?: unknown; kind?: unknown; price?: unknown; currency?: unknown; price_ils?: unknown; checked_at?: unknown }[];
 }
@@ -204,6 +207,7 @@ export async function encodeToken(items: unknown[], prefs?: Record<string, strin
     if (item.refs) out.f = item.refs;
     if (item.preferred_region) out.pr = String(item.preferred_region);
     if (item.hide_desc) out.hd = 1;
+    if (typeof item.note === 'string' && item.note) out.n = item.note;
     const added = toEpoch(item.added_at);
     if (added) out.a = added;
     return out;
@@ -246,6 +250,7 @@ function expand(payload: CompactPayload): unknown[] {
       refs: item.f ?? [],
       preferred_region: item.pr ?? null,
       hide_desc: item.hd ?? 0,
+      note: item.n ?? null,
       added_at: fromEpoch(item.a ?? 0),
       history,
     };

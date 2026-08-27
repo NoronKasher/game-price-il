@@ -42,6 +42,8 @@ import { Logo } from './Logo';
 import { safeUrl } from './url';
 import { HoldToConfirm } from './HoldToConfirm';
 import { DealsView } from './DealsView';
+import { NoteEditor, NoteView } from './NoteEditor';
+import { supportLinks } from './support';
 import { SearchProgressBar, type ProgressState } from './SearchProgressBar';
 import { loadProgressBar, loadProgressBlink, saveProgressBar, saveProgressBlink } from './progressPrefs';
 import { clearMutesForWorkingSources, muteForADay, muteUntilBack, visibleFailures } from './sourceNotice';
@@ -2384,6 +2386,8 @@ function SettingsView({
         <p className="settings-intro">{t.loadingDetails}</p>
       )}
 
+      <SupportSection />
+
       <h2 className="settings-section">{t.tickerMotionTitle}</h2>
       <p className="settings-intro">{t.tickerMotionIntro}</p>
       <TickerMotionToggle value={tickerMoves} onChange={onChangeTickerMoves} />
@@ -2405,6 +2409,34 @@ function SettingsView({
       <h2 className="settings-section">{t.currencyTitle}</h2>
       <p className="settings-intro">{t.currencySettingsNote}</p>
     </section>
+  );
+}
+
+/**
+ * The tip jar.
+ *
+ * One line, no banner, no popup, no counter. The tool is free and runs on the
+ * user's own machine; there is no bill to cover, so this has no business
+ * behaving like a fundraiser. Rendered at all only when a link is configured —
+ * see support.ts, which also records why it is a tip and never an affiliate
+ * link.
+ */
+function SupportSection() {
+  const links = supportLinks();
+  if (links.length === 0) return null;
+  return (
+    <>
+      <h2 className="settings-section">{t.supportTitle}</h2>
+      <p className="settings-intro">{t.supportIntro}</p>
+      <div className="support-links">
+        {links.map((link) => (
+          <a key={link.id} className="support-link" href={link.url} target="_blank" rel="noopener noreferrer">
+            {link.label}
+            <span className="support-note">{link.note}</span>
+          </a>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -2771,6 +2803,19 @@ function WishlistView({
     setExpandedId(items.some((it) => it.id === focusId) ? focusId : null);
     onFocusConsumed();
   }, [focusId, items, onFocusConsumed]);
+
+  /**
+   * Save (or clear) a game's note.
+   *
+   * The state is updated from what the SERVER returns, not from what was typed:
+   * the sanitiser is the authority on what a note is, and showing the raw input
+   * would mean the editor and the database disagree until the next reload.
+   */
+  const setNoteFor = async (id: number, html: string) => {
+    const saved = await api.setTrackSetting(id, { note: html });
+    const clean = (saved as { note?: string } | undefined)?.note ?? '';
+    setItems((prev) => (prev ? prev.map((it) => (it.id === id ? { ...it, note: clean } : it)) : prev));
+  };
 
   const remove = async (id: number) => {
     if (expandedId === id) setExpandedId(null);
@@ -3157,6 +3202,8 @@ function WishlistView({
                           alertScope={it.alert_scope}
                           globalRule={rule}
                           onSetAlert={(p) => setAlertFor(it.id, p)}
+                          note={it.note ?? ''}
+                          onSetNote={(html) => setNoteFor(it.id, html)}
                         />
                       </td>
                     </tr>
@@ -3335,6 +3382,8 @@ function ExpandedTrack({
   alertScope,
   globalRule,
   onSetAlert,
+  note,
+  onSetNote,
 }: {
   id: number;
   preferredRegion: string | null;
@@ -3349,9 +3398,14 @@ function ExpandedTrack({
   alertScope: string | null;
   globalRule: AlertRule | null;
   onSetAlert: (patch: TrackAlertPatch) => void;
+  note: string;
+  onSetNote: (html: string) => Promise<void>;
 }) {
   const [detail, setDetail] = useState<TrackDetail | null>(null);
   const [busy, setBusy] = useState(false);
+  // Closed by default even when a note exists: the note is READ in place, and
+  // opening the editor is a separate decision from reading it.
+  const [noteOpen, setNoteOpen] = useState(false);
 
   const load = () =>
     api.trackDetail(id).then((d) => {
@@ -3394,6 +3448,24 @@ function ExpandedTrack({
 
   return (
     <div className="expanded">
+      {/* The user's own note about this game — the reason they are watching it,
+          which is the one thing a price tracker cannot work out for itself.
+          Behind a checkbox so a list of games nobody has annotated stays a list
+          of games. */}
+      <label className="note-toggle">
+        <input
+          type="checkbox"
+          checked={noteOpen}
+          onChange={(e) => setNoteOpen(e.target.checked)}
+        />
+        {note ? t.noteEdit : t.noteAdd}
+      </label>
+      {noteOpen ? (
+        <NoteEditor value={note} onSave={onSetNote} onDelete={() => onSetNote('')} />
+      ) : (
+        <NoteView html={note} />
+      )}
+
       {detail?.meta?.genres?.length ? (
         <span className="meta genre-line">
           {t.genreLabel}: {detail.meta.genres.join(', ')}

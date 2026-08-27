@@ -35,6 +35,7 @@ import {
   setPreferredRegion,
   setHideDesc,
   setCaptureDays,
+  setNote,
   setAlert,
   setAlertMode,
   setAlertScope,
@@ -102,6 +103,7 @@ function wishlistPayload() {
       alert_price: row.alert_price,
       alert_price_ccy: row.alert_price_ccy,
       alert_scope: row.alert_scope,
+      note: row.note,
       added_at: row.added_at,
       current,
       previous,
@@ -321,6 +323,7 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
           alertPriceCcy?: string;
           alertMode?: 'global' | 'custom' | 'off';
           alertScope?: string | null;
+          note?: string;
         }
       ) => {
         if ('preferredRegion' in p) setPreferredRegion(id, p.preferredRegion ?? null);
@@ -331,8 +334,12 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
         }
         if (p.alertMode) setAlertMode(id, p.alertMode);
         if ('alertScope' in p) setAlertScope(id, (p.alertScope ?? null) as never);
+        // Sanitised inside setNote, and the sanitised value goes back — the
+        // sanitiser is the authority on what a note is.
+        let note: string | undefined;
+        if ('note' in p) note = setNote(id, p.note);
         await flush();
-        return { ok: true };
+        return note === undefined ? { ok: true } : { ok: true, note };
       }
     ),
 

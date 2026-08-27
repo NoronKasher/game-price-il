@@ -212,6 +212,8 @@ export const api = {
       alertPriceCcy?: string;
       alertMode?: AlertMode;
       alertScope?: AlertScope | null;
+      /** Rich-text note; sanitised server-side, and the SANITISED value comes back. */
+      note?: string;
     }
   ) =>
     fetch(`/api/track/${id}`, {

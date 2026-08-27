@@ -132,6 +132,8 @@ export interface WishlistItem {
   alert_price: number | null;
   alert_price_ccy: string | null;
   alert_scope: string | null;
+  /** The user's own note, already sanitised server-side. See noteHtml.ts. */
+  note?: string | null;
   added_at: string;
   current: { store: string; price_ils: number; checked_at: string; region?: string | null } | null;
   previous: { store: string; price_ils: number; checked_at: string; region?: string | null } | null;

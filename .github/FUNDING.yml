@@ -1,0 +1,15 @@
+# The Sponsor button on this repository.
+#
+# GitHub reads this file and shows a "Sponsor" button at the top of the repo.
+# It takes no platform fee and pays out to an Israeli bank account through
+# Stripe (Israel has been supported since 2022).
+#
+# IT IS COMMENTED OUT UNTIL THE ACCOUNT EXISTS. A Sponsor button that leads to
+# "this account is not accepting sponsorships" is worse than no button, so
+# enrol first at https://github.com/sponsors, then delete the # below.
+#
+# Ko-fi is the second line for people who would rather use PayPal than create a
+# GitHub account. Fill in the page name once there is one.
+
+# github: NoronKasher
+# ko_fi: your-ko-fi-name

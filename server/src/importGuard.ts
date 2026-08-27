@@ -1,4 +1,5 @@
 import { isAllowedScrapeUrl } from './net.ts';
+import { sanitizeNote } from './noteHtml.ts';
 
 /**
  * Import sanitiser — the trust boundary for user-shared tracking files.
@@ -68,6 +69,8 @@ export interface CleanImportItem {
   image: string | null;
   refs: CleanRef[];
   preferred_region: string | null;
+  /** Sanitised on the way in; see noteHtml.ts. */
+  note: string | null;
   hide_desc: number;
   added_at: string | null;
   history: CleanPoint[];
@@ -168,6 +171,9 @@ export function sanitizeImport(raw: unknown): CleanImportItem[] {
       image: image && /^https?:\/\//i.test(image) ? image : null,
       refs,
       preferred_region: str(o.preferred_region, 8),
+      // A note from somebody else's machine is exactly as untrusted as a web
+      // page — it arrives in shared files and in pasted tokens.
+      note: sanitizeNote(o.note) || null,
       hide_desc: o.hide_desc ? 1 : 0,
       added_at: str(o.added_at, 40),
       history,

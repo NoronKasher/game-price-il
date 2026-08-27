@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
 import { sanitizeImport } from './importGuard.ts';
+import { sanitizeNote } from './noteHtml.ts';
 import { isAlertScope, type AlertMode, type AlertRule, type AlertScope } from './alerts.ts';
 
 /**
@@ -53,6 +54,7 @@ db.exec(`
     refs TEXT NOT NULL DEFAULT '[]',
     preferred_region TEXT,
     hide_desc INTEGER NOT NULL DEFAULT 0,
+    note TEXT,                       -- the user's own note, sanitised HTML
     capture_days INTEGER,            -- per-game auto-capture interval; NULL = use global
     alert_mode TEXT,                 -- NULL/'global' = follow the global rule, 'custom', 'off'
     alert_pct INTEGER,               -- custom: notify when discounted ≥ this % off its normal price
@@ -118,8 +120,9 @@ db.exec(`
  * Also update the baseline CREATE above so fresh installs get the new shape.
  * Each step runs exactly once, in order.
  */
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 const MIGRATIONS: Record<number, string[]> = {
+  9: ['ALTER TABLE wishlist ADD COLUMN note TEXT'],
   8: ['ALTER TABLE notifications ADD COLUMN bell_cleared INTEGER NOT NULL DEFAULT 0'],
   4: [
     'ALTER TABLE wishlist ADD COLUMN capture_days INTEGER',
@@ -198,6 +201,7 @@ const EXPECTED_COLUMNS: Record<string, Record<string, string>> = {
     alert_price: 'REAL',
     alert_price_ccy: 'TEXT',
     alert_scope: 'TEXT',
+    note: 'TEXT',
   },
   notifications: { platform: 'TEXT', scope: 'TEXT', bell_cleared: 'INTEGER NOT NULL DEFAULT 0' },
 };
@@ -278,6 +282,12 @@ export interface WishlistRow {
   alert_price: number | null;
   alert_price_ccy: string | null;
   alert_scope: string | null;
+  /**
+   * The user's own note about this game — "wait for the GOTY edition", "gift
+   * for Dana". Rich text, stored as a restricted subset of HTML; see
+   * sanitizeNote for exactly which subset and why it is a whitelist.
+   */
+  note: string | null;
   added_at: string;
 }
 
@@ -325,6 +335,19 @@ export function removeFromWishlist(id: number): void {
 
 export function listWishlist(): WishlistRow[] {
   return db.prepare(`SELECT * FROM wishlist ORDER BY added_at DESC`).all() as unknown as WishlistRow[];
+}
+
+/**
+ * The user's own note about a game.
+ *
+ * Sanitised HERE rather than at the route, so no caller can reach the database
+ * with unsanitised markup — the extension, the server and any future shell all
+ * go through this one door. See noteHtml.ts for the whitelist.
+ */
+export function setNote(id: number, note: unknown): string {
+  const clean = sanitizeNote(note);
+  db.prepare(`UPDATE wishlist SET note = ? WHERE id = ?`).run(clean || null, id);
+  return clean;
 }
 
 /** Per-game preferred region (digital only) — the series the graph focuses on. */
@@ -749,6 +772,8 @@ export interface ExportItem {
   refs: SourceRef[];
   preferred_region?: string | null;
   hide_desc?: number;
+  /** The user's own note, so it travels with the list. */
+  note?: string | null;
   added_at: string;
   history: {
     store: string;
@@ -769,6 +794,7 @@ export function exportAll(): ExportItem[] {
     image: row.image,
     refs: JSON.parse(row.refs) as SourceRef[],
     preferred_region: row.preferred_region,
+    note: row.note,
     hide_desc: row.hide_desc,
     added_at: row.added_at,
     history: db
@@ -820,6 +846,9 @@ export function importAll(raw: unknown): { games: number; points: number } {
       // New to us: adopt the sharer's per-game settings and original add date.
       if (item.preferred_region !== null) setPreferredRegion(row.id, item.preferred_region);
       if (item.hide_desc) setHideDesc(row.id, true);
+      // Already sanitised by the import guard; setNote runs it again rather
+      // than trusting that, because this is the only door to the column.
+      if (item.note) setNote(row.id, item.note);
       if (item.added_at) db.prepare(`UPDATE wishlist SET added_at = ? WHERE id = ?`).run(item.added_at, row.id);
     }
     // Already tracked locally: leave preferred_region / hide_desc / added_at as

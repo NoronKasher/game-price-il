@@ -550,6 +550,61 @@ body {
 .deals-more { margin: 16px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
 .deals-note { margin: 16px 0 0; max-width: 620px; font-size: 11px; color: var(--muted); line-height: 1.7; }
 
+/* The tip jar. Quiet on purpose. */
+.support-links { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0 0; }
+.support-link {
+  display: inline-flex; flex-direction: column; gap: 2px;
+  padding: 8px 16px; border-radius: 9px; text-decoration: none;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+  font-size: 13px;
+}
+.support-link:hover { border-color: var(--amber); }
+.support-note { font-size: 10.5px; color: var(--muted); }
+
+/* ── per-game notes ── */
+.note-toggle { display: flex; align-items: center; gap: 7px; font-size: 12.5px; margin-bottom: 8px; cursor: pointer; }
+.note-editor { margin: 0 0 14px; max-width: 640px; }
+.note-tools { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-bottom: 6px; }
+.note-tool {
+  min-width: 28px; height: 28px; padding: 0 7px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--panel); color: var(--fg); font-size: 13px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.note-tool:hover { border-color: var(--amber); }
+.note-color { position: relative; overflow: hidden; }
+.note-color input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.note-size {
+  height: 28px; border: 1px solid var(--line); border-radius: 7px;
+  background: var(--panel); color: var(--fg); font: inherit; font-size: 12px; padding: 0 6px;
+}
+.note-box {
+  min-height: 84px; padding: 10px 12px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+  font-size: 13.5px; line-height: 1.7; overflow-wrap: anywhere;
+}
+.note-box:focus { outline: none; border-color: var(--amber); }
+/* An empty contenteditable gives no hint of what it is for. */
+.note-box:empty::before { content: attr(data-placeholder); color: var(--muted); }
+.note-box img, .note-view img { max-width: 100%; height: auto; border-radius: 6px; }
+.note-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.note-save {
+  padding: 6px 16px; border: 0; border-radius: 8px; cursor: pointer;
+  background: var(--amber); color: #0d1117; font-weight: 600; font-size: 12.5px;
+}
+.note-save:disabled { opacity: .5; cursor: default; }
+.note-delete {
+  padding: 6px 14px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+  background: none; color: var(--muted); font: inherit; font-size: 12.5px;
+}
+.note-hint { font-size: 10.5px; color: var(--muted); line-height: 1.6; flex: 1 1 220px; }
+.note-view {
+  margin: 0 0 14px; padding: 10px 12px; max-width: 640px;
+  border-inline-start: 3px solid var(--amber); border-radius: 0 9px 9px 0;
+  background: color-mix(in srgb, var(--amber) 6%, transparent);
+  font-size: 13.5px; line-height: 1.7; overflow-wrap: anywhere;
+}
+
 /* The automatic first check for rows that arrived without a price. */
 .firstcheck { max-width: 640px; margin: 0 0 14px; }
 .firstcheck-bar {

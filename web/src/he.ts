@@ -242,6 +242,10 @@ export const t = {
       'הסכום בשקלים הוא המרה לפי שער היום של מחיר שנרשם בעבר, ולא מה ששילמו עליו אז.',
       ...(others.length ? [`שפל בחלונות קצרים יותר — ${others.join(' · ')}`] : []),
     ].join('\n'),
+  // The tip jar. One line, no banner — see support.ts.
+  supportTitle: 'תמיכה בכלי',
+  supportIntro:
+    'הכלי חינמי, קוד פתוח, ורץ אצלכם במחשב — אין שרת לתחזק ואין שום דבר נעול מאחורי תשלום. אם בא לכם להשאיר טיפ, זה המקום. אם לא, הכול עובד בדיוק אותו הדבר. מה שלא יהיה כאן לעולם: קישורי שותפים. קישור שמשלם לנו לפי הקלקה ייתן לנו סיבה להעדיף מוכר מסוים, וסדר התוצאות הוא כל מה שהכלי הזה הוא.',
   // Whether the deals strip scrolls. A visible switch rather than an inference
   // from the OS — see prefs.loadTickerMotion.
   tickerMotionTitle: 'סרגל המבצעים',
@@ -258,6 +262,26 @@ export const t = {
     'הכלי מסביר כשחנות לא זמינה, וכשמחיר מאזור אחר דורש חשבון באותו אזור. אם כבר ברור לכם איך זה עובד, אפשר לכבות את ההסברים האלה לגמרי — הנתונים עצמם לא משתנים, רק ההודעות נעלמות.',
   quietHint:
     'ההגדרה הזו נשמרת גם בקוד ההעברה למכשיר אחר, יחד עם כל הודעה שסגרתם לתמיד.',
+  // A note about one game, in the user's own words and formatting. Behind a
+  // checkbox so a list nobody has annotated stays a list of games.
+  noteAdd: '📝 הוסיפו הערה למשחק הזה',
+  noteEdit: '📝 עריכת ההערה',
+  noteAria: 'הערה אישית למשחק',
+  notePlaceholder: 'למה אתם עוקבים אחרי המשחק הזה? "לחכות למהדורת GOTY", "מתנה לדנה", כל דבר.',
+  noteSave: 'שמירה',
+  noteSaving: 'שומר…',
+  noteSaved: 'נשמר ✓',
+  noteDelete: 'מחיקה',
+  noteDeleteConfirm: 'למחוק את ההערה? אין דרך לשחזר אותה.',
+  noteColor: 'צבע טקסט',
+  noteSize: 'גודל',
+  noteSizeSmall: 'קטן',
+  noteSizeNormal: 'רגיל',
+  noteSizeBig: 'גדול',
+  noteImage: 'הוספת תמונה או GIF',
+  noteImageTooBig: (kb: number) => `התמונה גדולה מדי. המקסימום הוא ${kb}KB — נסו תמונה קטנה יותר.`,
+  noteHint:
+    'ההערה נשמרת אצלכם בלבד, ונוסעת יחד עם רשימת המעקב בייצוא ובקוד ההעברה. אפשר להשתמש באימוג’י של המקלדת (Win+נקודה בווינדוס) ולהדביק או לגרור תמונות.',
   // The automatic first price check for rows that arrived without one.
   firstCheckRunning: (done: number, total: number) =>
     `בודקים מחירים ראשונים למשחקים שנוספו — ${done} מתוך ${total}`,

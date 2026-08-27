@@ -43,6 +43,7 @@ import {
   findWishlist,
   getWishlistRow,
   setPreferredRegion,
+  setNote,
   setHideDesc,
   setCaptureDays,
   setAlert,
@@ -514,8 +515,15 @@ app.patch('/api/track/:id', (req, res) => {
   const row = getWishlistRow(Number(req.params.id));
   if (!row) return res.status(404).json({ error: 'not tracked' });
   const body = req.body ?? {};
+  let cleanNote: string | undefined;
   if ('preferredRegion' in body) setPreferredRegion(row.id, body.preferredRegion ?? null);
   if ('hideDesc' in body) setHideDesc(row.id, !!body.hideDesc);
+  // The note is sanitised inside setNote, not here — every shell reaches the
+  // database through the same door. See noteHtml.ts.
+  // The sanitised value goes back to the caller: the sanitiser is the authority
+  // on what a note IS, and echoing the raw input would let the editor and the
+  // database disagree until the next reload.
+  if ('note' in body) cleanNote = setNote(row.id, body.note);
   if ('captureDays' in body) {
     // null / empty → clear the override (fall back to the global interval).
     const n = Number(body.captureDays);
@@ -539,7 +547,7 @@ app.patch('/api/track/:id', (req, res) => {
   if ('alertScope' in body) {
     setAlertScope(row.id, isAlertScope(body.alertScope) ? body.alertScope : null);
   }
-  res.json({ ok: true });
+  res.json(cleanNote === undefined ? { ok: true } : { ok: true, note: cleanNote });
 });
 
 /** In-app sale-alert notifications: list + unread count, mark-read, clear. */

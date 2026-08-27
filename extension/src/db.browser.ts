@@ -1,4 +1,5 @@
 import { sanitizeImport } from '../../server/src/importGuard.ts';
+import { sanitizeNote } from '../../server/src/noteHtml.ts';
 import { isAlertScope, type AlertMode, type AlertRule, type AlertScope } from '../../server/src/alerts.ts';
 
 /**
@@ -42,6 +43,8 @@ export interface WishlistRow {
   alert_price: number | null;
   alert_price_ccy: string | null;
   alert_scope: string | null;
+  /** The user's own note, sanitised. See server/src/noteHtml.ts. */
+  note: string | null;
   added_at: string;
 }
 
@@ -262,6 +265,20 @@ export function setPreferredRegion(id: number, region: string | null): void {
 
 export function setHideDesc(id: number, hide: boolean): void {
   patch(id, (r) => (r.hide_desc = hide ? 1 : 0));
+}
+
+/**
+ * The user's own note.
+ *
+ * Sanitised HERE rather than at the caller, so the extension and the server go
+ * through the same door — a note that reaches storage unsanitised is a stored
+ * XSS, and there must be exactly one place that decides what a note may contain.
+ * See server/src/noteHtml.ts.
+ */
+export function setNote(id: number, note: unknown): string {
+  const clean = sanitizeNote(note);
+  patch(id, (r) => (r.note = clean || null));
+  return clean;
 }
 
 export function setCaptureDays(id: number, days: number | null): void {
