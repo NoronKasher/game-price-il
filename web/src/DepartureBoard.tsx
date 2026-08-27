@@ -335,8 +335,17 @@ export function DepartureBoard({
     }
 
     if (view === 'pinned') {
-      // Israel and the user's own market first — the rows they can act on today.
-      const rank = (o: Offer) => (o.region === 'IL' || o.location === 'israel' ? 0 : o.region === preferred ? 1 : 2);
+      /**
+       * The DEFAULT REGION first, then everything else cheapest to dearest.
+       *
+       * It used to pin Israel and then the chosen region, which the label
+       * described as "ישראל והמדינה שלי למעלה" — two different countries at the
+       * top for a reason the reader had to guess at. If somebody has picked a
+       * default region, that is the answer to "which prices are mine"; Israel
+       * is only special when Israel is what they picked.
+       */
+      const rank = (o: Offer) =>
+        preferred && (o.region === preferred || (preferred === 'IL' && o.location === 'israel')) ? 0 : 1;
       return list
         .slice()
         .sort((a, b) => rank(a) - rank(b) || byPrice(a, b))

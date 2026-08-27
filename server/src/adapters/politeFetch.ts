@@ -152,7 +152,25 @@ const MAX_REDIRECTS = 5;
  *
  * So: manual redirects, every hop re-validated, and a cap so a redirect loop
  * ends in an error rather than a hang.
+ *
+ * AND A BROWSER CANNOT DO THAT. `redirect: 'manual'` is defined differently in
+ * a page or a service worker: instead of handing back the 3xx, fetch returns an
+ * OPAQUE REDIRECT — status 0, no headers, no Location to read. This broke Ivory
+ * and Player1 in the extension the moment the guard shipped: both redirect, the
+ * opaque response has no Location, so it fell through as a real answer and the
+ * adapter reported "responded 0".
+ *
+ * The fallback follows the redirect chain the ordinary way and validates the
+ * FINAL url instead. That is genuinely weaker — the disallowed request has
+ * already been sent by the time we can see where it went — and it is acceptable
+ * only in the browser, where the threat is different in kind: an extension can
+ * fetch nothing but the hosts in its manifest, so there is no internal network
+ * to reach and no metadata endpoint to hit. On the server, where the guard
+ * exists to protect a machine with a real localhost, the strict path is the one
+ * that runs.
  */
+const OPAQUE_REDIRECT = (res: Response): boolean => res.type === 'opaqueredirect' || res.status === 0;
+
 async function followChecked(startUrl: string): Promise<Response> {
   let url = startUrl;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
@@ -161,6 +179,9 @@ async function followChecked(startUrl: string): Promise<Response> {
       redirect: 'manual',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
+
+    if (OPAQUE_REDIRECT(res)) return followInBrowser(url);
+
     // 3xx with a Location is the only thing we follow; a 304 or a bodyless 3xx
     // is handed back as-is for the caller to deal with.
     const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
@@ -173,6 +194,21 @@ async function followChecked(startUrl: string): Promise<Response> {
     url = next;
   }
   throw new Error(`politeFetch: too many redirects from "${startUrl}"`);
+}
+
+/** Let fetch follow, then check where it actually ended up. See above. */
+async function followInBrowser(url: string): Promise<Response> {
+  const res = await fetch(url, {
+    headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'he-IL,he;q=0.9,en;q=0.8' },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  // res.url is where the chain finished. An empty one means the browser would
+  // not tell us, and an answer we cannot place is one we do not use.
+  if (res.url && !isAllowedScrapeUrl(res.url)) {
+    throw new Error(`politeFetch: refusing a response redirected to "${res.url}"`);
+  }
+  return res;
 }
 
 /** Fetch a URL politely; returns the response body as text. */

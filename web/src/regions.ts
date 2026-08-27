@@ -68,13 +68,16 @@ export function savePreferredRegion(market: string): void {
  * On by default; the settings page can turn it off for instant opens (and
  * `prefers-reduced-motion` disables the motion regardless of this flag).
  */
+import { loadMotionPref } from './prefs';
+
 const OPEN_ANIM_KEY = 'gp_open_anim';
+/**
+ * The card-into-board flight. Same rule as every other motion setting: the OS
+ * preference picks the default, the stored choice always wins. See
+ * loadMotionPref in prefs.ts.
+ */
 export function loadOpenAnim(): boolean {
-  try {
-    return localStorage.getItem(OPEN_ANIM_KEY) !== '0';
-  } catch {
-    return true;
-  }
+  return loadMotionPref(OPEN_ANIM_KEY);
 }
 export function saveOpenAnim(v: boolean): void {
   try {

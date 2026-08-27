@@ -83,7 +83,20 @@ body {
    has left the strip the second is precisely where it started, so the loop has
    no gap and no visible restart — the old single pass had to travel its own
    width and snap back, which read as the ticker "ending". */
-.ticker .reel { display: flex; width: max-content; animation: reel 70s linear infinite; }
+.ticker .reel {
+  display: flex; width: max-content;
+  /* Duration is set from the content's width so the SPEED is constant — see
+     REEL_PX_PER_SEC in App.tsx. The fallback only ever applies for the instant
+     before the first measurement. */
+  animation: reel var(--reel-duration, 40s) linear infinite;
+  /* Its own compositing layer. Without this the strip shares one with the rest
+     of the page, so the card-into-board flight — a transform on a large
+     element — forces the marquee to be repainted in step with it, and a
+     marquee that stutters whenever something else animates is the complaint
+     that "opening a card affects the moving bar". */
+  will-change: transform;
+}
+.ticker { contain: paint; }
 .ticker .reel-run { display: flex; flex: none; }
 /* Pause the marquee on hover so a deal can actually be read and clicked. */
 .ticker:hover .reel { animation-play-state: paused; }

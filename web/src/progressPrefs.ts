@@ -7,6 +7,8 @@
  * Kept apart from the bar's own module so the settings screen can read them
  * without pulling a component in.
  */
+import { loadMotionPref, saveMotionPref } from './prefs';
+
 const BAR_KEY = 'gp_search_progress';
 const BLINK_KEY = 'gp_search_progress_blink';
 
@@ -30,16 +32,13 @@ export const loadProgressBar = () => read(BAR_KEY);
 export const saveProgressBar = (on: boolean) => write(BAR_KEY, on);
 
 /**
- * The blink also yields to the OS. Someone who set "reduce motion" has already
- * answered this question, and making them answer it again in our settings would
- * be ignoring what they said.
+ * The blink takes the OS preference as a DEFAULT, not as a veto.
+ *
+ * It used to check the media query FIRST and return false without ever looking
+ * at what the user had stored — so turning the blink on in Settings worked
+ * until the next navigation, when the component remounted, asked again, and got
+ * false. The switch appeared to turn itself off. See loadMotionPref in prefs.ts
+ * for the rule, which two other settings had got wrong in the same way.
  */
-export function loadProgressBlink(): boolean {
-  try {
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return false;
-  } catch {
-    /* no matchMedia; fall through to the stored preference */
-  }
-  return read(BLINK_KEY);
-}
-export const saveProgressBlink = (on: boolean) => write(BLINK_KEY, on);
+export const loadProgressBlink = () => loadMotionPref(BLINK_KEY);
+export const saveProgressBlink = (on: boolean) => saveMotionPref(BLINK_KEY, on);

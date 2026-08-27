@@ -41,7 +41,10 @@
     "https://www.gog.com/*",
     "https://catalog.gamepass.com/*",
     "https://api.steampowered.com/*",
-    "https://steamcommunity.com/*"
+    "https://steamcommunity.com/*",
+    "https://catalog.gog.com/*",
+    "https://open.er-api.com/*",
+    "https://www.ubisoft.com/*"
   ],
   "declarative_net_request": {
     "rule_resources": [

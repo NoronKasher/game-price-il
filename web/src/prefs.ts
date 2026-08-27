@@ -97,21 +97,31 @@ export function applyPrefs(prefs: unknown): number {
 const TICKER_KEY = 'gp_ticker_motion';
 
 /**
- * Should the deals strip move?
+ * THE RULE FOR EVERY MOTION SETTING, in one place because it was got wrong in
+ * three separate ones.
  *
- * The operating system's reduced-motion preference picks the DEFAULT and
- * nothing more. Reading it straight into "no animation" was wrong twice over:
- * Windows' animation setting is about window transitions rather than a news
- * strip, it is switched off on a great many machines, and the result was a
- * ticker that looked broken with no visible way to start it. A preference the
- * user can see and change beats one inferred from their OS.
+ * The operating system's reduced-motion preference picks the DEFAULT. It is not
+ * a veto. Reading it as one produced three bugs that all looked different:
+ *
+ *   the deals strip appeared frozen with no way to start it;
+ *   the search bar's blink switched itself back off on every navigation,
+ *     because the stored "on" was read AFTER the media query had already
+ *     returned false and thrown it away;
+ *   and the card-into-board flight never played, so the setting for it did
+ *     nothing at all.
+ *
+ * Windows' "animation effects" switch is off on a great many machines and it is
+ * about window transitions, not about whether a price tracker may move a strip
+ * of text. A preference somebody can see and change beats one inferred from
+ * their OS — so a stored choice always wins, and the OS is consulted only when
+ * there is no stored choice to consult instead.
  */
-export function loadTickerMotion(): boolean {
+export function loadMotionPref(key: string): boolean {
   try {
-    const stored = localStorage.getItem(TICKER_KEY);
+    const stored = localStorage.getItem(key);
     if (stored !== null) return stored === '1';
   } catch {
-    /* fall through to the default */
+    /* storage unavailable; fall through to the OS default */
   }
   try {
     return !matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -120,13 +130,16 @@ export function loadTickerMotion(): boolean {
   }
 }
 
-export function saveTickerMotion(on: boolean): void {
+export function saveMotionPref(key: string, on: boolean): void {
   try {
-    localStorage.setItem(TICKER_KEY, on ? '1' : '0');
+    localStorage.setItem(key, on ? '1' : '0');
   } catch {
-    /* nothing to do */
+    /* private browsing; the preference simply will not persist */
   }
 }
+
+export const loadTickerMotion = () => loadMotionPref(TICKER_KEY);
+export const saveTickerMotion = (on: boolean) => saveMotionPref(TICKER_KEY, on);
 
 const QUIET_KEY = 'gp_quiet_notices';
 

@@ -76,6 +76,14 @@ import type {
   WishlistItem,
 } from './types';
 
+/**
+ * How fast the deals strip travels, in pixels a second.
+ *
+ * A ticker is read at a glance, so the number that matters is how long one
+ * screenful takes to pass — about eight seconds at this pace on a laptop.
+ */
+const REEL_PX_PER_SEC = 110;
+
 /** One pass of the ticker's deals. Rendered twice — see the reel. */
 function TickerRun({
   deals,
@@ -116,6 +124,33 @@ export function App() {
   const [ticker, setTicker] = useState<TickerDeal[]>([]);
   // Whether the strip scrolls. A visible switch, not an inference from the OS.
   const [tickerMoves, setTickerMoves] = useState(loadTickerMotion);
+  const reelRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Set the marquee's duration from how much content there is.
+   *
+   * It was a flat 70s regardless, which is not a speed — with fifteen deals the
+   * track is 4,200px, so 70s is 60 pixels a second and a headline takes fifteen
+   * seconds to cross the strip. That does not read as slow, it reads as broken,
+   * which is exactly what it was reported as. It also meant the ticker changed
+   * speed whenever the number of deals changed.
+   *
+   * Measured from the first run and reapplied when it resizes, so the strip
+   * moves at the same pace whatever is in it.
+   */
+  useEffect(() => {
+    const track = reelRef.current;
+    const run = track?.firstElementChild as HTMLElement | undefined;
+    if (!track || !run) return;
+    const apply = () => {
+      const width = run.getBoundingClientRect().width;
+      if (width > 0) track.style.setProperty('--reel-duration', `${Math.round(width / REEL_PX_PER_SEC)}s`);
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(run);
+    return () => observer.disconnect();
+  }, [ticker]);
   const changeTickerMoves = (on: boolean) => {
     setTickerMoves(on);
     saveTickerMotion(on);
@@ -247,7 +282,7 @@ export function App() {
            animation ends exactly where it began and the loop cannot be seen. */
         <div className={`ticker ${tickerMoves ? '' : 'still'}`}>
           <span className="label">{t.tickerTitle}</span>
-          <div className="reel">
+          <div className="reel" ref={reelRef}>
             <TickerRun deals={ticker} onPick={openDeal} />
             {/* The copy exists only to fill the gap, so it is hidden from
                 assistive tech and from the tab order — every deal on it is
@@ -1035,10 +1070,6 @@ function SearchView({
   /** The results grid, so opening a board can scroll its top into view. */
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  const prefersReducedMotion = () =>
-    typeof window !== 'undefined' &&
-    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-
   const openBoard = (g: GameGroup, platform: Platform, cardEl: HTMLElement | null) => {
     // Clicking the platform already open closes the board and restores the card.
     if (expanded && expanded.key === g.key && expanded.platform === platform) {
@@ -1047,7 +1078,12 @@ function SearchView({
       setAbsorb(null);
       return;
     }
-    const animate = openAnim && !prefersReducedMotion() && !!cardEl;
+    // The SETTING decides. It used to be `openAnim && !prefersReducedMotion()`,
+    // which meant the switch in Settings could not turn the animation on:
+    // Windows' "animation effects" toggle is off on a great many machines, and
+    // reading it as a veto left people with a switch that did nothing. The OS
+    // preference now only picks that switch's default — see prefs.ts.
+    const animate = openAnim && !!cardEl;
     // Capture the card's on-screen box BEFORE React removes it from the grid.
     let fromRect = animate && cardEl ? cardEl.getBoundingClientRect() : null;
 
@@ -2236,6 +2272,8 @@ function SettingsView({
 }) {
   const [bar, setBar] = useState(loadProgressBar);
   const [blinkPref, setBlinkPref] = useState(loadProgressBlink);
+  // The chosen region's Hebrew name, for the board-view option that pins it.
+  const preferredName = REGIONS.find((r) => r.market === preferred)?.nameHe ?? '';
   const [keys, setKeys] = useState<KeysResponse | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const loadKeys = () =>
@@ -2350,7 +2388,12 @@ function SettingsView({
                   checked={boardView === v}
                   onChange={() => onChangeBoardView(v)}
                 />
-                <span>{t.boardViewNames[v]}</span>
+                <span>
+                  {/* The pinned option names the region actually chosen — "my
+                      country" is a label for a setting the reader cannot see
+                      from where they are standing. */}
+                  {v === 'pinned' ? t.boardViewPinned(preferredName) : t.boardViewNames[v]}
+                </span>
               </label>
             ))}
           </div>

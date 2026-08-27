@@ -208,3 +208,57 @@ test('a redirect loop ends in an error rather than a hang', async () => {
     globalThis.fetch = real;
   }
 });
+
+/**
+ * `type` and `url` on a Response are getter-only, so a stub has to define them
+ * rather than assign them. Both are what distinguishes a browser's opaque
+ * redirect from a real answer, so a test cannot skip faking them.
+ */
+function fakeResponse(body, init, extras) {
+  const res = new Response(body, init);
+  for (const [key, value] of Object.entries(extras)) {
+    Object.defineProperty(res, key, { get: () => value, configurable: true });
+  }
+  return res;
+}
+
+test('an opaque redirect (what a browser returns) falls back instead of failing', async () => {
+  // The regression the SSRF guard shipped with. In a page or a service worker,
+  // `redirect: 'manual'` does not hand back the 3xx — it returns an opaque
+  // response with status 0 and no headers. With no Location to read, that fell
+  // through as a real answer and Ivory and Player1 both reported "responded 0".
+  const real = globalThis.fetch;
+  const modes = [];
+  globalThis.fetch = async (url, init) => {
+    modes.push(init.redirect);
+    if (init.redirect === 'manual') {
+      // What a browser gives you. Response cannot be constructed with status 0,
+      // so the type is what identifies it — which is why the check reads both.
+      return fakeResponse(null, { status: 204 }, { type: 'opaqueredirect', status: 0 });
+    }
+    return fakeResponse('the real page', { status: 200 }, { url: 'https://www.ivory.co.il/final' });
+  };
+  try {
+    assert.match(await politeFetch('https://www.ivory.co.il/start'), /the real page/);
+    assert.deepEqual(modes, ['manual', 'follow'], 'strict first, fallback only when it cannot work');
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test('the browser fallback still refuses a chain that ended somewhere else', async () => {
+  // Weaker than the server path — the request has already been sent — but an
+  // answer from a host we do not scrape is still not one we will use.
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    if (init.redirect === 'manual') {
+      return fakeResponse(null, { status: 204 }, { type: 'opaqueredirect', status: 0 });
+    }
+    return fakeResponse('somebody else', { status: 200 }, { url: 'https://evil.example/landed' });
+  };
+  try {
+    await assert.rejects(() => politeFetch('https://www.ivory.co.il/start2'), /redirected to/);
+  } finally {
+    globalThis.fetch = real;
+  }
+});
