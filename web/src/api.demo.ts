@@ -86,13 +86,24 @@ interface Session {
   nextId: number;
 }
 
+/** Every key name, unset — the floor under a snapshot recorded before one existed. */
+const BLANK_KEYS: KeysResponse = {
+  ggdeals: { configured: false, source: 'none' },
+  itad: { configured: false, source: 'none' },
+  steam: { configured: false, source: 'none' },
+};
+
 let sessionPromise: Promise<Session> | null = null;
 function session(): Promise<Session> {
   sessionPromise ??= snap().then((s) => ({
     wishlist: structuredClone(s.wishlist),
     notifications: structuredClone(s.notifications),
     settings: structuredClone(s.settings),
-    keys: structuredClone(s.keys),
+    // Every key the UI can render, whether or not the recorded snapshot has
+    // heard of it. A snapshot is filled by a weekly capture, so between adding
+    // a key and the next run it is always one behind — and a missing entry is
+    // not a blank row here, it is a crash on `status.configured`.
+    keys: { ...BLANK_KEYS, ...structuredClone(s.keys) },
     nextId: s.wishlist.reduce((max, w) => Math.max(max, w.id), 0) + 1,
   }));
   return sessionPromise;
@@ -520,8 +531,14 @@ export const api: typeof LiveApi = {
     const state = await session();
     // A key entered here would go nowhere — there is no server to use it — so
     // the demo records only that one was set, never the value.
-    if (patch.ggdeals !== undefined) state.keys.ggdeals = { configured: !!patch.ggdeals, source: patch.ggdeals ? 'settings' : 'none' };
-    if (patch.itad !== undefined) state.keys.itad = { configured: !!patch.itad, source: patch.itad ? 'settings' : 'none' };
+    //
+    // Written over the patch rather than key by key: the named-per-key version
+    // silently ignored a key added later, which is exactly how the Steam key
+    // came to be enterable everywhere except here.
+    for (const [name, value] of Object.entries(patch) as [keyof KeysResponse, string | undefined][]) {
+      if (value === undefined) continue;
+      state.keys[name] = { configured: !!value, source: value ? 'settings' : 'none' };
+    }
     return state.keys;
   },
 
@@ -561,9 +578,13 @@ export const api: typeof LiveApi = {
     return { ok: false as const, reason: 'demo' };
   },
 
-  /** The advisor needs a Steam key and a live library; the demo has neither. */
+  /** The advisor needs a real library; the demo has neither route to one. */
   async advisor() {
     return { type: 'error' as const, reason: 'demo' };
+  },
+
+  async localLibrary() {
+    return { available: false, reason: 'demo' };
   },
 
   /** The demo has no sources to diagnose and no database to count. */

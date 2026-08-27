@@ -171,9 +171,33 @@ export interface KeyStatus {
   configured: boolean;
   source: 'settings' | 'env' | 'file' | 'none';
 }
+/**
+ * Whether this machine's own Steam install can supply a library with no key.
+ *
+ * The Steam client records playtime per app in `localconfig.vdf`, which is the
+ * same figure the Web API returns and needs no key, no profile id and no
+ * request. It covers only what was played on THIS computer, so `partial` is
+ * always true when it is available and the UI has to say so.
+ */
+export interface LocalLibraryStatus {
+  available: boolean;
+  games?: number;
+  partial?: boolean;
+  personaName?: string | null;
+  accounts?: number;
+  reason?: string;
+}
+
 export interface KeysResponse {
   ggdeals: KeyStatus;
   itad: KeyStatus;
+  /**
+   * Steam's own Web API key. Unlike the other two it buys no extra PRICES —
+   * Steam's prices are public. It exists only to read a person's own library,
+   * which Steam login-gates, so it is the one key that is useless to anyone who
+   * does not want the "you already own this" check or the advisor.
+   */
+  steam: KeyStatus;
 }
 
 export interface TickerDeal {
@@ -393,6 +417,12 @@ export interface GenreAffinity {
 export interface AdvisorStep {
   type: 'library' | 'profiling' | 'affinity' | 'scoring' | 'done' | 'error';
   games?: number;
+  /** Which library the profile was built from — see LocalLibraryStatus. */
+  source?: 'local' | 'api';
+  /** True for the local route: what was PLAYED here, not everything owned. */
+  partial?: boolean;
+  /** The Steam persona whose playtime was read, when it came off this machine. */
+  account?: string;
   total?: number;
   done?: number;
   title?: string;

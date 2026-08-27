@@ -11,6 +11,7 @@ import type {
   HealthResponse,
   HistoryPoint,
   KeysResponse,
+  LocalLibraryStatus,
   Offer,
   OffersProgress,
   OffersResponse,
@@ -236,6 +237,9 @@ export const api = {
    * sampled game and that is genuinely tens of seconds. A progress line beats
    * a spinner for a wait that long.
    */
+  /** Whether this machine's Steam install can stand in for the API key. */
+  localLibrary: () => fetch('/api/steam-library/local').then((r) => json<LocalLibraryStatus>(r)),
+
   async advisor(profile: string, onStep: (s: AdvisorStep) => void): Promise<AdvisorStep | null> {
     const res = await fetch('/api/advisor', {
       method: 'POST',
@@ -450,7 +454,7 @@ export const api = {
 
   /** BYOK API-key status (never returns the secret) + save/clear. */
   getKeys: () => fetch('/api/keys').then((r) => json<KeysResponse>(r)),
-  setKeys: (patch: { ggdeals?: string; itad?: string }) =>
+  setKeys: (patch: { ggdeals?: string; itad?: string; steam?: string }) =>
     fetch('/api/keys', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

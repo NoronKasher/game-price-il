@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from './api';
 import { nis, t } from './he';
-import type { AdvisorStep, GenreAffinity, Suggestion } from './types';
+import type { AdvisorStep, GenreAffinity, LocalLibraryStatus, Suggestion } from './types';
 
 /**
  * ALPHA — "given what you actually play, is this one for you?"
@@ -30,16 +30,39 @@ export function AdvisorView() {
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  /**
+   * Whether this machine's own Steam install can supply the library.
+   *
+   * Asked before anything is typed, because the answer decides whether the
+   * profile field is a requirement or an option — and demanding a key from
+   * somebody sitting next to a Steam install that already has the numbers was
+   * the single thing most likely to make this feature never get used.
+   */
+  const [local, setLocal] = useState<LocalLibraryStatus | null>(null);
+  const [usedSource, setUsedSource] = useState<AdvisorStep | null>(null);
+  useEffect(() => {
+    void api
+      .localLibrary()
+      .then(setLocal)
+      .catch(() => setLocal({ available: false }));
+  }, []);
+
+  const canRun = Boolean(profile.trim()) || Boolean(local?.available);
 
   const run = async () => {
-    if (!profile.trim() || running) return;
+    if (!canRun || running) return;
     setRunning(true);
     setError(null);
     setSuggestions(null);
     setAffinity([]);
+    setUsedSource(null);
     try {
       const final = await api.advisor(profile.trim(), (s) => {
         setStep(s);
+        // Which library it actually read, kept for the line under the results.
+        // Falling back from a missing key to the local install is the right
+        // thing to do and the wrong thing to do SILENTLY.
+        if (s.type === 'library') setUsedSource(s);
         if (s.type === 'affinity' && s.affinity) setAffinity(s.affinity);
       });
       if (!final || final.type === 'error') setError(final?.reason ?? 'failed');
@@ -62,7 +85,7 @@ export function AdvisorView() {
 
       <div className="advisor-run">
         <label className="contact-field advisor-field">
-          <span className="cur-label">{t.advisorProfileLabel}</span>
+          <span className="cur-label">{local?.available ? t.advisorProfileOptional : t.advisorProfileLabel}</span>
           <input
             className="pref-select contact-input"
             value={profile}
@@ -73,11 +96,23 @@ export function AdvisorView() {
             }}
           />
         </label>
-        <button className="diag-go" onClick={() => void run()} disabled={running || !profile.trim()}>
+        <button className="diag-go" onClick={() => void run()} disabled={running || !canRun}>
           {running ? t.advisorRunning : t.advisorRun}
         </button>
       </div>
-      <p className="advisor-keynote">{t.advisorKeyNote}</p>
+
+      {/* The key note is only true when there is no other way in. Showing it to
+          somebody whose machine can already answer would be telling them to go
+          and do unnecessary paperwork. */}
+      {local?.available ? (
+        <>
+          <p className="advisor-local">{t.advisorLocalFound(local.games ?? 0, local.personaName ?? null)}</p>
+          <p className="advisor-keynote">{t.advisorLocalPartial}</p>
+          <p className="advisor-keynote">{t.advisorProfileOptionalNote}</p>
+        </>
+      ) : (
+        <p className="advisor-keynote">{t.advisorKeyNote}</p>
+      )}
 
       {/* A wait of tens of seconds needs to say what it is doing. */}
       {running && step && (
@@ -89,6 +124,14 @@ export function AdvisorView() {
       )}
 
       {error && <p className="advisor-error">{t.advisorErrors[error] ?? t.advisorErrors.failed}</p>}
+
+      {/* Said once the run is over, because "where did this come from" is the
+          first question a surprising suggestion raises. */}
+      {usedSource && !running && (
+        <p className="advisor-local">
+          {usedSource.source === 'local' ? t.advisorLocalUsed(usedSource.account ?? null) : t.advisorApiUsed}
+        </p>
+      )}
 
       {affinity.length > 0 && (
         <div className="advisor-taste">

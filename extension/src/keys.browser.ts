@@ -19,14 +19,14 @@ export type ApiKeySource = 'settings' | 'env' | 'file' | 'none';
 
 const STORAGE_KEY = 'apiKeys';
 
-let cache: Record<ApiKeyName, string> = { ggdeals: '', itad: '' };
+let cache: Record<ApiKeyName, string> = { ggdeals: '', itad: '', steam: '' };
 
 /** Load once at worker start; every wake-up re-runs module scope, so this is fresh. */
 const ready = (async () => {
   try {
     const bag = await chrome.storage.local.get(STORAGE_KEY);
     const saved = bag[STORAGE_KEY] as Partial<Record<ApiKeyName, string>> | undefined;
-    if (saved) cache = { ggdeals: saved.ggdeals ?? '', itad: saved.itad ?? '' };
+    if (saved) cache = { ggdeals: saved.ggdeals ?? '', itad: saved.itad ?? '', steam: saved.steam ?? '' };
   } catch {
     /* no keys configured is a normal state, not an error */
   }

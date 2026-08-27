@@ -104,7 +104,8 @@ const APP_VERSION = (() => {
   return 'unknown';
 })();
 import { record } from './eventLog.ts';
-import { ownedGames } from './steamLibrary.ts';
+import { ownedGames, SteamKeyMissing } from './steamLibrary.ts';
+import { localLibraryHere, findSteam, localAccounts } from './steamLocal.ts';
 import { genreAffinity, scoreCandidate, mostPlayed } from './advisor.ts';
 import { runHealthCheck, lastHealthReport, healthCheckDue } from './health.ts';
 import { currentSearchHash, searchHashSource } from './adapters/psn.ts';
@@ -794,7 +795,7 @@ app.post('/api/import/token', async (req, res) => {
  * no key, and answers only for profiles their owner has left public.
  */
 app.post('/api/import/steam', async (req, res) => {
-  const { profile } = (req.body ?? {}) as { profile?: string };
+  const { profile, useLocal } = (req.body ?? {}) as { profile?: string; useLocal?: boolean };
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('X-Accel-Buffering', 'no');
@@ -946,6 +947,31 @@ app.get('/api/diagnostics', async (req, res) => {
 });
 
 /**
+ * Whether this machine can profile a Steam library without a key.
+ *
+ * Asked before the advisor runs so the profile field can be optional rather
+ * than demanded and then ignored. Returns counts and a persona name — never an
+ * app list, never the 64-bit id, because nothing on the page needs either.
+ */
+app.get('/api/steam-library/local', (_req, res) => {
+  const root = findSteam();
+  if (!root) return res.json({ available: false, reason: 'no_steam' });
+  const accounts = localAccounts(root);
+  if (accounts.length === 0) return res.json({ available: false, reason: 'no_accounts' });
+  const lib = localLibraryHere();
+  if (!lib) return res.json({ available: false, reason: 'no_playtime' });
+  res.json({
+    available: true,
+    games: lib.games.length,
+    partial: lib.partial,
+    personaName: lib.account.personaName ?? null,
+    // A shared PC has several; naming the count lets the UI say which one it
+    // read rather than silently picking the most recent.
+    accounts: accounts.length,
+  });
+});
+
+/**
  * ALPHA — "given what you actually play, is this one for you?"
  *
  * Streamed, because building a taste profile means a store lookup per game in
@@ -961,14 +987,50 @@ app.post('/api/advisor', async (req, res) => {
   res.flushHeaders();
   const line = (obj: unknown) => res.write(JSON.stringify(obj) + String.fromCharCode(10));
 
-  if (!profile?.trim()) {
+  /**
+   * Where the library comes from, in the order that asks least of the user.
+   *
+   * The local Steam install wins when it is there and nothing else was asked
+   * for, because it needs no key, no profile id, no login and no request. The
+   * Web API route stays for the complete library and for machines with no Steam
+   * client — and it is what an explicitly typed profile means.
+   */
+  const local = useLocal === false ? null : localLibraryHere();
+  const wantsApi = Boolean(profile?.trim());
+
+  if (!wantsApi && !local) {
     line({ type: 'error', reason: 'no_profile' });
     return res.end();
   }
 
   try {
-    const owned = await ownedGames(profile.trim());
-    line({ type: 'library', games: owned.length });
+    let owned;
+    let source: 'local' | 'api';
+    if (wantsApi) {
+      try {
+        owned = await ownedGames(profile!.trim());
+        source = 'api';
+      } catch (err) {
+        // A missing key is not a dead end when the machine has Steam on it.
+        // Falling back silently would be wrong, so the stream says which was
+        // used and the UI repeats it.
+        if (err instanceof SteamKeyMissing && local) {
+          owned = local.games;
+          source = 'local';
+        } else throw err;
+      }
+    } else {
+      owned = local!.games;
+      source = 'local';
+    }
+    line({
+      type: 'library',
+      games: owned.length,
+      source,
+      // Only ever true for the local route: played-on-this-PC is not owned.
+      partial: source === 'local',
+      account: source === 'local' ? local!.account.personaName : undefined,
+    });
 
     const sample = mostPlayed(owned);
     line({ type: 'profiling', total: sample.length });

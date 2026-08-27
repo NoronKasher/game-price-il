@@ -261,6 +261,17 @@ export const t = {
   advisorProfilePlaceholder: 'קישור לפרופיל, שם משתמש, או SteamID64',
   advisorKeyNote:
     'דורש מפתח Steam API (חינמי, נרשם בדקה ב‑steamcommunity.com/dev/apikey ומוזן בהגדרות). Steam סגר את הגישה לרשימת המשחקים בלי מפתח, כך שאין דרך אחרת. הספרייה שלכם לא נשמרת בשום מקום ולא נשלחת לאף אחד.',
+  /* The no-key route: the Steam client on this machine has the same numbers. */
+  advisorLocalFound: (games: number, persona: string | null) =>
+    `נמצאה התקנת Steam במחשב הזה${persona ? ` (${persona})` : ''} — ${games} משחקים עם שעות משחק. אין צורך במפתח.`,
+  advisorLocalPartial:
+    'שימו לב: זו רשימת המשחקים ששיחקתם בהם *במחשב הזה*, ולא כל מה שקניתם. לפרופיל הז׳אנרים זה לא משנה (משחק שלא נפתח ממילא לא נספר), אבל ייתכן שנציע משחק שכבר יש לכם ולא הותקן כאן. מפתח Steam API נותן את הספרייה המלאה.',
+  advisorLocalUsed: (persona: string | null) =>
+    `הפרופיל נבנה מהתקנת ה‑Steam במחשב הזה${persona ? ` (${persona})` : ''} — בלי מפתח ובלי בקשת רשת.`,
+  advisorApiUsed: 'הפרופיל נבנה מ‑Steam Web API, לפי הפרופיל שהוזן.',
+  advisorProfileOptional: 'פרופיל Steam (לא חובה)',
+  advisorProfileOptionalNote:
+    'אפשר להשאיר ריק ולהשתמש בהתקנה המקומית. מלאו כאן רק כדי לקרוא ספרייה מלאה או פרופיל של מישהו אחר — לזה נדרש מפתח.',
   advisorRun: 'בנו לי המלצות',
   advisorRunning: 'עובד…',
   advisorFoundLibrary: (n: number) => `נמצאו ${n} משחקים בספרייה. בונה פרופיל…`,
@@ -278,7 +289,8 @@ export const t = {
     steam_key_missing: 'לא הוגדר מפתח Steam API. אפשר להוסיף אותו בהגדרות → מפתחות API.',
     steam_profile_private: 'רשימת המשחקים בפרופיל הזה פרטית. אפשר לשנות ב‑Steam: Privacy Settings → Game details → Public.',
     steam_profile_not_found: 'לא מצאנו פרופיל בשם הזה. נסו את הקישור המלא לפרופיל.',
-    no_profile: 'צריך פרופיל Steam כדי להתחיל.',
+    no_profile:
+      'לא נמצאה התקנת Steam במחשב הזה, ולא הוזן פרופיל. אפשר להזין פרופיל Steam ולהגדיר מפתח API בהגדרות → מפתחות API.',
     demo: 'ההמלצות לא זמינות בהדגמה — הן דורשות מפתח וספרייה אמיתית.',
     unreachable: 'אין חיבור לשרת של הכלי.',
     failed: 'משהו השתבש. אפשר לנסות שוב.',
@@ -568,6 +580,20 @@ export const t = {
     'הכלי עובד מצוין גם בלי המפתחות האלה. הם רק מוסיפים מקורות מחיר לעותקים דיגיטליים למחשב (מוכרי מפתחות וספקים חיצוניים). המפתח הוא אישי — הוא נשמר במחשב שלכם בלבד, ואינו נשלח לשום מקום מלבד השירות עצמו. אם הכלי יופץ בעתיד, כל משתמש ישתמש במפתח שלו כדי שלא ניתקל בחסימות או במגבלת בקשות.',
   keysGgBlurb: 'GG.deals — המחיר הזול ביותר אצל מוכרי מפתחות (G2A, Kinguin, Eneba, Gamivo…).',
   keysItadBlurb: 'IsThereAnyDeal — עשרות חנויות דיגיטליות ומוכרי מפתחות למחשב במקום אחד.',
+  keysSteamBlurb:
+    'Steam — לא למחירים (המחירים של Steam ממילא פומביים) אלא כדי לקרוא את רשימת המשחקים שכבר יש לכם, שסטים חוסמת בלי התחברות. נחוץ רק ל"כבר יש לי את זה" ולממליץ.',
+  /**
+   * The one question everybody hits on Steam's form, answered in place.
+   *
+   * Valve requires a domain name on the key form. It is a label — for user keys
+   * there is no verification and no IP or referrer restriction (those exist
+   * only for publisher keys). Saying so is not encouragement to invent one:
+   * this project HAS a public address, and it is the honest thing to type.
+   */
+  keysSteamDomain:
+    'בטופס של Steam יש שדה חובה "Domain Name". זו תווית בלבד — Valve לא מאמתת אותה ולא מגבילה לפיה בקשות (הגבלת IP קיימת רק למפתחות של מפרסמי משחקים). אפשר להזין את הכתובת הפומבית של הכלי: noronkasher.github.io',
+  keysSteamPrivacy:
+    'המפתח נשמר אצלכם בלבד ואינו נשלח לשום מקום מלבד Steam עצמה. שימו לב שגם עם מפתח, Steam תחזיר את רשימת המשחקים רק אם פרופיל "פרטי המשחקים" שלכם מוגדר כציבורי.',
   keyConfigured: 'מוגדר ✓',
   keyNotConfigured: 'לא הוגדר',
   keySource: (s: string) =>

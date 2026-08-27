@@ -577,6 +577,18 @@ body {
   border: 1px solid color-mix(in srgb, var(--up) 45%, var(--line));
   color: var(--up);
 }
+/* The no-key notice: this machine's own Steam install can answer. Green
+   rather than the warning amber above it — it is good news, not a caveat. */
+.advisor-local {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border-inline-start: 3px solid var(--ok, #3fb950);
+  background: color-mix(in srgb, var(--ok, #3fb950) 8%, transparent);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .advisor-warn {
   margin: 0 0 14px; padding: 10px 12px; border-radius: 9px;
   background: color-mix(in srgb, var(--up) 8%, transparent);

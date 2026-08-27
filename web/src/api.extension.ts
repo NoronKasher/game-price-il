@@ -1,6 +1,6 @@
 import type { AdvisorStep } from './types';
 import type { api as LiveApi } from './api';
-import type { SourceRef } from './types';
+import type { LocalLibraryStatus, SourceRef } from './types';
 
 /**
  * The API the extension build talks to: a service worker, not a server.
@@ -139,6 +139,13 @@ export const api: typeof LiveApi = {
   deals: (page: number, limit: number) => call('deals', page, limit),
   bundles: (appId: string) => call('bundles', appId),
   diagnostics: (q?: string) => call('diagnostics', q),
+  /**
+   * Always unavailable here, and not a gap worth apologising for: reading the
+   * Steam client's files means reading the disk, which an extension cannot do.
+   * The API-key route works in the extension exactly as it does on a server.
+   */
+  localLibrary: async (): Promise<LocalLibraryStatus> => ({ available: false, reason: 'extension' }),
+
   advisor: (profile: string, onStep: (s: AdvisorStep) => void) =>
     callStreaming('advisor', (s) => onStep(s as AdvisorStep), profile) as Promise<AdvisorStep | null>,
 
@@ -154,7 +161,7 @@ export const api: typeof LiveApi = {
 
   /** Bring-your-own-key for GG.deals and ITAD, held in chrome.storage. */
   getKeys: () => call('getKeys'),
-  setKeys: (patch: { ggdeals?: string; itad?: string }) => call('setKeys', patch),
+  setKeys: (patch: { ggdeals?: string; itad?: string; steam?: string }) => call('setKeys', patch),
 
   /**
    * PlayStation's hash can be read and pasted here exactly as on the server.

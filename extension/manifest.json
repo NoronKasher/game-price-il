@@ -14,7 +14,8 @@
     "storage",
     "alarms",
     "unlimitedStorage",
-    "declarativeNetRequest"
+    "declarativeNetRequest",
+    "scripting"
   ],
   "host_permissions": [
     "https://www.cheapshark.com/*",

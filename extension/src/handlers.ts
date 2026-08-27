@@ -10,6 +10,8 @@ import { steamAppIdOf } from '../../server/src/fanout.ts';
 import { ilsTo } from '../../server/src/rates.ts';
 import { refreshBadge } from './badge.ts';
 import { tickerDeals, dealsPage } from '../../server/src/ticker.ts';
+import { genreAffinity, scoreCandidate, mostPlayed } from '../../server/src/advisor.ts';
+import { ownedGames } from '../../server/src/steamLibrary.ts';
 import { bundlesForApp } from '../../server/src/bundle.ts';
 import { buildReport, renderReport } from '../../server/src/diagnostics.ts';
 import { record } from '../../server/src/eventLog.ts';
@@ -23,7 +25,7 @@ import {
 import { runHealthCheck, lastHealthReport, healthCheckDue } from '../../server/src/health.ts';
 import { hasApiKey, setApiKey, apiKeySource, type ApiKeyName } from './keys.browser.ts';
 import { currentSearchHash, searchHashSource } from '../../server/src/adapters/psn.ts';
-import { noteHashSaved } from './psnHash.browser.ts';
+import { noteHashSaved, probeBrowser } from './psnHash.browser.ts';
 import {
   setSetting,
   getSetting,
@@ -593,6 +595,88 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
     },
 
     /** One page of the merged deals feed — same code the server runs. */
+    /**
+     * ALPHA — suggestions from what the user actually plays.
+     *
+     * A PORT OF THE SERVER'S ENDPOINT, NOT A NEW FEATURE. The UI has always
+     * offered this tab in every shell and the extension had no handler behind
+     * it, so pressing the button here produced a bare "something went wrong" —
+     * the worst of both worlds, since every piece it needs was already in this
+     * bundle: the Steam library reader, the store lookup, the deals feed and
+     * the scoring itself.
+     *
+     * The one thing that genuinely differs: no local Steam install can be read
+     * from an extension (see steamLocal.browser.ts), so a profile and a key are
+     * required here rather than optional. The UI knows that already — its
+     * localLibrary() answers `available: false` in this shell.
+     *
+     * Streams through `emit` for the same reason the server streams NDJSON: one
+     * store lookup per sampled game is tens of seconds, and an open port also
+     * keeps MV3 from killing the worker mid-run.
+     */
+    advisor: withDb(async (profile: string, emit?: (p: unknown) => void) => {
+      const step = (obj: Record<string, unknown>) => emit?.(obj);
+      if (!profile?.trim()) return { type: 'error', reason: 'no_profile' };
+
+      try {
+        const owned = await ownedGames(profile.trim());
+        step({ type: 'library', games: owned.length, source: 'api', partial: false });
+
+        const sample = mostPlayed(owned);
+        step({ type: 'profiling', total: sample.length });
+        const genres = new Map<string, string[]>();
+        for (let i = 0; i < sample.length; i++) {
+          const g = sample[i]!;
+          try {
+            const meta = await steamMeta(g.appId);
+            if (meta?.genres?.length) genres.set(g.appId, meta.genres);
+          } catch {
+            /* a game we cannot describe simply does not vote */
+          }
+          step({ type: 'profiling', total: sample.length, done: i + 1, title: g.title });
+          if (i < sample.length - 1) await new Promise((r) => setTimeout(r, 300));
+        }
+
+        const affinity = genreAffinity(owned, (id) => genres.get(id));
+        step({ type: 'affinity', affinity: affinity.slice(0, 8) });
+
+        const ownedIds = new Set(owned.map((g) => g.appId));
+        const deals = await dealsPage(0, 40);
+        const suggestions = [];
+        for (let i = 0; i < deals.length; i++) {
+          const deal = deals[i]!;
+          const hit = (await searchGames(sources, deal.title, false)).games.find(
+            (g) => g.sourceId === 'steam-regional'
+          );
+          if (!hit) continue;
+          let dealGenres: string[] = [];
+          try {
+            dealGenres = (await steamMeta(hit.sourceGameId))?.genres ?? [];
+          } catch {
+            continue;
+          }
+          const scored = scoreCandidate(
+            { appId: hit.sourceGameId, title: deal.title, genres: dealGenres },
+            affinity,
+            ownedIds
+          );
+          if (scored) suggestions.push({ ...scored, salePriceILS: deal.salePrice, savings: deal.savings });
+          step({ type: 'scoring', total: deals.length, done: i + 1 });
+          if (suggestions.length >= 12) break;
+        }
+
+        suggestions.sort((a, b) => b.score - a.score);
+        return { type: 'done', suggestions, libraryGames: owned.length };
+      } catch (err) {
+        // The two Steam failures the UI has distinct wording for — a missing
+        // key and a private profile — must survive as their own reasons rather
+        // than collapse into "failed", which would send people to the wrong fix.
+        const reason = err instanceof Error ? err.message : 'failed';
+        record('error', 'advisor', err);
+        return { type: 'error', reason };
+      }
+    }),
+
     deals: async (page: number, limit: number) => ({ deals: await dealsPage(page, limit) }),
 
     /**
@@ -621,23 +705,23 @@ export function makeHandlers(sources: SourceAdapter[]): Record<string, Handler> 
     /**
      * PlayStation's persisted-query hash.
      *
-     * Reading and pasting one work here exactly as on the server — which
-     * matters, because until now an extension user whose hash had rotated had
-     * no way at all to fix it, while a server user could paste a fresh one in
-     * half a minute. What is still missing is the automatic recovery: that means
-     * running the store's own page and watching the request it makes, which the
-     * desktop build does with its own Chromium (desktop/psnHash.js) and an
-     * extension cannot do without observing requests it has no permission for.
+     * Reading and pasting one work here exactly as on the server, and so now
+     * does the automatic recovery. The extension does not need to START a
+     * browser the way the server does — it is one. It opens the store's public
+     * search page in a background tab and reads the hash out of what that page
+     * recorded requesting (see psnHash.browser.ts for why the bundle cannot
+     * simply be grepped for it, and why this needs no traffic-watching
+     * permission).
      */
-    getPsnHash: withDb(() => ({
-      hash: currentSearchHash(),
-      source: searchHashSource(),
-      browser: null,
-      // Not "no browser found" — the user is reading this IN a browser. An
-      // extension has no way to start one and watch its requests, which is a
-      // fact about extensions, not about their machine.
-      recovery: 'manual' as const,
-    })),
+    getPsnHash: withDb(async () => {
+      const browser = await probeBrowser();
+      return {
+        hash: currentSearchHash(),
+        source: searchHashSource(),
+        browser,
+        recovery: browser ? ('auto' as const) : ('manual' as const),
+      };
+    }),
     setPsnHash: withDb(async (hash: string) => {
       const raw = String(hash ?? '').trim().toLowerCase();
       if (raw && !/^[a-f0-9]{64}$/.test(raw)) {

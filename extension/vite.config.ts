@@ -48,6 +48,12 @@ export default defineConfig({
         replacement: path.resolve(import.meta.dirname, 'src/db.browser.ts').split(path.sep).join('/'),
       },
       {
+        // Reading the Steam client's own files off disk. node:fs again, and the
+        // extension has no substitute for it — it keeps the API-key route.
+        find: /^.*\/steamLocal\.ts$/,
+        replacement: path.resolve(import.meta.dirname, 'src/steamLocal.browser.ts').split(path.sep).join('/'),
+      },
+      {
         // Hash recovery drives Playwright, which cannot exist here. The stub
         // keeps PlayStation searching on the known hash rather than dropping
         // the source entirely.

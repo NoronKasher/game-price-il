@@ -2227,7 +2227,7 @@ function SettingsView({
   useEffect(() => {
     loadKeys();
   }, []);
-  const save = async (patch: { ggdeals?: string; itad?: string }) => setKeys(await api.setKeys(patch));
+  const save = async (patch: { ggdeals?: string; itad?: string; steam?: string }) => setKeys(await api.setKeys(patch));
 
   return (
     <section className="settings-view" ref={settingsRoot}>
@@ -2401,6 +2401,24 @@ function SettingsView({
             blurb={t.keysItadBlurb}
             onSave={(v) => save({ itad: v })}
           />
+          {/* The odd one out: this key buys no prices at all. Steam's prices
+              are public — what it unlocks is reading YOUR OWN library, which
+              Steam login-gates. Placed last because most people want neither
+              the ownership check nor the advisor, and a key row they do not
+              need reads as a requirement. */}
+          <KeyRow
+            label="Steam"
+            status={keys.steam}
+            registerUrl="https://steamcommunity.com/dev/apikey"
+            blurb={t.keysSteamBlurb}
+            onSave={(v) => save({ steam: v })}
+          />
+          {/* The question every single person hits on Valve's form. Answering it
+              here is the difference between a key that takes a minute and one
+              that never gets created. */}
+          <p className="key-note">{t.keysSteamDomain}</p>
+          <p className="key-note">{t.keysSteamPrivacy}</p>
+
           {/* Why EA looks different from every other storefront here. */}
           <p className="key-note">{t.keysEaNote}</p>
         </>
